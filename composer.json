@@ -2,7 +2,7 @@
     "name": "ddn/sapp",
     "description": "Simply a PDF Parser",
     "type": "library",
-    "license": "GNU/LGPLv3",
+    "license": "LGPL-3.0-or-later",
     "authors": [
         {
             "name": "Carlos A.",
