@@ -14,5 +14,6 @@
     },
     "autoload": {
         "psr-4": {"ddn\\sapp\\": "src/"}
-    }
+    },
+    "minimum-stability": "RC"
 }
