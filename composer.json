@@ -1,0 +1,18 @@
+{
+    "name": "ddn/sapp",
+    "description": "Simply a PDF Parser",
+    "type": "library",
+    "license": "GNU/LGPLv3",
+    "authors": [
+        {
+            "name": "Carlos A.",
+            "email": "caralla@upv.es"
+        }
+    ],
+    "require": {
+        "php": "^7.2"        
+    },
+    "autoload": {
+        "psr-4": {"ddn\\sapp\\": "src/"}
+    }
+}
