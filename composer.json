@@ -1,6 +1,6 @@
 {
     "name": "ddn/sapp",
-    "description": "Simply a PDF Parser",
+    "description": "Simply A PDF Parser (SAPP), Editor and Easy Signer, usign PHP",
     "type": "library",
     "license": "LGPL-3.0-or-later",
     "authors": [
@@ -15,5 +15,5 @@
     "autoload": {
         "psr-4": {"ddn\\sapp\\": "src/"}
     },
-    "minimum-stability": "RC"
+    "minimum-stability": "dev"
 }

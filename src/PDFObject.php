@@ -135,6 +135,7 @@ class PDFObject implements ArrayAccess {
                     p_error('unknown compression method ' . $this->_value['Filter']);
             }
         }
+        $this->_value['Length'] = strlen($stream);
         $this->_stream = $stream;
     }    
     /**

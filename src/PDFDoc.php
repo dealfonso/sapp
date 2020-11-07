@@ -43,6 +43,23 @@ if (!defined('__TMP_FOLDER'))
 
 class PDFDoc extends PDFBaseDoc {
 
+    const T_STANDARD_FONTS = [
+        "Times-Roman", 
+        "Times-Bold", 
+        "Time-Italic", 
+        "Time-BoldItalic", 
+        "Courier", 
+        "Courier-Bold", 
+        "Courier-Oblique", 
+        "Courier-BoldOblique",
+        "Helvetica", 
+        "Helvetica-Bold", 
+        "Helvetica-Oblique", 
+        "Helvetica-BoldOblique", 
+        "Symbol", 
+        "ZapfDingbats"
+    ];
+
     // The PDF version of the parsed file
     protected $_pdf_objects = [];
     protected $_pdf_version_string = null;
@@ -208,6 +225,101 @@ class PDFDoc extends PDFBaseDoc {
     }
 
     /**
+     * This is a function that allows to add a very basic text to a page, using a standard font.
+     *   The function is mainly oriented to add banners and so on, and not to use for writting.
+     * @param page the number of page in which the text should appear
+     * @param text the text
+     * @param x the x offset from left for the text (we do not take care of margins)
+     * @param y the y offset from top for the text (we do not take care of margins)
+     * @param params an array of values [ "font" => <fontname>, "size" => <size in pt>, 
+     *               "color" => <#hexcolor>, "angle" => <rotation angle>]
+     */
+    public function add_text($page_to_appear, $text, $x, $y, $params = []) {
+
+        $default = [
+            "font" => "Helvetica",
+            "size" => 24,
+            "color" => "#000000",
+            "angle" => 0
+        ];
+
+        $params = array_merge($default, $params);
+
+        $page_obj = $this->get_page($page_to_appear);
+        if ($page_obj === false)
+            return p_error("invalid page");
+
+        $resources_obj = $this->get_indirect_object($page_obj['Resources']);
+
+        if (array_search($params["font"], self::T_STANDARD_FONTS) === false)
+            return p_error("only standard fonts are allowed Times-Roman, Helvetica, Courier, Symbol, ZapfDingbats");
+
+        $font_id = "F" . get_random_string(4);
+        $resources_obj['Font'][$font_id] = [
+            "Type" => "/Font",
+            "Subtype" => "/Type1",
+            "BaseFont" => "/" . $params['font'],
+        ];
+
+        // Get the contents for the page
+        $contents_obj = $this->get_indirect_object($page_obj['Contents']);
+
+        $data = $contents_obj->get_stream(false);
+        if ($data === false)
+            return p_error("could not interpret the contents of the page");
+
+        // Get the page height, to change the coordinates system (up to down)
+        $pagesize = $this->get_page_size($page_to_appear);
+        $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
+
+        $angle = $params["angle"];
+        $angle *= M_PI/180;
+        $c = cos($angle);
+        $s = sin($angle);
+        $cx = $x;
+        $cy = ($pagesize_h - $y);
+
+        if ($angle !== 0)
+            $rotate_command = sprintf("%.5F %.5F %.5F %.5F %.2F %.2F cm 1 0 0 1 %.2F %.2F cm", $c, $s, -$s, $c, $cx, $cy, -$cx, -$cy);
+
+        $text_command = "BT ";
+        $text_command .= "/$font_id "  . $params['size'] . " Tf ";
+        $text_command .= sprintf("%.2f %.2f Td ", $x, $pagesize_h - $y); // Ubicar en x, y
+        $text_command .= sprintf("(%s) Tj ", $text);
+        $text_command .= "ET ";
+
+        $color = $params["color"];
+        if ($color[0] === '#') {
+            $colorvalid = true;
+            $r = null;
+            switch (strlen($color)) {
+                case 4:
+                    $color = "#" . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
+                    p_debug_var($color);
+                case 7:
+                    list($r, $g, $b) = sscanf($color, "#%02x%02x%02x");                    
+                    break;
+                default:
+                    p_error("please use html-like colors (e.g. #ffbbaa)");
+            }
+            if ($r !== null)
+                $text_command = " q $r $g $b rg $text_command Q"; // Color RGB
+        } else 
+            p_error("please use html-like colors (e.g. #ffbbaa)");
+
+        if ($angle !== 0)
+            $text_command = " q $rotate_command $text_command Q";    
+            
+        $data .= $text_command;
+
+        $contents_obj->set_stream($data, false);
+
+        // Update the contents
+        $this->add_object($resources_obj);
+        $this->add_object($contents_obj);        
+    }
+
+    /**
      * Adds an image to the document, in the specific page
      *   NOTE: the image inclusion is taken from http://www.fpdf.org/; this is an adaptation
      *         and simplification of function Image(); it does not take care about units nor 
@@ -219,7 +331,11 @@ class PDFDoc extends PDFBaseDoc {
      * @param w the width of the image
      * @param w the height of the image
      */
-    public function add_image($page_obj, $filename, $x=0, $y=0, $w=0, $h=0) {
+    public function add_image($page_to_appear, $filename, $x=0, $y=0, $w=0, $h=0) {
+
+        $page_obj = $this->get_page($page_to_appear);
+        if ($page_obj === false)
+            return p_error("invalid page");
 
         if (empty($filename))
             return p_error('invalid image name or stream');
@@ -235,10 +351,6 @@ class PDFDoc extends PDFBaseDoc {
 
         $finfo = new \finfo();
         $content_type = $finfo->buffer($filecontent, FILEINFO_MIME_TYPE);
-
-        // $content_type = mime_content_type($filename);
-        // if ($content_type === false)
-        //    return p_error("failed to read file $filename");
 
         $ext = mime_to_ext($content_type);
 
@@ -306,9 +418,13 @@ class PDFDoc extends PDFBaseDoc {
         if ($data === false)
             return p_error("could not interpret the contents of the page");
 
-        $data .= sprintf("\nq %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q\n",$w,$h,$x,$y,$info['i']);
+        // Get the page height, to change the coordinates system (up to down)
+        $pagesize = $this->get_page_size($page_to_appear);
+        $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
+
+        $data .= sprintf("\nq %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q\n", $w, $h, $x, $pagesize_h - $y - $h, $info['i']);
+
         $contents_obj->set_stream($data, false);
-        $contents_obj["Length"] = strlen($data);
 
         if ($add_alpha === true) {
             $page_obj['Group'] = new PDFValueObject([
@@ -334,7 +450,7 @@ class PDFDoc extends PDFBaseDoc {
      *      $o2->sign_document(...);
      *      $o2->to_pdf_file_s();
      */
-    public function sign_document($certfile, $certpass, $page_to_appear = 0) {
+    public function sign_document($certfile, $certpass, $page_to_appear = 0, $rect_to_appear = [ 0, 0, 0, 0 ]) {
         // Do not allow more than one signature for a specific document; if needed, signatures must be chained
         if ($this->_signature !== null)
             return p_error("the document has already been prepared to be signed");
@@ -367,6 +483,10 @@ class PDFDoc extends PDFBaseDoc {
         $signature = new PDFSignatureObject($this->get_new_oid());
         $signature->set_certificate($certificate);
         
+        // Get the page height, to change the coordinates system (up to down)
+        $pagesize = $this->get_page_size($page_to_appear);
+        $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
+
         // Create the annotation object, annotate the offset and append the object
         $annotation_object = new PDFObject($this->get_new_oid(),
             [
@@ -376,7 +496,7 @@ class PDFDoc extends PDFBaseDoc {
                 "V" => new PDFValueReference($signature->get_oid()),
                 "T" => new PDFValueString('Signature' . get_random_string()),
                 "P" => new PDFValueReference($page_obj->get_oid()),
-                "Rect" => [ 0, 0, 0, 0 ],
+                "Rect" => [ $rect_to_appear[0], $pagesize_h - $rect_to_appear[1], $rect_to_appear[2], $pagesize_h - $rect_to_appear[3] ],
                 "F" => 4  // TODO: check this value
             ]
         );      
