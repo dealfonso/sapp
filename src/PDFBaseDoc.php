@@ -56,6 +56,7 @@ class PDFBaseDoc extends Buffer {
         return $trailer_obj;
     }
 
+    // TODO: support Cross-Reference Streams (7.5.8 Cross-Reference Streams)
     protected static function get_xref(&$_buffer, $xref_pos) {
 
         // Each xref is immediately followed by a trailer
@@ -79,7 +80,7 @@ class PDFBaseDoc extends Buffer {
         while (($xref_line = strtok($separator)) !== false) {
 
             // The first type of entry contains the id of the next object and the amount of continuous objects defined
-            if (preg_match('/^([0-9]+) ([0-9]+)$/', $xref_line, $matches) === 1) {
+            if (preg_match('/([0-9]+) ([0-9]+)$/', $xref_line, $matches) === 1) {
                 if ($obj_count > 0) {
                     // If still expecting objects, we'll assume that the xref is malformed
                     return p_error("malformed xref at position $xref_pos", [false, false]);
@@ -374,7 +375,7 @@ class PDFBaseDoc extends Buffer {
      * Function that parses an object 
      */
     protected static function object_from_string(&$buffer, $expected_obj_id, $offset = 0, &$offset_end = 0) {
-        if (preg_match('/^([0-9]+)\s+([0-9+])\s+obj(\s)+/ms', $buffer, $matches, 0, $offset) !== 1) {
+        if (preg_match('/([0-9]+)\s+([0-9+])\s+obj(\s+)/ms', $buffer, $matches, 0, $offset) !== 1) {
             return p_error("object is not valid: $expected_obj_id");
         }
 
