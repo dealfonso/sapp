@@ -47,13 +47,14 @@ class PDFValue implements ArrayAccess {
         $this->value[$offset] = $value;
     }
     public function offsetUnset($offset ) {
-        if ((!is_array($this->value)) || (!isset($this->value[$offset]))) throw new Exception('invalid offset');
+        if ((!is_array($this->value)) || (!isset($this->value[$offset]))) 
+            throw new Exception('invalid offset');
         unset($this->value[$offset]);
     }    
     public function push($v) {
         /*if (get_class($v) !== get_class($this))
             throw new Exception('invalid object to concat to this one');*/
-        return true;
+        return false;
     }
     public function get_int() {
         return false;

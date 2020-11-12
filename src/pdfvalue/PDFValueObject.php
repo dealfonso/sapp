@@ -84,6 +84,10 @@ class PDFValueObject extends PDFValue {
         $this->value[$offset] = self::_convert($value);
         return $this->value[$offset];
     }
+    public function offsetExists ( $offset ) {
+        return isset($this->value[$offset]);
+    }
+
     /**
      * Function to output the object using the PDF format, and trying to make it compact (by reducing spaces, depending on the values)
      * @return pdfentry the PDF entry for the object

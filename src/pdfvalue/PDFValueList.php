@@ -28,6 +28,16 @@ class PDFValueList extends PDFValue {
     public function __toString() {
         return '[' . implode(' ', $this->value) . ']';
     }
+    public function val($recurse = false) {
+        if ($recurse === true) {
+            $result = [];
+            foreach ($this->value as $v) {
+                array_push($result, $v->val());
+            }
+            return $result;
+        } else
+            return parent::val();
+    }
     public function get_object_referenced() {
         $ids = [];
         $plain_text_val = implode(' ', $this->value);
@@ -66,6 +76,10 @@ class PDFValueList extends PDFValue {
         };
     }
     public function push($v) {
+        if (is_object($v) && (get_class($v) === get_class($this))) {
+            // If a list is pushed to another list, the elements are merged
+            $v = $v->val();
+        }
         if (!is_array($v)) $v = [ $v ];
         foreach ($v as $e) {
             $e = self::_convert($e);

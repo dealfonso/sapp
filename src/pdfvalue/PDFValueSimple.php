@@ -26,12 +26,12 @@ class PDFValueSimple extends PDFValue {
         parent::__construct($v);
     }
     public function push($v) {
-        $result = parent::push($v);
-        if ($result === true) {
+        if (get_class($v) === get_class($this)) {
             // Can push
             $this->value = $this->value . ' ' . $v->val();
+            return true;
         }
-        return $result;
+        return false;
     }
     public function get_object_referenced() {
         if (! preg_match('/^\s*([0-9]+)\s+([0-9]+)\s+R\s*$/ms', $this->value, $matches)) {
