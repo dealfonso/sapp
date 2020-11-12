@@ -118,4 +118,21 @@ class Buffer {
         $this->_buffer = $buffer;
         return $result;
     }    
+
+
+    public function show_bytes($columns, $offset = 0, $length = null) {
+        if ($length === null)
+            $length = $this->_bufferlen;
+
+        $result = "";
+        $length = min($length, $this->_bufferlen);
+        for ($i = $offset; $i < $length;) {
+            for ($j = 0; ($j < $columns) && ($i < $length); $i++, $j++) {
+                $result .= sprintf("%02x ", ord($this->_buffer[$i]));
+            }
+            $result .= "\n";
+        }
+
+        return $result;
+    }
 }

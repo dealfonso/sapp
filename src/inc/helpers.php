@@ -95,6 +95,16 @@ function p_debug($e, $retval = false) {
     return $retval;
 }
 /**
+ * Function that writes a string to stderr and returns a value (to ease coding like return p_warning(...))
+ * @param e the debug message
+ * @param retval the value to return (default: false)
+ * @return retval
+ */
+function p_warning($e, $retval = false) {
+    p_stderr($e, "Warning");
+    return $retval;
+}
+/**
  * Function that writes a string to stderr and returns a value (to ease coding like return p_error(...))
  * @param e the error message
  * @param retval the value to return (default: false)
@@ -152,4 +162,21 @@ function get_memory_limit() {
         $memory_limit = 0;
     }
     return $memory_limit;
+}
+
+function show_bytes($str, $columns = null) {
+    $result = "";
+    if ($columns === null)
+        $columns = strlen($str);
+    $c = $columns;
+    for ($i = 0; $i < strlen($str); $i++) {
+        $result .= sprintf("%02x ", ord($str[$i]));
+        $c--;
+        if ($c === 0) {
+            $c = $columns;
+            $result .= "\n";
+        }
+
+    }
+    return $result;
 }
