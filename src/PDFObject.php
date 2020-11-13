@@ -22,7 +22,9 @@
 namespace ddn\sapp;
 
 use ddn\sapp\pdfvalue\PDFValueObject;
+use ddn\sapp\pdfvalue\PDFValueSimple;
 use \ArrayAccess;
+use \Buffer;
 
 /**
  * Class to gather the information of a PDF object: the OID, the definition and the stream. The purpose is to 
@@ -54,6 +56,10 @@ class PDFObject implements ArrayAccess {
         $this->_value = $value;
     }
 
+    public function set_oid($oid) {
+        $this->_oid = $oid;
+    }
+
     public function __toString() {
         return  "$this->_oid 0 obj\n" .
             "$this->_value\n" .
@@ -75,14 +81,14 @@ class PDFObject implements ArrayAccess {
      * @return pdfentry a string that contains the PDF entry
      */
     public function to_pdf_entry() {
-        return  "$this->_oid 0 obj\n" .
-                "$this->_value\n" .
+        return  "$this->_oid 0 obj\r" .
+                "$this->_value\r" .
                 ($this->_stream === null?"":
-                    "stream\n" .
+                    "stream\r\n" .
                     $this->_stream . 
-                    "\nendstream\n"
+                    "\rendstream\r"
                 ) .
-                "endobj\n";
+                "endobj\r";
     }
     /**
      * Gets the object ID
@@ -98,6 +104,82 @@ class PDFObject implements ArrayAccess {
     public function get_value() {
         return $this->_value;
     }
+    protected static function FlateDecode($_stream, $params) {
+        switch ($params["Predictor"]->get_int()) {
+            case 1:
+                    return $_stream;
+            case 10:
+            case 11:
+            case 12:
+            case 13:
+            case 14:
+            case 15:
+                    break;
+            default:
+                    return p_error("other predictor than PNG is not supported in this version");
+        }
+
+        switch($params["Colors"]->get_int()) {
+            case 1:
+                break;
+            default:
+                return p_error("other color count than 1 is not supported in this version");
+        }
+
+        switch($params["BitsPerComponent"]->get_int()) {
+            case 8:
+                break;
+            default:
+                return p_error("other bit count than 8 is not supported in this version");
+        }
+
+        $decoded = new Buffer();
+        $columns = $params['Columns']->get_int();
+
+        $row_len = $columns + 1;
+        $stream_len = strlen($_stream);
+
+        // The previous row is zero
+        $data_prev = str_pad("", $columns, chr(0));
+        $row_i = 0;
+        $pos_i = 0;
+        $data = str_pad("", $columns, chr(0));
+        while ($pos_i < $stream_len) {
+            $filter_byte = ord($_stream[$pos_i++]);
+
+            // Get the current row
+            $data = substr($_stream, $pos_i, $columns);
+            $pos_i += strlen($data);
+
+            // Zero pad, in case that the content is not paired
+            $data = str_pad($data, $columns, chr(0));
+
+            // Depending on the filter byte of the row, we should unpack on one way or another
+            switch ($filter_byte) {
+                case 0: 
+                    break;
+                case 1: 
+                    for ($i = 1; $i < $columns; $i++)
+                        $data[$i] = ($data[$i] + $data[$i-1]) % 256;
+                    break;
+                case 2: 
+                    for ($i = 0; $i < $columns; $i++) {
+                        $data[$i] = chr((ord($data[$i]) + ord($data_prev[$i])) % 256);
+                    }
+                    break;
+                default: 
+                    return p_error("Unsupported stream");
+            }
+
+            // Store and prepare the previous row
+            $decoded->data($data);
+            $data_prev = $data;
+        }
+
+        // p_debug_var($decoded->show_bytes($columns));
+        return $decoded->get_raw();
+    }
+
     /**
      * Gets the stream of the object
      * @return stream a string that contains the stream of the object
@@ -108,7 +190,15 @@ class PDFObject implements ArrayAccess {
         if (isset($this->_value['Filter'])) {
             switch ($this->_value['Filter']) {
                 case '/FlateDecode':
-                    return gzuncompress($this->_stream);
+                    $DecodeParams = $this->_value['DecodeParms']??[];
+                    $params = [
+                        "Columns" => $DecodeParams['Columns']??new PDFValueSimple(0),
+                        "Predictor" => $DecodeParams['Predictor']??new PDFValueSimple(1),
+                        "BitsPerComponent" => $DecodeParams['BitsPerComponent']??new PDFValueSimple(8),
+                        "Colors" => $DecodeParams['Colors']??new PDFValueSimple(1)
+                    ];
+                    return self::FlateDecode(gzuncompress($this->_stream), $params);
+                    
                     break;
                 default:
                     return p_error('unknown compression method ' . $this->_value['Filter']);
@@ -128,8 +218,7 @@ class PDFObject implements ArrayAccess {
         if (isset($this->_value['Filter'])) {
             switch ($this->_value['Filter']) {
                 case '/FlateDecode':
-                    $this->_stream = gzcompress($stream);
-                    return;
+                    $stream = gzcompress($stream);
                     break;
                 default:
                     p_error('unknown compression method ' . $this->_value['Filter']);
@@ -177,4 +266,8 @@ class PDFObject implements ArrayAccess {
     public function offsetUnset($field ) {
         $this->_value->offsetUnset($field);
     }    
+
+    public function push($v) {
+        return $this->_value->push($v);
+    }
 }

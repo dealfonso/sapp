@@ -43,23 +43,6 @@ if (!defined('__TMP_FOLDER'))
 
 class PDFDoc extends PDFBaseDoc {
 
-    const T_STANDARD_FONTS = [
-        "Times-Roman", 
-        "Times-Bold", 
-        "Time-Italic", 
-        "Time-BoldItalic", 
-        "Courier", 
-        "Courier-Bold", 
-        "Courier-Oblique", 
-        "Courier-BoldOblique",
-        "Helvetica", 
-        "Helvetica-Bold", 
-        "Helvetica-Oblique", 
-        "Helvetica-BoldOblique", 
-        "Symbol", 
-        "ZapfDingbats"
-    ];
-
     // The PDF version of the parsed file
     protected $_pdf_objects = [];
     protected $_pdf_version_string = null;
@@ -97,6 +80,7 @@ class PDFDoc extends PDFBaseDoc {
         $pdfdoc->_pdf_trailer_object = $trailer;
         $pdfdoc->_xref_position = $xref_position;
         $pdfdoc->_xref_table = $xref_table;
+        $pdfdoc->_xref_table_version = $structure["xrefversion"];
         $pdfdoc->_buffer = $buffer;
 
         if ($trailer['Encrypt'] !== false)
@@ -152,15 +136,16 @@ class PDFDoc extends PDFBaseDoc {
 
         return $object;
     }
+
     /**
      * Creates an image object in the document, using the content of "info"
      *   NOTE: the image inclusion is taken from http://www.fpdf.org/; this is a translation
      *         of function _putimage
      */
-    protected function _create_image_objects($info) {
+    protected static function _create_image_objects($info, $id_fnc) {
         $objects = [];
 
-        $image = new PDFObject($this->get_new_oid(),
+        $image = new PDFObject(call_user_func($id_fnc),
             [
                 'Type' => '/XObject',
                 'Subtype' => '/Image',
@@ -168,21 +153,22 @@ class PDFDoc extends PDFBaseDoc {
                 'Height' => $info['h'],
                 'ColorSpace' => [ ],
                 'BitsPerComponent' => $info['bpc'],
-                'Length' => strlen($info['data'])
+                'Length' => strlen($info['data']),
             ]            
         );
 
         switch ($info['cs']) {
             case 'Indexed':
-                $image['ColorSpace']->push([
-                    '/Indexed', '/DeviceRGB', (strlen($info['pal']) / 3) - 1, new PDFValueReference($mask->get_oid())
-                ]);
                 $data = gzcompress($info['pal']);
-                $streamobject = new PDFObject($this->get_new_oid(), [
-                    'Filter' => '/FlatDecode',
+                $streamobject = new PDFObject(call_user_func($id_fnc), [
+                    'Filter' => '/FlateDecode',
                     'Length' => strlen($data),
                 ]);
                 $streamobject->set_stream($data);
+
+                $image['ColorSpace']->push([
+                    '/Indexed', '/DeviceRGB', (strlen($info['pal']) / 3) - 1, new PDFValueReference($streamobject->get_oid())
+                ]);
                 array_push($objects, $streamobject);
                 break;
             case 'DeviceCMYK':
@@ -193,7 +179,7 @@ class PDFDoc extends PDFBaseDoc {
         }
 
         if (isset($info['f']))
-            $image['Filter'] = "/" . $info['f'];
+            $image['Filter'] = new PDFValueType($info['f']);
 
         if(isset($info['dp']))
             $image['DecodeParms'] = PDFValueObject::fromstring($info['dp']);
@@ -213,7 +199,7 @@ class PDFDoc extends PDFBaseDoc {
             ];
 
             // In principle, it may return multiple objects
-            $smasks = $this->_create_image_objects($smaskinfo);
+            $smasks = self::_create_image_objects($smaskinfo, $id_fnc);
             foreach ($smasks as $smask)
                 array_push($objects, $smask);
             $image['SMask'] = new PDFValueReference($smask->get_oid());
@@ -221,121 +207,29 @@ class PDFDoc extends PDFBaseDoc {
 
         $image->set_stream($info['data']);
         array_unshift($objects, $image);
+
         return $objects;
     }
 
     /**
-     * This is a function that allows to add a very basic text to a page, using a standard font.
-     *   The function is mainly oriented to add banners and so on, and not to use for writting.
-     * @param page the number of page in which the text should appear
-     * @param text the text
-     * @param x the x offset from left for the text (we do not take care of margins)
-     * @param y the y offset from top for the text (we do not take care of margins)
-     * @param params an array of values [ "font" => <fontname>, "size" => <size in pt>, 
-     *               "color" => <#hexcolor>, "angle" => <rotation angle>]
+     * This function creates the objects needed to add an image to the document, at a specific position and size.
+     *   The function is agnostic from the place in which the image is to be created, and just creates the objects
+     *   with its contents and prepares the PDF command to place the image
+     * @param filename the file name that contains the image, or a string that contains the image (with character '@'
+     *                 prepended)
+     * @param x points from left in which to appear the image (the units are "content-defined" (i.e. depending on the size of the page))
+     * @param y points from bottom in which to appear the image (the units are "content-defined" (i.e. depending on the size of the page))
+     * @param w width of the rectangle in which to appear the image (image will be scaled, and the units are "content-defined" (i.e. depending on the size of the page))
+     * @param h height of the rectangle in which to appear the image (image will be scaled, and the units are "content-defined" (i.e. depending on the size of the page))
+     * @return result an array with the next fields:
+     *                  "images": objects of the corresponding images (i.e. position [0] is the image, the rest elements are masks, if needed)
+     *                  "resources": PDFValueObject with keys that needs to be incorporated to the resources of the object in which the images will appear
+     *                  "alpha": true if the image has alpha
+     *                  "command": pdf command to draw the image
+     * 
+     * TODO: this function could be static, if function "get_new_oid" is public; maybe we could create a public function "new_object" in the document
      */
-    public function add_text($page_to_appear, $text, $x, $y, $params = []) {
-
-        $default = [
-            "font" => "Helvetica",
-            "size" => 24,
-            "color" => "#000000",
-            "angle" => 0
-        ];
-
-        $params = array_merge($default, $params);
-
-        $page_obj = $this->get_page($page_to_appear);
-        if ($page_obj === false)
-            return p_error("invalid page");
-
-        $resources_obj = $this->get_indirect_object($page_obj['Resources']);
-
-        if (array_search($params["font"], self::T_STANDARD_FONTS) === false)
-            return p_error("only standard fonts are allowed Times-Roman, Helvetica, Courier, Symbol, ZapfDingbats");
-
-        $font_id = "F" . get_random_string(4);
-        $resources_obj['Font'][$font_id] = [
-            "Type" => "/Font",
-            "Subtype" => "/Type1",
-            "BaseFont" => "/" . $params['font'],
-        ];
-
-        // Get the contents for the page
-        $contents_obj = $this->get_indirect_object($page_obj['Contents']);
-
-        $data = $contents_obj->get_stream(false);
-        if ($data === false)
-            return p_error("could not interpret the contents of the page");
-
-        // Get the page height, to change the coordinates system (up to down)
-        $pagesize = $this->get_page_size($page_to_appear);
-        $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
-
-        $angle = $params["angle"];
-        $angle *= M_PI/180;
-        $c = cos($angle);
-        $s = sin($angle);
-        $cx = $x;
-        $cy = ($pagesize_h - $y);
-
-        if ($angle !== 0)
-            $rotate_command = sprintf("%.5F %.5F %.5F %.5F %.2F %.2F cm 1 0 0 1 %.2F %.2F cm", $c, $s, -$s, $c, $cx, $cy, -$cx, -$cy);
-
-        $text_command = "BT ";
-        $text_command .= "/$font_id "  . $params['size'] . " Tf ";
-        $text_command .= sprintf("%.2f %.2f Td ", $x, $pagesize_h - $y); // Ubicar en x, y
-        $text_command .= sprintf("(%s) Tj ", $text);
-        $text_command .= "ET ";
-
-        $color = $params["color"];
-        if ($color[0] === '#') {
-            $colorvalid = true;
-            $r = null;
-            switch (strlen($color)) {
-                case 4:
-                    $color = "#" . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
-                    p_debug_var($color);
-                case 7:
-                    list($r, $g, $b) = sscanf($color, "#%02x%02x%02x");                    
-                    break;
-                default:
-                    p_error("please use html-like colors (e.g. #ffbbaa)");
-            }
-            if ($r !== null)
-                $text_command = " q $r $g $b rg $text_command Q"; // Color RGB
-        } else 
-            p_error("please use html-like colors (e.g. #ffbbaa)");
-
-        if ($angle !== 0)
-            $text_command = " q $rotate_command $text_command Q";    
-            
-        $data .= $text_command;
-
-        $contents_obj->set_stream($data, false);
-
-        // Update the contents
-        $this->add_object($resources_obj);
-        $this->add_object($contents_obj);        
-    }
-
-    /**
-     * Adds an image to the document, in the specific page
-     *   NOTE: the image inclusion is taken from http://www.fpdf.org/; this is an adaptation
-     *         and simplification of function Image(); it does not take care about units nor 
-     *         page breaks
-     * @param pageobj the page object in which the image will appear
-     * @param filename the name of the file that contains the image (or the content of the file, with the character '@' prepended)
-     * @param x the x position (in pixels) where the image will appear
-     * @param y the y position (in pixels) where the image will appear
-     * @param w the width of the image
-     * @param w the height of the image
-     */
-    public function add_image($page_to_appear, $filename, $x=0, $y=0, $w=0, $h=0) {
-
-        $page_obj = $this->get_page($page_to_appear);
-        if ($page_obj === false)
-            return p_error("invalid page");
+    protected function _add_image($filename, $x=0, $y=0, $w=0, $h=0) {
 
         if (empty($filename))
             return p_error('invalid image name or stream');
@@ -369,6 +263,7 @@ class PDFDoc extends PDFBaseDoc {
                 return p_error("unsupported mime type");
         }
 
+        // Generate a new identifier for the image
         $info['i'] = "Im" . get_random_string(4);
 
         if ($w === null)
@@ -385,76 +280,47 @@ class PDFDoc extends PDFBaseDoc {
         if($h==0)
             $h = $w*$info['h']/$info['w'];
 
-        $images_objects = $this->_create_image_objects($info);
+        $images_objects = self::_create_image_objects($info, [ $this, 'get_new_oid' ]);
 
-        $resources = new PDFObject($this->get_new_oid(),
-            [
-                'ProcSet' => [ '/PDF', '/Text', '/ImageB', '/ImageC', '/ImageI' ],
-                'XObject' => new PDFValueObject ([
-                    $info['i'] => $images_objects[0]->get_oid()
-                ])
-            ]
-        );
-
-        if (is_int($page_obj))
-            $page_obj = $this->get_page($page_obj);
-
-        if ($page_obj === false)
-            return p_error("invalid page");
-            
-        // Get the resources for the page
-        $resources_obj = $this->get_indirect_object($page_obj['Resources']);
-        if (!isset($resources_obj['ProcSet']))
-            $resources_obj['ProcSet'] = new PDFValueList(['/PDF']);
-        $resources_obj['ProcSet']->push(['/ImageB', '/ImageC', '/ImageI']);
-        if (!isset($resources_obj['XObject']))
-            $resources_obj['XObject'] = new PDFValueObject();
-        $resources_obj['XObject'][$info['i']] = new PDFValueReference($images_objects[0]->get_oid());
-
-        // Get the contents for the page
-        $contents_obj = $this->get_indirect_object($page_obj['Contents']);
-
-        $data = $contents_obj->get_stream(false);
-        if ($data === false)
-            return p_error("could not interpret the contents of the page");
-
-        // Get the page height, to change the coordinates system (up to down)
-        $pagesize = $this->get_page_size($page_to_appear);
-        $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
-
-        $data .= sprintf("\nq %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q\n", $w, $h, $x, $pagesize_h - $y - $h, $info['i']);
-
-        $contents_obj->set_stream($data, false);
-
-        if ($add_alpha === true) {
-            $page_obj['Group'] = new PDFValueObject([
-                'Type' => '/Group',
-                'S' => '/Transparency',
-                'CS' => '/DeviceRGB'
-            ]);
-
-            $this->add_object($page_obj);
-        }
-
-        foreach ([...$images_objects, $resources_obj, $contents_obj] as $o )
+        foreach ($images_objects as $o) {
             $this->add_object($o);
+        }
+                
+        // Generate the command to translate and scale the image
+        $data = sprintf("q %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q", $w, $h, $x, $y, $info['i']);
+
+        $resources = new PDFValueObject( [
+            'ProcSet' => [ '/PDF', '/Text', '/ImageB', '/ImageC', '/ImageI' ],
+            'XObject' => new PDFValueObject ([
+                $info['i'] => new PDFValueReference($images_objects[0]->get_oid()),                        
+            ])
+        ]);
+
+        return [ "image" => $images_objects[0], 'command' => $data, 'resources' => $resources, 'alpha' => $add_alpha ];
     }
 
     /**
-     * This function prepares the document to be signed, using the certificate and password. It creates the annotations
-     *   and adds them to the document; then prepares the signature object, ready to be used once the document is dumped
+     * This function prepares the document to be generated including a digital signature, using the provided certificate. It is 
+     *   possible to set the page in which the signature may appear and the rectangle in which to appear. Moreover, an image can 
+     *   be added to make the signature appear. In case that the image is null, the image will be invisible
      * 
-     *   LIMITATIONS: one document can be signed once at a time; if wanted more signatures, then chain the documents:
+     *      LIMITATIONS: one document can be signed once at a time; if wanted more signatures, then chain the documents:
      *      $o1->sign_document(...);
      *      $o2 = PDFDoc::fromstring($o1->to_pdf_file_s);
      *      $o2->sign_document(...);
      *      $o2->to_pdf_file_s();
+
+     * @param certfile the file that contains the certificate to sign the document (format pkcs12)
+     * @param certpass the password needed to sign using the certificate
+     * @param page_to_appear the page number in which the signature will appear
+     * @param rect_to_appear the rectangle (using the page coordinates in pixels) in which the signature will appear
+     * @param imagefilename the image to appear, associated to the signature
+     * @return prepared true if the file is ready to be genereated with the digital signature
      */
-    public function sign_document($certfile, $certpass, $page_to_appear = 0, $rect_to_appear = [ 0, 0, 0, 0 ]) {
+    public function sign_document($certfile, $certpass, $page_to_appear = 0, $rect_to_appear = [ 0, 0, 0, 0 ], $imagefilename = null) {
         // Do not allow more than one signature for a specific document; if needed, signatures must be chained
         if ($this->_signature !== null)
             return p_error("the document has already been prepared to be signed");
-
 
         // First we read the certificate
         $certfilecontent = file_get_contents($certfile);
@@ -471,14 +337,15 @@ class PDFDoc extends PDFBaseDoc {
         if (($root === false) || (($root = $root->get_object_referenced()) === false))
             return p_error("could not find the root object from the trailer");
 
-        $page_obj = $this->get_page($page_to_appear);
-        if ($page_obj === false)
-            return p_error("invalid page");
-
         $root_obj = $this->get_object($root);
         if ($root_obj === false)
             return p_error("invalid root object");
 
+        // Now the object corresponding to the page number in which to appear
+        $page_obj = $this->get_page($page_to_appear);
+        if ($page_obj === false)
+            return p_error("invalid page");
+    
         // Prepare the signature object (we need references to it)
         $signature = new PDFSignatureObject($this->get_new_oid());
         $signature->set_certificate($certificate);
@@ -497,33 +364,161 @@ class PDFDoc extends PDFBaseDoc {
                 "T" => new PDFValueString('Signature' . get_random_string()),
                 "P" => new PDFValueReference($page_obj->get_oid()),
                 "Rect" => [ $rect_to_appear[0], $pagesize_h - $rect_to_appear[1], $rect_to_appear[2], $pagesize_h - $rect_to_appear[3] ],
-                "F" => 4  // TODO: check this value
+                "F" => 132  // TODO: check this value
             ]
         );      
         
+        // If an image is provided, let's load it
+        if ($imagefilename !== null) {
+            // Signature with appearance, following the Adobe workflow: 
+            //   1. form
+            //   2. layers /n0 (empty) and /n2
+            // https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/acrobat_digital_signature_appearances_v9.pdf
+
+            $bbox = [ 0, 0, $rect_to_appear[2] - $rect_to_appear[0], $rect_to_appear[3] - $rect_to_appear[1]];
+            $form_object = new PDFObject($this->get_new_oid(),
+            [
+                "BBox" => $bbox,
+                "Subtype" => "/Form",
+                "Type" => "/XObject",
+                "Group" => [
+                    'Type' => '/Group',
+                    'S' => '/Transparency',
+                    'CS' => '/DeviceRGB'
+                ]
+            ]);
+    
+            $result = $this->_add_image($imagefilename, ...$bbox);
+            if ($result === false)
+                return p_error("could not add the image");
+
+            $drawcommand = $result['command'];
+            $resources = $result['resources'];
+
+            $layer_n0 = new PDFObject($this->get_new_oid(), [
+                "BBox" => $bbox,
+                "Subtype" => "/Form",
+                "Type" => "/XObject",
+                "Resources" => new PDFValueObject()
+            ]);
+            $layer_n0->set_stream("% DSBlank\r", false);
+
+            $layer_n2 = new PDFObject($this->get_new_oid(), [
+                "BBox" => $bbox,
+                "Subtype" => "/Form",
+                "Type" => "/XObject",
+                "Resources" => $resources
+            ]);
+            $layer_n2->set_stream($drawcommand, false);
+
+            $container_form_object = new PDFObject($this->get_new_oid(), [
+                "BBox" => $bbox,
+                "Subtype" => "/Form",
+                "Type" => "/XObject",
+                "Resources" => [ "XObject" => [
+                    "n0" => new PDFValueReference($layer_n0->get_oid()),
+                    "n2" => new PDFValueReference($layer_n2->get_oid()) 
+                    ] ] 
+                ]);
+            $container_form_object->set_stream("q 1 0 0 1 0 0 cm /n0 Do Q\nq 1 0 0 1 0 0 cm /n2 Do Q\n", false);
+
+            $form_object['Resources'] = new PDFValueObject([
+                "XObject" => [
+                    "FRM" => new PDFValueReference($container_form_object->get_oid())
+                ]
+            ]);
+            $form_object->set_stream("/FRM Do", false);
+
+            $this->add_object($form_object);
+            $this->add_object($layer_n0);
+            $this->add_object($layer_n2);
+            $this->add_object($container_form_object);
+
+            // Set the signature appearance field to the form object
+            $annotation_object["AP"] = [ "N" => new PDFValueReference($form_object->get_oid())];
+        }
+
+        // The objects to update
+        $updated_objects = [ $annotation_object ];
+
         // Add the annotation to the page
         if (!isset($page_obj["Annots"]))
             $page_obj["Annots"] = new PDFValueList();
 
-        if (!$page_obj["Annots"]->push(new PDFValueReference($annotation_object->get_oid())))
+        $annots = &$page_obj["Annots"];
+
+        $newannots = new PDFObject($this->get_new_oid(), 
+            new PDFValueList()
+        );
+
+        if ((($referenced = $annots->get_object_referenced()) !== false) && (!is_array($referenced))) {
+            // It is an indirect object, so we need to update that object
+            $annots = $this->get_object($referenced);
+        } else {
+            $newannots->push($annots);
+        }
+
+        if (!$newannots->push(new PDFValueReference($annotation_object->get_oid())))
             return p_error("Could not update the page where the signature has to appear");
-        
+
+        array_push($updated_objects, $newannots);
+        $page_obj["Annots"] = new PDFValueReference($newannots->get_oid());
+        array_push($updated_objects, $page_obj);
+
+        // AcroForm may be an indirect object
         if (!isset($root_obj["AcroForm"]))
             $root_obj["AcroForm"] = new PDFValueObject();
 
-        // Add the annotation to the interactive form
-        $root_obj["AcroForm"]["SigFlags"] = 3;
-        if (!isset($root_obj["AcroForm"]['Fields']))
-            $root_obj["AcroForm"]['Fields'] = new PDFValueList();
+        $acroform = &$root_obj["AcroForm"];
+        if ((($referenced = $acroform->get_object_referenced()) !== false) && (!is_array($referenced))) {
+            $acroform = $this->get_object($referenced);
+            array_push($updated_objects, $acroform);
+        } else {
+            array_push($updated_objects, $root_obj);
+        }
 
-        if (!$root_obj["AcroForm"]['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
+        // Add the annotation to the interactive form
+        $acroform["SigFlags"] = 3;
+        if (!isset($acroform['Fields']))
+            $acroform['Fields'] = new PDFValueList();
+
+        // Update the xmp metadata if exists
+        if (isset($root_obj["Metadata"])) {
+            $metadata = $root_obj["Metadata"];
+            if ((($referenced = $metadata->get_object_referenced()) !== false) && (!is_array($referenced))) {
+                $metadata = $this->get_object($referenced);
+                array_push($updated_objects, $metadata);
+
+                $metastream = $metadata->get_stream();
+                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . (new \DateTime())->format("c") . '</xmp:ModifyDate>', $metastream);
+                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . (new \DateTime())->format("c") . '</xmp:MetadataDate>', $metastream);
+                $metadata->set_stream($metastream, false);
+                $this->add_object($metadata);
+            }
+        }
+
+        // Add the annotation object to the interactive form
+        if (!$acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
             return p_error("could not create the signature field");
-        }            
+        }
+
+        // Update the information object (not really needed)
+        $info = $this->_pdf_trailer_object["Info"];
+        if (($info === false) || (($info = $info->get_object_referenced()) === false))
+            return p_error("could not find the info object from the trailer");
+
+        $info_obj = $this->get_object($info);
+        if ($info_obj === false)
+            return p_error("invalid info object");
+
+        $info_obj["ModDate"] = $signature["M"];
+        $info_obj["Producer"] = "Modificado con SAPP";
+        array_push($updated_objects, $info_obj);
 
         // Store the objects
-        $this->add_object($annotation_object);
-        $this->add_object($root_obj);
-        $this->add_object($page_obj);
+        foreach ($updated_objects as &$object) {
+            $this->add_object($object);
+        }
 
         // And store the signature
         $this->_signature = $signature;
@@ -574,13 +569,14 @@ class PDFDoc extends PDFBaseDoc {
     }
 
     /**
-     * This function generates all the contents of the file up to the xref entry. This works both in
-     *   in-mem docs as incremental docs, because in the former case the buffer will be zeroed.
-     * 
+     * This function generates all the contents of the file up to the xref entry. 
+     * @param rebuild whether to generate the xref with all the objects in the document (true) or
+     *                consider only the new ones (false)
+     * @return xref_data [ the text corresponding to the objects, array of offsets for each object ]
      */
     protected function _generate_content_to_xref($rebuild = false) {
         if ($rebuild === true) {
-            $result  = new Buffer("%$this->_pdf_version_string\n");
+            $result  = new Buffer("%$this->_pdf_version_string\r");
         }  else {
             $result = new Buffer($this->_buffer);
         }
@@ -613,6 +609,7 @@ class PDFDoc extends PDFBaseDoc {
 
     /**
      * This functions outputs the document to a buffer object, ready to be dumped to a file.
+     * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
      * @return buffer a buffer that contains a pdf dumpable document
      */
     public function to_pdf_file_b($rebuild = false) : Buffer {
@@ -629,24 +626,86 @@ class PDFDoc extends PDFBaseDoc {
             $xref_offset +=  strlen($this->_signature->to_pdf_entry());
         }
 
-        $xref_content = self::build_xref($_obj_offsets);
+        $doc_version_string = str_replace("PDF-", "", $this->_pdf_version_string);
 
-        // Update the trailer
-        $this->_pdf_trailer_object['Size'] = $this->_max_oid + 1;
+        // The version considered for the cross reference table depends on the version of the current xref table,
+        //   as it is not possible to mix xref tables. Anyway we are 
+        $target_version = $this->_xref_table_version;
+        if ($this->_xref_table_version >= "1.5") {
+            // i.e. xref streams
+            if ($doc_version_string > $target_version)
+                $target_version = $doc_version_string;
+        } else {
+            // i.e. xref+trailer
+            if ($doc_version_string < $target_version)
+                $target_version = $doc_version_string;
+        }
 
-        if ($rebuild === false)
-            $this->_pdf_trailer_object['Prev'] = $this->_xref_position;
+        if ($target_version >= "1.5") {
+            p_debug("generating xref using cross-reference streams");
 
-        // Generate new IDs
-        $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref_content);
-        $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
-        $this->_pdf_trailer_object['ID'] = new PDFValueList(
-            [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ]
-        );
+            // Create a new object for the trailer
+            $trailer = new PDFObject(
+                $this->get_new_oid(),
+                clone $this->_pdf_trailer_object
+            );
 
-        $_doc_from_xref = new Buffer($xref_content);
-        $_doc_from_xref->data("trailer\n$this->_pdf_trailer_object");
-        $_doc_from_xref->data("\nstartxref\n$xref_offset\n%%EOF\n");
+            // Add this object to the offset table, to be also considered in the xref table
+            $_obj_offsets[$trailer->get_oid()] = $xref_offset;
+
+            // Generate the xref cross-reference stream
+            $xref = self::build_xref_1_5($_obj_offsets);
+
+            // Set the parameters for the trailer
+            $trailer["Index"] = explode(" ", $xref["Index"]);
+            $trailer["W"] = $xref["W"];
+            $trailer["Size"] = $this->_max_oid + 1;
+            $trailer["Type"] = "/XRef";
+
+            // Not needed to generate new IDs, as in metadata the IDs will be set
+            // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref["stream"]);
+            // $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
+            // $trailer["ID"] = [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ];
+
+            // We are not using predictors nor encoding
+            if (isset($trailer["DecodeParms"])) unset($trailer["DecodeParms"]);
+
+            // We are not compressing the stream
+            if (isset($trailer["Filter"])) unset($trailer["Filter"]);
+            $trailer->set_stream($xref["stream"], false);
+
+            // If creating an incremental modification, point to the previous xref table
+            if ($rebuild === false)
+                $trailer['Prev'] = $this->_xref_position;
+
+            // Add this object to the document
+            $this->add_object($trailer);
+
+            // And generate the part of the document related to the xref
+            $_doc_from_xref = new Buffer($trailer->to_pdf_entry());
+            $_doc_from_xref->data("startxref\r$xref_offset\r%%EOF\r");
+        } else {
+            p_debug("generating xref using classic xref...trailer");
+            $xref_content = self::build_xref($_obj_offsets);
+
+            // Update the trailer
+            $this->_pdf_trailer_object['Size'] = $this->_max_oid + 1;
+
+            if ($rebuild === false)
+                $this->_pdf_trailer_object['Prev'] = $this->_xref_position;
+
+            // Not needed to generate new IDs, as in metadata the IDs may be set
+            // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref_content);
+            // $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
+            // $this->_pdf_trailer_object['ID'] = new PDFValueList(
+            //    [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ]
+            // );
+
+            // Generate the part of the document related to the xref
+            $_doc_from_xref = new Buffer($xref_content);
+            $_doc_from_xref->data("trailer\n$this->_pdf_trailer_object");
+            $_doc_from_xref->data("\nstartxref\n$xref_offset\n%%EOF\n");
+        }
 
         if ($this->_signature !== null) {
             // In case that the document is signed, calculate the signature
@@ -718,15 +777,28 @@ class PDFDoc extends PDFBaseDoc {
 
     /**
      * Gets the size of the page in the form of a rectangle [ x0 y0 x1 y1 ]
-     * @param i the number of page (according to the rendering order)
+     * @param i the number of page (according to the rendering order), or the page object
      * @return box the bounding box of the page
      */
     public function get_page_size($i) {
-        if ($i < 0) return false;
-        if ($i > count($this->_pages_info)) return false;
+        $pageinfo = false;
+        
+        if (is_int($i)) {
+            if ($i < 0) return false;
+            if ($i > count($this->_pages_info)) return false;
 
-        $pageinfo = $this->_pages_info[$i]['info'];
-        if (!isset($pageinfo['size'])) 
+            $pageinfo = $this->_pages_info[$i]['info'];
+        } else {
+            foreach ($this->_pages_info as $k => $info) {
+                if ($info['oid'] === $i->get_oid()) {
+                    $pageinfo = $info['info'];
+                    break;
+                }
+            }
+        }
+
+        // The page has not been found
+        if (($pageinfo === false) || (!isset($pageinfo['size'])))
             return false;
 
         return $pageinfo['size'];
@@ -741,6 +813,9 @@ class PDFDoc extends PDFBaseDoc {
      */
     protected function _get_page_info($oid, $info = []) {
         $object = $this->get_object($oid);
+        if ($object === false)
+            return p_error("could not get information about the page");
+
         $page_ids = [];
 
         switch ($object["Type"]->val()) {
@@ -778,7 +853,6 @@ class PDFDoc extends PDFBaseDoc {
      */
     protected function _acquire_pages_info() {
         $root = $this->_pdf_trailer_object["Root"];
-
         if (($root === false) || (($root = $root->get_object_referenced()) === false))
             return p_error("could not find the root object from the trailer");
 
