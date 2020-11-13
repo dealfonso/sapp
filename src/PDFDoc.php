@@ -401,7 +401,7 @@ class PDFDoc extends PDFBaseDoc {
                 "Type" => "/XObject",
                 "Resources" => new PDFValueObject()
             ]);
-            $layer_n0->set_stream("% DSBlank\r", false);
+            $layer_n0->set_stream("% DSBlank" . __EOL, false);
 
             $layer_n2 = new PDFObject($this->get_new_oid(), [
                 "BBox" => $bbox,
@@ -447,14 +447,15 @@ class PDFDoc extends PDFBaseDoc {
 
         $annots = &$page_obj["Annots"];
 
-        $newannots = new PDFObject($this->get_new_oid(), 
-            new PDFValueList()
-        );
-
         if ((($referenced = $annots->get_object_referenced()) !== false) && (!is_array($referenced))) {
             // It is an indirect object, so we need to update that object
-            $annots = $this->get_object($referenced);
+            $newannots = new PDFObject($this->get_new_oid(), 
+                $this->get_object($referenced)->get_value()
+            );
         } else {
+            $newannots = new PDFObject($this->get_new_oid(), 
+                new PDFValueList()
+            );
             $newannots->push($annots);
         }
 
@@ -576,7 +577,7 @@ class PDFDoc extends PDFBaseDoc {
      */
     protected function _generate_content_to_xref($rebuild = false) {
         if ($rebuild === true) {
-            $result  = new Buffer("%$this->_pdf_version_string\r");
+            $result  = new Buffer("%$this->_pdf_version_string" . __EOL);
         }  else {
             $result = new Buffer($this->_buffer);
         }
@@ -683,7 +684,7 @@ class PDFDoc extends PDFBaseDoc {
 
             // And generate the part of the document related to the xref
             $_doc_from_xref = new Buffer($trailer->to_pdf_entry());
-            $_doc_from_xref->data("startxref\r$xref_offset\r%%EOF\r");
+            $_doc_from_xref->data("startxref" . __EOL . "$xref_offset" . __EOL ."%%EOF" . __EOL);
         } else {
             p_debug("generating xref using classic xref...trailer");
             $xref_content = self::build_xref($_obj_offsets);
