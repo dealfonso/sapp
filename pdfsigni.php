@@ -3,7 +3,7 @@
 /*
     This file is part of SAPP
 
-    Simply A PDF Parser (SAPP) - Parse PDF documents in PHP (and update them)
+    Simply and Agnostic PDF Parser (SAPP) - Parse PDF documents in PHP (and update them)
     Copyright (C) 2020 - Carlos de Alfonso (caralla76@gmail.com)
 
     This program is free software: you can redistribute it and/or modify
