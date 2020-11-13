@@ -1,6 +1,18 @@
-# SAPP - Simply A PDF Document Parser
+# SAPP - Simply and Agnostic PDF Document Parser
 
-SAPP stands for Simply a PDF Parser and it makes what is name says: parsing PDF files. It also enables other cool features such as rebuilding documents (to make the content more clear or compact), adding images or digitally signing documents.
+SAPP stands for Simply and Agnostic PDF Parser and it makes what is name says: parsing PDF files. It also enables other cool features such as rebuilding documents (to make the content more clear or compact) or digitally signing documents.
+
+SAPP is agnostic because it does not care of composing PDF documents (e.g. adding pages, updating pages, etc.). Instead, its aim is to be somehow a backend to parse an existing PDF document and to manipulate the objects included on it, or to create new ones.
+
+The way of working with SAPP can be seen in the function to sign the document: it is an independent function that adds and manipulates the PDF objects contained in the document.
+
+Some features:
+1. Support 1.4 PDF documents
+1. Support many features of 1.5 PDF and later documents (including cross-reference streams)
+1. Work using incremental versions
+1. Works for rebuilding documents to flatten versions (older version are dropped)
+1. Signature of documents using the Acrobat workflow
+1. Others
 
 # 1. Why SAPP
 I created SAPP because I wanted to programmatically sign documents, including **multiple signatures**.
@@ -22,12 +34,13 @@ $ composer dump-autoload
 $ php pdfrebuild.php examples/testdoc.pdf > testdoc-rebuilt.pdf
 ``` 
 
-## 1.1. Examples
+## 2.1. Examples
 
 In the root folder you can find two simple examples: 
 
 1. `pdfrebuild.php`: this example gets a PDF file, loads it and rebuilds it to make every PDF object to be in order, and also reducing the amount of text to define the document. 
 1. `pdfsign.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate.
+1. `pdfsigni.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate, and adds an image that makes visible the signature in the document.
 
 ### 2.1.1. Rebuild PDF files with `pdfrebuild.php`
 
@@ -148,12 +161,51 @@ else {
 }
 ```
 
+### 2.1.3. Sign PDF files with an image, using `pdfsigni.php`
+
+To sign a PDF document that contains an image associated to the signature, it is possible to use the script `pdfsigni.php`:
+
+```bash
+$ php pdfsigni.php examples/testdoc.pdf "https://www.google.es/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" caralla.p12 > testdoc-signed.pdf
+```
+
+And now the document is signed, and a cool image appears. If you wanted to add a second signature, it is as easy as signing the resulting document again.
+
+The main difference with the previous code is the next:
+
+**The code:**
+
+_* the code related to the position in which the signature and the image appear has been ommited._
+
+```php
+...
+if ($obj->sign_document($argv[3], $password, 0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $image) === false)
+    fwrite(STDERR, "could not sign the document");
+else
+    echo $obj->to_pdf_file_s();
+...
+```
+
 # 3. Limitations
 
 At this time, the main limitations are:
 - Not dealing with **non-zero generation** pdf objects: they are uncommon, but according to the definition of the PDF structure, they are possible. If you find one non-zero generation object (you get an exception or error in that sense), please send me the document and I'll try to support it.
 - Not dealing with **encrypted documents**.
 - Other limitations, for sure :)
+
+## 3.1 Known issues
+
+Signatures may be chained using SAPP, and everything is ok with the Acrobat verification (i.e. Acrobat acknowledges that the documents and signatures are valid).
+
+But in a scenario when a document has been signed using Acrobat tools (either Pro or Reader), if signing with SAPP again somehow breaks the integrity and Acrobat does not acknowledge the previous signatures. The next signatures chained with SAPP are ok, even if signed with Acrobat tools.
+
+**Example**
+1. Signature 1 with Acrobat => ok
+1. Signature 2 with SAPP => the previous signatures are invalid, but this is ok
+1. Signature 3 with Acrobat => signature 1 is invalid, but 2 and 3 are ok
+1. Signature 4 with SAPP => signature 1 is invalid, but 2, 3 and 4 are ok
+
+I did a lot of debug, but I cannot find the problem. Maybe it is related to the certificate used or the metadata, but I could not found the problem, yet.
 
 # 4. Attributions
 

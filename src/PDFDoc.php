@@ -39,7 +39,12 @@ require_once(__DIR__ . "/inc/fpdfhelpers.php");
 if (!defined('__TMP_FOLDER'))
     define('__TMP_FOLDER', '/tmp');
 
-// The signature mechanism is taken from tcpdf (https://github.com/tecnickcom/TCPDF)
+// TODO: move the signature of documents to a new class (i.e. PDFDocSignable)
+// TODO: create a "object factory" concept, which is an object that can create objects, instead of using "new PDFObject($this->get_new_oid()..." to have a function "create_object"
+//       and to add it to the document; this can be provided that the object returned is obtained by reference, thus being updated in the
+//       document. This feature will enable the next two:
+// TODO: move function _create_image_objects outside PDFDoc class (e.g. to utilities or to fpdfhelpers)
+// TODO: move function _add_image outside the PDFDoc class (e.g. to utilities or to fpdfhelpers)
 
 class PDFDoc extends PDFBaseDoc {
 
