@@ -6,15 +6,15 @@ SAPP is agnostic because it does not care of composing PDF documents (e.g. addin
 
 The way of working with SAPP can be seen in the function to sign the document: it is an independent function that adds and manipulates the PDF objects contained in the document.
 
-Some features:
-1. Support 1.4 PDF documents
-1. Support many features of 1.5 PDF and later documents (including cross-reference streams)
-1. Work using incremental versions
+**Some of the features of SAPP:**
+1. Supports 1.4 PDF documents
+1. Supports many features of 1.5 PDF and later documents (including cross-reference streams)
+1. Works using incremental versions
 1. Works for rebuilding documents to flatten versions (older version are dropped)
-1. Signature of documents using the Acrobat workflow
-1. Others
+1. Signature of documents using the Acrobat workflow (and obtain the green checkmark).
+1. Others.
 
-# 1. Why SAPP
+## 1. Why SAPP
 I created SAPP because I wanted to programmatically sign documents, including **multiple signatures**.
 
 I tried [tcpdf](https://tcpdf.org/) along with [FPDI](https://www.setasign.com/products/fpdi/downloads/), but the results are not those expected. When importing a document using FPDI, the result is a new document with the pages of the original one, not the original document. So if the original document was signed, those signatures were lost.
@@ -23,26 +23,48 @@ I read about [SetaPDF-Signer](https://www.setasign.com/products/setapdf-signer/d
 
 At the end I got the [PDF 1.7 definition](https://www.adobe.com/content/dam/acom/en/devnet/pdf/pdfs/PDF32000_2008.pdf), and I learned about incremental PDF documents and its utility to include multiple signature in documents.
 
-# 2. Using SAPP
+## 2. Using SAPP
 
-To test the examples, you can clone the repository and use [composer](https://getcomposer.org/):
+### 2.1 Using composer and packagist
+
+To use SAPP in your projects, you just need to use [composer](https://getcomposer.org/):
+
+```bash
+$ composer require ddn/sapp:dev-main
+```
+
+Then, a `vendor` folder will be created, and then you can simply include the main file and use the classes:
+
+```php
+use ddn\sapp\PDFDoc;
+
+require_once('vendor/autoload.php');
+
+$obj = PDFDoc::from_string(file_get_contents("/path/to/my/pdf/file.pdf"));
+echo $obj->to_pdf_file_s(true);
+```
+
+### 2.2 Getting the source code
+Altenatively you can clone the repository and use [composer](https://getcomposer.org/):
 
 ```bash
 $ git clone https://github.com/dealfonso/sapp
 $ cd sapp
 $ composer dump-autoload
 $ php pdfrebuild.php examples/testdoc.pdf > testdoc-rebuilt.pdf
-``` 
+```
 
-## 2.1. Examples
+Then you will be ready to include the main file and use the classes.
 
-In the root folder you can find two simple examples: 
+## 3. Examples
+
+In the root folder of the source code you can find two simple examples: 
 
 1. `pdfrebuild.php`: this example gets a PDF file, loads it and rebuilds it to make every PDF object to be in order, and also reducing the amount of text to define the document. 
 1. `pdfsign.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate.
 1. `pdfsigni.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate, and adds an image that makes visible the signature in the document.
 
-### 2.1.1. Rebuild PDF files with `pdfrebuild.php`
+### 3.1. Rebuild PDF files with `pdfrebuild.php`
 
 Once cloned the repository and generated the autoload content, it is possible to run the example:
 
@@ -112,7 +134,7 @@ else {
 }
 ```
 
-### 2.1.2. Sign PDF files with `pdfsign.php`
+### 3.2. Sign PDF files with `pdfsign.php`
 
 To sign a PDF document, it is possible to use the script `pdfsign.php`:
 
@@ -161,7 +183,7 @@ else {
 }
 ```
 
-### 2.1.3. Sign PDF files with an image, using `pdfsigni.php`
+### 3.3. Sign PDF files with an image, using `pdfsigni.php`
 
 To sign a PDF document that contains an image associated to the signature, it is possible to use the script `pdfsigni.php`:
 
@@ -186,14 +208,14 @@ else
 ...
 ```
 
-# 3. Limitations
+## 4. Limitations
 
 At this time, the main limitations are:
 - Not dealing with **non-zero generation** pdf objects: they are uncommon, but according to the definition of the PDF structure, they are possible. If you find one non-zero generation object (you get an exception or error in that sense), please send me the document and I'll try to support it.
 - Not dealing with **encrypted documents**.
 - Other limitations, for sure :)
 
-## 3.1 Known issues
+### 4.1 Known issues
 
 Signatures may be chained using SAPP, and everything is ok with the Acrobat verification (i.e. Acrobat acknowledges that the documents and signatures are valid).
 
@@ -207,7 +229,7 @@ But in a scenario when a document has been signed using Acrobat tools (either Pr
 
 I did a lot of debug, but I cannot find the problem. Maybe it is related to the certificate used or the metadata, but I could not found the problem, yet.
 
-# 4. Attributions
+## 5. Attributions
 
 1. The mechanism for calculating the signature hash is heavily inspired in tcpdf.
 1. Reading jpg and png files has been taken from fpdf.
