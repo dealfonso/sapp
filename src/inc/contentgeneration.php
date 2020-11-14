@@ -99,8 +99,6 @@ function _create_image_objects($info, $object_factory) {
  *                  "resources": PDFValueObject with keys that needs to be incorporated to the resources of the object in which the images will appear
  *                  "alpha": true if the image has alpha
  *                  "command": pdf command to draw the image
- * 
- * TODO: this function could be static, if function "get_new_oid" is public; maybe we could create a public function "new_object" in the document
  */
 function _add_image($object_factory, $filename, $x=0, $y=0, $w=0, $h=0) {
 

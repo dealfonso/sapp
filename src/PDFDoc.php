@@ -186,7 +186,7 @@ class PDFDoc extends PDFBaseDoc {
             return p_error("invalid page");
     
         // Prepare the signature object (we need references to it)
-        $signature = new PDFSignatureObject($this->get_new_oid());
+        $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject");
         $signature->set_certificate($certificate);
         
         // Get the page height, to change the coordinates system (up to down)
@@ -194,8 +194,7 @@ class PDFDoc extends PDFBaseDoc {
         $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
 
         // Create the annotation object, annotate the offset and append the object
-        $annotation_object = new PDFObject($this->get_new_oid(),
-            [
+        $annotation_object = $this->create_object([
                 "Type" => "/Annot",
                 "Subtype" => "/Widget",
                 "FT" => "/Sig",
@@ -215,8 +214,7 @@ class PDFDoc extends PDFBaseDoc {
             // https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/acrobat_digital_signature_appearances_v9.pdf
 
             $bbox = [ 0, 0, $rect_to_appear[2] - $rect_to_appear[0], $rect_to_appear[3] - $rect_to_appear[1]];
-            $form_object = new PDFObject($this->get_new_oid(),
-            [
+            $form_object = $this->create_object([
                 "BBox" => $bbox,
                 "Subtype" => "/Form",
                 "Type" => "/XObject",
@@ -234,7 +232,7 @@ class PDFDoc extends PDFBaseDoc {
             $drawcommand = $result['command'];
             $resources = $result['resources'];
 
-            $layer_n0 = new PDFObject($this->get_new_oid(), [
+            $layer_n0 = $this->create_object([
                 "BBox" => $bbox,
                 "Subtype" => "/Form",
                 "Type" => "/XObject",
@@ -242,7 +240,7 @@ class PDFDoc extends PDFBaseDoc {
             ]);
             $layer_n0->set_stream("% DSBlank" . __EOL, false);
 
-            $layer_n2 = new PDFObject($this->get_new_oid(), [
+            $layer_n2 = $this->create_object([
                 "BBox" => $bbox,
                 "Subtype" => "/Form",
                 "Type" => "/XObject",
@@ -250,7 +248,7 @@ class PDFDoc extends PDFBaseDoc {
             ]);
             $layer_n2->set_stream($drawcommand, false);
 
-            $container_form_object = new PDFObject($this->get_new_oid(), [
+            $container_form_object = $this->create_object([
                 "BBox" => $bbox,
                 "Subtype" => "/Form",
                 "Type" => "/XObject",
@@ -268,11 +266,6 @@ class PDFDoc extends PDFBaseDoc {
             ]);
             $form_object->set_stream("/FRM Do", false);
 
-            $this->add_object($form_object);
-            $this->add_object($layer_n0);
-            $this->add_object($layer_n2);
-            $this->add_object($container_form_object);
-
             // Set the signature appearance field to the form object
             $annotation_object["AP"] = [ "N" => new PDFValueReference($form_object->get_oid())];
         }
@@ -288,11 +281,11 @@ class PDFDoc extends PDFBaseDoc {
 
         if ((($referenced = $annots->get_object_referenced()) !== false) && (!is_array($referenced))) {
             // It is an indirect object, so we need to update that object
-            $newannots = new PDFObject($this->get_new_oid(), 
+            $newannots = $this->create_object( 
                 $this->get_object($referenced)->get_value()
             );
         } else {
-            $newannots = new PDFObject($this->get_new_oid(), 
+            $newannots = $this->create_object(
                 new PDFValueList()
             );
             $newannots->push($annots);
@@ -301,7 +294,6 @@ class PDFDoc extends PDFBaseDoc {
         if (!$newannots->push(new PDFValueReference($annotation_object->get_oid())))
             return p_error("Could not update the page where the signature has to appear");
 
-        array_push($updated_objects, $newannots);
         $page_obj["Annots"] = new PDFValueReference($newannots->get_oid());
         array_push($updated_objects, $page_obj);
 
@@ -402,12 +394,11 @@ class PDFDoc extends PDFBaseDoc {
      * @param value the value that the object will contain
      * @return obj the PDFObject created
      */
-    public function create_object($value): PDFObject {
-        $o = new PDFObject($this->get_new_oid(), $value);
+    public function create_object($value = [], $class = "ddn\sapp\PDFObject"): PDFObject {
+        $o = new $class($this->get_new_oid(), $value);
         $this->add_object($o);
         return $o;
     }
-
 
     /**
      * Adds a pdf object to the document (overwrites the one with the same oid, if existed)
@@ -499,8 +490,7 @@ class PDFDoc extends PDFBaseDoc {
             p_debug("generating xref using cross-reference streams");
 
             // Create a new object for the trailer
-            $trailer = new PDFObject(
-                $this->get_new_oid(),
+            $trailer = $this->create_object(
                 clone $this->_pdf_trailer_object
             );
 
@@ -531,9 +521,6 @@ class PDFDoc extends PDFBaseDoc {
             // If creating an incremental modification, point to the previous xref table
             if ($rebuild === false)
                 $trailer['Prev'] = $this->_xref_position;
-
-            // Add this object to the document
-            $this->add_object($trailer);
 
             // And generate the part of the document related to the xref
             $_doc_from_xref = new Buffer($trailer->to_pdf_entry());
