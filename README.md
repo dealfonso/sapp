@@ -1,6 +1,6 @@
-# SAPP - Simply and Agnostic PDF Document Parser
+# SAPP - Simple and Agnostic PDF Document Parser
 
-SAPP stands for Simply and Agnostic PDF Parser and it makes what is name says: parsing PDF files. It also enables other cool features such as rebuilding documents (to make the content more clear or compact) or digitally signing documents.
+SAPP stands for Simple and Agnostic PDF Parser and it makes what is name says: parsing PDF files. It also enables other cool features such as rebuilding documents (to make the content more clear or compact) or digitally signing documents.
 
 SAPP is agnostic because it does not care of composing PDF documents (e.g. adding pages, updating pages, etc.). Instead, its aim is to be somehow a backend to parse an existing PDF document and to manipulate the objects included on it, or to create new ones.
 
