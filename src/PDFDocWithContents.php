@@ -130,7 +130,6 @@ class PDFDocWithContents extends PDFDoc {
             switch (strlen($color)) {
                 case 4:
                     $color = "#" . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
-                    p_debug_var($color);
                 case 7:
                     list($r, $g, $b) = sscanf($color, "#%02x%02x%02x");                    
                     break;

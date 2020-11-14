@@ -156,7 +156,7 @@ class PDFBaseDoc extends Buffer {
 
             // When dealing with 1.5 cross references, we do not allow to use other than cross references
             [ $xref_table, $trailer_obj ] = self::get_xref_1_5($_buffer, $Prev);
-            p_debug_var($xref_table);
+            // p_debug_var($xref_table);
         } 
 
         // p_debug("xref table found at $xref_pos (oid: " . $xref_o->get_oid() . ")");
@@ -492,7 +492,6 @@ class PDFBaseDoc extends Buffer {
         if (!is_array($object_offset))
             return self::find_object_at_pos($_buffer, $oid, $object_offset, $xref_table);
         else {
-            p_warning("using cross reference streams, which are partially tested; please use with caution");
             $object = self::find_object_in_objstm($_buffer, $xref_table, $object_offset[0], $object_offset[1], $oid);
             return $object;
         }
