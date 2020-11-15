@@ -97,6 +97,19 @@ class PDFDoc extends PDFBaseDoc {
     }
 
     /**
+     * This function creates an interator over the objects of the document, and makes use of function "get_object".
+     *   This mechanism enables to walk over any object, either they are new ones or they were in the original doc.
+     *   Enables: 
+     *         foreach ($doc->get_object_iterator() as $oid => obj) { ... }
+     * @return oid=>obj the objects
+     */
+    public function get_object_iterator() {
+        for ($i = 0; $i < $this->_max_oid; $i++) {
+            yield $i => $this->get_object($i);
+        }
+    }
+
+    /**
      * This function checks whether the passed object is a reference or not, and in case that
      *   it is a reference, it returns the referenced object; otherwise it return the object itself
      * @param reference the reference value to obtain
@@ -521,6 +534,10 @@ class PDFDoc extends PDFBaseDoc {
             // If creating an incremental modification, point to the previous xref table
             if ($rebuild === false)
                 $trailer['Prev'] = $this->_xref_position;
+            else
+                // If rebuilding the document, remove the references to previous xref tables, because it will be only one
+                if (isset($trailer['Prev']))
+                    unset($trailer['Prev']);
 
             // And generate the part of the document related to the xref
             $_doc_from_xref = new Buffer($trailer->to_pdf_entry());
