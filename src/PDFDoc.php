@@ -30,12 +30,17 @@ use ddn\sapp\pdfvalue\PDFValueType;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueHexString;
 use ddn\sapp\pdfvalue\PDFValueString;
-use \Buffer;
+use ddn\sapp\helpers\Buffer;
 
-require_once(__DIR__ . "/inc/buffer.php");
-require_once(__DIR__ . "/inc/mime.php");
-require_once(__DIR__ . "/inc/fpdfhelpers.php");
-require_once(__DIR__ . "/inc/contentgeneration.php");
+use function ddn\sapp\helpers\get_random_string;
+use function ddn\sapp\helpers\p_debug;
+use function ddn\sapp\helpers\p_debug_var;
+use function ddn\sapp\helpers\_add_image;
+
+// Loading the functions
+use ddn\sapp\helpers\LoadHelpers;
+if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
+    new LoadHelpers;
 
 if (!defined('__TMP_FOLDER'))
     define('__TMP_FOLDER', '/tmp');
@@ -60,6 +65,10 @@ class PDFDoc extends PDFBaseDoc {
     //  - info: an array with information about the page
     //      - size: the size of the page
     protected $_pages_info = [];
+
+    public function get_page_count() {
+        return count($this->_pages_info);
+    }
 
     /**
      * The function parses a document from a string: analyzes the structure and obtains and object

@@ -19,10 +19,12 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+namespace ddn\sapp\helpers;
+
 if (!defined('__CONVENIENT_MAX_BUFFER_DUMP'))
     define('__CONVENIENT_MAX_BUFFER_DUMP', 80);
 
-require_once('helpers.php');
+use function ddn\sapp\helpers\debug_var;
 
 /**
  * This class is used to manage a buffer of characters. The main features are that

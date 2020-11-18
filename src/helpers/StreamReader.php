@@ -19,7 +19,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-require_once('helpers.php');
+namespace ddn\sapp\helpers;
 
 /**
  * This class abstracts the reading from a stream of data (i.e. a string). The objective of

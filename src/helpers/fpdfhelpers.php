@@ -33,6 +33,8 @@
 	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
 */
 
+namespace ddn\sapp\helpers;
+
 function _parsejpg($filecontent)
 {
 	// Extract info from a JPEG file

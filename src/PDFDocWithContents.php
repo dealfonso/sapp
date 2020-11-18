@@ -30,11 +30,13 @@ use ddn\sapp\pdfvalue\PDFValueType;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueHexString;
 use ddn\sapp\pdfvalue\PDFValueString;
-use \Buffer;
+use ddn\sapp\helpers\Buffer;
 
-require_once(__DIR__ . "/inc/buffer.php");
-require_once(__DIR__ . "/inc/mime.php");
-require_once(__DIR__ . "/inc/fpdfhelpers.php");
+use function ddn\sapp\helpers\get_random_string;
+use function ddn\sapp\helpers\p_debug;
+use function ddn\sapp\helpers\p_warning;
+use function ddn\sapp\helpers\p_debug_var;
+use function ddn\sapp\helpers\_add_image;
 
 class PDFDocWithContents extends PDFDoc {
 

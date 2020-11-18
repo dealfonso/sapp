@@ -148,7 +148,7 @@ And now the document is signed. And if you wanted to add a second signature, it 
 $ php pdfsign.php testdoc-signed.pdf user.p12 > testdoc-resigned.pdf
 ```
 
-**The code:**
+**The code: (full working example)**
 
 ```php
 use ddn\sapp\PDFDoc;
@@ -206,6 +206,30 @@ if ($obj->sign_document($argv[3], $password, 0, [ $p_x, $p_y, $p_x + $i_w, $p_y 
 else
     echo $obj->to_pdf_file_s();
 ...
+```
+
+### 3.4. Decompress the streams of any object with `pdfdeflate.php`
+
+This is an example of how to manipulate the objects in a document. The example walks over any object in the document, obtains its stream deflated, removes the filter (i.e. compression method), and restores it to the document. So that the objects are not compressed anymore (e.g. you can read in plain text the commands used to draw the elements).
+
+**The code:**
+
+```php
+foreach ($obj->get_object_iterator() as $oid => $object) {
+    if ($object === false)
+        continue;
+    if ($object["Filter"] == "/FlateDecode") {
+        /* Getting the stream with raw flag set to "false" will process the stream prior to returning it */
+        $stream = $object->get_stream(false);
+        if ($stream !== false) {
+            unset($object["Filter"]);
+            /* Setting the stream with raw flag set to "false" will process the stream, although in this case it is not important, because we removed the filter.*/
+            $object->set_stream($stream, false);
+            $obj->add_object($object);
+        }
+    }
+}
+echo $obj->to_pdf_file_s(true);
 ```
 
 ## 4. Limitations

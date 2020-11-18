@@ -19,6 +19,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+namespace ddn\sapp\helpers;
+
 function mime_to_ext($mime) {
     $mime_map = [
         'video/3gpp2'                                                               => '3g2',

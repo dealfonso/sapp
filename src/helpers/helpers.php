@@ -19,6 +19,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+namespace ddn\sapp\helpers;
+
 /** 
  * Outputs a var to a string, using the PHP var_dump function
  * @param var the variable to output

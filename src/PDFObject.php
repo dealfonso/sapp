@@ -24,7 +24,16 @@ namespace ddn\sapp;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use \ArrayAccess;
-use \Buffer;
+
+use ddn\sapp\helpers\Buffer;
+
+// Loading the functions
+use ddn\sapp\helpers\LoadHelpers;
+if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
+    new LoadHelpers;
+
+use function ddn\sapp\helpers\p_debug;
+use function ddn\sapp\helpers\p_debug_var;
 
 // The character used to end lines
 if (!defined('__EOL'))

@@ -29,11 +29,10 @@
     use ddn\sapp\pdfvalue\PDFValueSimple;
     use ddn\sapp\pdfvalue\PDFValueString;
     use ddn\sapp\pdfvalue\PDFValueType;
-    use \StreamReader;
+    use ddn\sapp\helpers\StreamReader;
+    use \Exception;
 
-    require_once( __DIR__ . '/inc/helpers.php');
-    require_once( __DIR__ . '/inc/buffer.php');
-    require_once( __DIR__ . '/inc/streamreader.php');
+    use ddn\sapp\helpers\Buffer;
 
     /**
      * Class devoted to parse a single PDF object
@@ -67,6 +66,7 @@
         const T_OBJECT_END = 9;
         const T_STREAM_BEGIN = 10;
         const T_STREAM_END = 11;
+        const T_COMMENT = 13;
 
         const T_NAMES = [
             self::T_NOTOKEN => 'no token',
@@ -81,7 +81,8 @@
             self::T_OBJECT_BEGIN => 'object begin',
             self::T_OBJECT_END => 'object end',
             self::T_STREAM_BEGIN => 'stream begin',
-            self::T_STREAM_END => 'stream end'
+            self::T_STREAM_END => 'stream end',
+            self::T_COMMENT => 'comment'
         ];
 
         const T_SIMPLE_OBJECTS = [
@@ -89,7 +90,8 @@
             self::T_OBJECT_BEGIN,
             self::T_OBJECT_END,
             self::T_STREAM_BEGIN,
-            self::T_STREAM_END
+            self::T_STREAM_END,
+            self::T_COMMENT
         ];
 
         protected $_buffer = null;
@@ -173,7 +175,7 @@
         protected function _c_is_separator() {
             $DSEPS =[ "<<", ">>" ];
 
-            return (($this->_c === false) || (strpos("<([]/ \n\r\t", $this->_c) !== false) || ((array_search($this->_c . $this->_n, $DSEPS)) !== false));
+            return (($this->_c === false) || (strpos("%<([]/ \n\r\t", $this->_c) !== false) || ((array_search($this->_c . $this->_n, $DSEPS)) !== false));
         }
 
         /**
@@ -196,6 +198,15 @@
                 // TODO: literal strings are not parsed properly, according to section 7.3.4.2: the strings may contain "balanced pairs of parentheses" and may "require no special treatment"; i.e. (this is a (correct) string)
                 // TODO: also the special characters are not "strictly" considered, according to section 7.3.4.2: \n \r \t \b \f \( \) \\ are valid; the other not; but also \bbb should be considered; all of them are "sufficiently" treated, but other unknown caracters such as \u are also accepted
                 switch ($this->_c) {
+                    case '%':
+                        $this->nextchar();
+                        $token = "";
+                        while (strpos("\n\r", $this->_c) === false) {
+                            $token .= $this->_c;
+                            $this->nextchar();
+                        }
+                        $token_type = self::T_COMMENT;
+                    break;
                     case '<':
                         if ($this->_n === '<') {
                             $this->nextchar();

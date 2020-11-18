@@ -38,11 +38,13 @@ else {
                 if ($object === false)
                     continue;
                 if ($object["Filter"] == "/FlateDecode") {
-                    $stream = $object->get_stream(false);
-                    if ($stream !== false) {
-                        unset($object["Filter"]);
-                        $object->set_stream($stream, false);
-                        $obj->add_object($object);
+                    if ($object["Subtype"] != "/Image") {
+                        $stream = $object->get_stream(false);
+                        if ($stream !== false) {
+                            unset($object["Filter"]);
+                            $object->set_stream($stream, false);
+                            $obj->add_object($object);
+                        }
                     }
                 }
             }

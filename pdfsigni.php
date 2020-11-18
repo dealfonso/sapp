@@ -23,7 +23,6 @@
 use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
-require_once('src/inc/helpers.php');
 
 if ($argc !== 4)
     fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));

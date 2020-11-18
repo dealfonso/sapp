@@ -22,11 +22,15 @@
 namespace ddn\sapp;
 
 use ddn\sapp\PDFObjectParser;
-use \StreamReader;
-use \Buffer;
+use ddn\sapp\helpers\StreamReader;
+use ddn\sapp\helpers\Buffer;
 
-require_once(__DIR__ . "/inc/buffer.php");
-require_once(__DIR__ . "/inc/streamreader.php");
+use function ddn\sapp\helpers\p_debug;
+use function ddn\sapp\helpers\p_debug_var;
+
+use ddn\sapp\helpers\LoadHelpers;
+if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
+    new LoadHelpers;
 
 // TODO: use the streamreader to deal with the document in the file, instead of a buffer
 

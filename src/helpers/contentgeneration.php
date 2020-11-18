@@ -19,6 +19,8 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+namespace ddn\sapp\helpers;
+
 use ddn\sapp\PDFBaseDoc;
 use ddn\sapp\PDFBaseObject;
 use ddn\sapp\pdfvalue\PDFValueObject;
@@ -28,6 +30,11 @@ use ddn\sapp\pdfvalue\PDFValueType;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueHexString;
 use ddn\sapp\pdfvalue\PDFValueString;
+
+use function ddn\sapp\helpers\get_random_string;
+use function ddn\sapp\helpers\mime_to_ext;
+use function ddn\sapp\helpers\_parsejpg;
+use function ddn\sapp\helpers\_parsepng;
 
 /**
  * Creates an image object in the document, using the content of "info"
