@@ -184,14 +184,24 @@ class PDFDoc extends PDFBaseDoc {
             return p_error("the document has already been prepared to be signed");
 
         // First we read the certificate
-        $certfilecontent = file_get_contents($certfile);
-        if ($certfilecontent === false)
-            return p_error("could not read file $certfile");
-        if (openssl_pkcs12_read($certfilecontent, $certificate, $certpass) === false)
-            return p_error("could not get the certificates from file $certfile");
-        if ((!isset($certificate['cert'])) || (!isset($certificate['pkey'])))
-            return p_error("could not get the certificate or the private key from file $certfile");
+        if (is_array($certfile)) {
+            $certificate = $certfile;
 
+            // If a password is provided, we'll try to decode the private key
+            if (!empty($certpass)) {
+                $t_pkey = openssl_pkey_get_private($certificate["pkey"], $certpass);
+                openssl_pkey_export($t_pkey, $t_decpkey);
+                $certificate["pkey"] = $t_decpkey;
+            }
+
+        } else {
+            $certfilecontent = file_get_contents($certfile);
+            if ($certfilecontent === false)
+                return p_error("could not read file $certfile");
+            if (openssl_pkcs12_read($certfilecontent, $certificate, $certpass) === false)
+                return p_error("could not get the certificates from file $certfile");
+        }
+        
         // First of all, we are searching for the root object (which should be in the trailer)
         $root = $this->_pdf_trailer_object["Root"];
 
