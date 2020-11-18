@@ -406,7 +406,7 @@ class PDFBaseDoc extends Buffer {
 
         if (openssl_pkcs7_sign($filenametosign, $temp_filename, $certificate, $key, array(), PKCS7_BINARY | PKCS7_DETACHED) !== true) {
             unlink($temp_filename);
-            return p_error("failed to sign file $tempfile");
+            return p_error("failed to sign file $filenametosign");
         }
 
         $signature = file_get_contents($temp_filename);
