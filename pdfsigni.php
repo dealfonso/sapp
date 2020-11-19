@@ -54,6 +54,9 @@ else {
             if ($pagesize === false)
                 return p_error("failed to get page size");
 
+            // Calculate the position of the image according to its size and the size of the page;
+            //   the idea is to keep the aspect ratio and center the image in the page with a size
+            //   of 1/3 of the size of the page.
             $p_x = intval("". $pagesize[0]);
             $p_y = intval("". $pagesize[1]);
             $p_w = intval("". $pagesize[2]) - $p_x;
@@ -67,14 +70,17 @@ else {
 
             $i_w = ($i_w * $ratio) / 3;
             $i_h = ($i_h * $ratio) / 3;
-
             $p_x = $p_w / 3;
             $p_y = $p_h / 3;
 
-            if ($obj->sign_document($argv[3], $password, 0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $image) === false)
+            // Set the image appearance and the certificate file
+            $obj->set_signature_appearance(0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $image);
+            $obj->set_signature_certificate($argv[3], $password);
+            $docsigned = $obj->to_pdf_file_s();
+            if ($docsigned === false)
                 fwrite(STDERR, "could not sign the document");
             else
-                echo $obj->to_pdf_file_s();
+                echo $docsigned;
         }
     }
 }

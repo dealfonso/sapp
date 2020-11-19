@@ -174,10 +174,12 @@ else {
         if ($obj === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
         else {
-            if ($obj->sign_document($argv[2], $password) === false)
+            $obj->set_signature_certificate($argv[3], $password);
+            $docsigned = $obj->to_pdf_file_s();
+            if ($docsigned === false)
                 fwrite(STDERR, "could not sign the document");
             else
-                echo $obj->to_pdf_file_s();
+                echo $docsigned;
         }
     }
 }
@@ -197,14 +199,17 @@ The main difference with the previous code is the next:
 
 **The code:**
 
-_* the code related to the position in which the signature and the image appear has been ommited._
+_* the code related to the position in which the signature and the image appear has been ommited, but can be seen in file `pdfsigni.php`._
 
 ```php
 ...
-if ($obj->sign_document($argv[3], $password, 0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $image) === false)
+$obj->set_signature_appearance(0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $image);
+$obj->set_signature_certificate($argv[3], $password);
+$docsigned = $obj->to_pdf_file_s();
+if ($docsigned === false)
     fwrite(STDERR, "could not sign the document");
 else
-    echo $obj->to_pdf_file_s();
+    echo $docsigned;
 ...
 ```
 
@@ -253,7 +258,15 @@ But in a scenario when a document has been signed using Acrobat tools (either Pr
 
 I did a lot of debug, but I cannot find the problem. Maybe it is related to the certificate used or the metadata, but I could not found the problem, yet.
 
-## 5. Attributions
+## 5. Future work
+
+My idea is to provide support for other cool features:
+
+1. Support for TSA timestamping
+1. Include document protection (i.e. lock documents)
+1. Try to provide support to write some text
+
+## 6. Attributions
 
 1. The mechanism for calculating the signature hash is heavily inspired in tcpdf.
 1. Reading jpg and png files has been taken from fpdf.
