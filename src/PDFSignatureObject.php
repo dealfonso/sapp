@@ -30,6 +30,7 @@ use ddn\sapp\pdfvalue\PDFValueReference;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueString;
 use ddn\sapp\pdfvalue\PDFValueType;
+use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
 // The maximum signature length, needed to create a placeholder to calculate the range of bytes
 // that will cover the signature.
@@ -40,27 +41,6 @@ if (!defined('__SIGNATURE_MAX_LENGTH'))
 // is not known. 68 digits enable 20 digits for the size of the document
 if (!defined('__BYTERANGE_SIZE'))
     define('__BYTERANGE_SIZE', 68);
-
-/**
- * Function that outputs a timestamp to a PDF compliant string (including the D:)
- * @param timestamp the timestamp to conver (or 0 if get "now")
- * @return date_string the date string in PDF format
- */
-function timestamp_to_pdfdatestring($timestamp = 0) {
-    if ((empty($timestamp)) || ($timestamp < 0)) {
-        $timestamp = (new \DateTime())->getTimestamp();
-    }
-    return 'D:' . get_pdf_formatted_date($timestamp);
-}
-/**
- * Returns a formatted date-time.
- * @param $time (int) Time in seconds.
- * @return string escaped date string.
- * @since 5.9.152 (2012-03-23)
- */
-function get_pdf_formatted_date($time) {
-    return substr_replace(date('YmdHisO', intval($time)), '\'', (0 - 2), 0).'\'';
-}
 
 // This is an special object that has a set of fields
 class PDFSignatureObject extends PDFObject {

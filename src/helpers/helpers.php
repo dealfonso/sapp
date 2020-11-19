@@ -182,3 +182,25 @@ function show_bytes($str, $columns = null) {
     }
     return $result;
 }
+
+/**
+ * Function that outputs a timestamp to a PDF compliant string (including the D:)
+ * @param timestamp the timestamp to conver (or 0 if get "now")
+ * @return date_string the date string in PDF format
+ */
+function timestamp_to_pdfdatestring($date = null) {
+    if ($date === null)
+        $date = new \DateTime();
+
+    $timestamp = $date->getTimestamp();
+    return 'D:' . get_pdf_formatted_date($timestamp);
+}
+/**
+ * Returns a formatted date-time.
+ * @param $time (int) Time in seconds.
+ * @return string escaped date string.
+ * @since 5.9.152 (2012-03-23)
+ */
+function get_pdf_formatted_date($time) {
+    return substr_replace(date('YmdHisO', intval($time)), '\'', (0 - 2), 0).'\'';
+}
