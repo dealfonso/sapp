@@ -36,6 +36,7 @@ use function ddn\sapp\helpers\get_random_string;
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
 use function ddn\sapp\helpers\_add_image;
+use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
 // Loading the functions
 use ddn\sapp\helpers\LoadHelpers;
@@ -57,7 +58,9 @@ class PDFDoc extends PDFBaseDoc {
     protected $_xref_table = [];
     protected $_max_oid = 0;
     protected $_buffer = "";    
-    protected $_signature = null;
+    protected $_backup_state = [];
+    protected $_certificate = null;
+    protected $_appearance = null;
 
     // Array of pages ordered by appearance in the final doc (i.e. index 0 is the first page rendered; index 1 is the second page rendered, etc.)
     // Each entry is an array with the following fields:
@@ -66,8 +69,39 @@ class PDFDoc extends PDFBaseDoc {
     //      - size: the size of the page
     protected $_pages_info = [];
 
+    /**
+     * Retrieve the number of pages in the document (not considered those pages that could be added by the user using this object or derived ones)
+     * @return pagecount number of pages in the original document
+     */
     public function get_page_count() {
         return count($this->_pages_info);
+    }
+
+    /**
+     * Function that backups the current objects with the objective of making temporary modifications, and to restore
+     *   the state using function "pop_state". Many states can be stored, and they will be retrieved in reverse order
+     *   using pop_state
+     */
+    public function push_state() {
+        $cloned_objects = [];
+        foreach ($this->_pdf_objects as $oid => $object) {
+            $cloned_objects[$oid] = clone $object;
+        }
+        array_push($this->_backup_state, [ 'max_oid' => $this->_max_oid, 'pdf_objects' => $cloned_objects ]);
+    }
+
+    /**
+     * Function that retrieves an stored state by means of function "push_state"
+     * @return restored true if a previous state was restored; false if there was no stored state
+     */
+    public function pop_state() {
+        if (count($this->_backup_state) > 0) {
+            $state = array_pop($this->_backup_state);
+            $this->_max_oid = $state['max_oid'];
+            $this->_pdf_objects = $state['pdf_objects'];
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -161,39 +195,55 @@ class PDFDoc extends PDFBaseDoc {
     }
 
     /**
-     * This function prepares the document to be generated including a digital signature, using the provided certificate. It is 
-     *   possible to set the page in which the signature may appear and the rectangle in which to appear. Moreover, an image can 
-     *   be added to make the signature appear. In case that the image is null, the image will be invisible
-     * 
-     *      LIMITATIONS: one document can be signed once at a time; if wanted more signatures, then chain the documents:
-     *      $o1->sign_document(...);
-     *      $o2 = PDFDoc::fromstring($o1->to_pdf_file_s);
-     *      $o2->sign_document(...);
-     *      $o2->to_pdf_file_s();
-
-     * @param certfile the file that contains the certificate to sign the document (format pkcs12)
-     * @param certpass the password needed to sign using the certificate
-     * @param page_to_appear the page number in which the signature will appear
-     * @param rect_to_appear the rectangle (using the page coordinates in pixels) in which the signature will appear
-     * @param imagefilename the image to appear, associated to the signature
-     * @return prepared true if the file is ready to be genereated with the digital signature
+     * Function that sets the appearance of the signature (if the document is to be signed). At this time, it is possible to set
+     *   the page in which the signature will appear, the rectangle, and an image that will be shown in the signature form.
+     * @param page the page (zero based) in which the signature will appear
+     * @param rect the rectangle (in page-based coordinates) where the signature will appear in that page
+     * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect
      */
-    public function sign_document($certfile, $certpass, $page_to_appear = 0, $rect_to_appear = [ 0, 0, 0, 0 ], $imagefilename = null) {
-        // Do not allow more than one signature for a specific document; if needed, signatures must be chained
-        if ($this->_signature !== null)
-            return p_error("the document has already been prepared to be signed");
+    public function set_signature_appearance($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0], $imagefilename = null) {
+        $this->_appearance = [
+            "page" => $page_to_appear,
+            "rect" => $rect_to_appear,
+            "image" => $imagefilename
+        ];
+    }
 
+    /**
+     * Removes the settings of signature appearance (i.e. no signature will appear in the document)
+     */
+    public function clear_signature_appearance() {
+        $this->_appearance = null;
+    }
+
+    /**
+     * Removes the certificate for the signature (i.e. the document will not be signed)
+     */
+    public function clear_signature_certificate() {
+        $this->_certificate = null;
+    }
+    
+    /**
+     * Function that stores the certificate to use, when signing the document
+     * @param certfile a file that contains a user certificate in pkcs12 format, or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem> ]
+     *                 that would be the output of openssl_pkcs12_read
+     * @param password the password to read the private key
+     * @return valid true if the certificate can be used to sign the document, false otherwise
+     */
+    public function set_signature_certificate($certfile, $certpass = null) {    
         // First we read the certificate
         if (is_array($certfile)) {
             $certificate = $certfile;
 
             // If a password is provided, we'll try to decode the private key
-            if (!empty($certpass)) {
-                $t_pkey = openssl_pkey_get_private($certificate["pkey"], $certpass);
-                openssl_pkey_export($t_pkey, $t_decpkey);
-                $certificate["pkey"] = $t_decpkey;
-            }
+            $t_pkey = openssl_pkey_get_private($certificate["pkey"], $certpass);
+            if ($t_pkey === false)
+                return p_error("invalid private key");
 
+            openssl_pkey_export($t_pkey, $t_decpkey);
+            $certificate["pkey"] = $t_decpkey;
+
+            // TODO: check the certificate
         } else {
             $certfilecontent = file_get_contents($certfile);
             if ($certfilecontent === false)
@@ -201,7 +251,43 @@ class PDFDoc extends PDFBaseDoc {
             if (openssl_pkcs12_read($certfilecontent, $certificate, $certpass) === false)
                 return p_error("could not get the certificates from file $certfile");
         }
-        
+
+        // Store the certificate
+        $this->_certificate = $certificate;
+
+        return true;
+    }
+
+    /**
+     * Function that creates and updates the PDF objects needed to sign the document. The workflow for a signature is:
+     * - create a signature object
+     * - create an annotation object whose value is the signature object
+     * - create a form object (along with other objects) that will hold the appearance of the annotation object
+     * - modify the root object to make acroform point to the annotation object
+     * - modify the page object to make the annotations of that page include the annotation object
+     * 
+     * > If the appearance is not set, the image will not appear, and the signature object will be invisible.
+     * > If the certificate is not set, the signature created will be a placeholder (that acrobat will able to sign)
+     * 
+     *      LIMITATIONS: one document can be signed once at a time; if wanted more signatures, then chain the documents:
+     *      $o1->set_signature_certificate(...);
+     *      $o2 = PDFDoc::fromstring($o1->to_pdf_file_s);
+     *      $o2->set_signature_certificate(...);
+     *      $o2->to_pdf_file_s();
+     * 
+     * @return signature a signature object, or null if the document is not signed; false if an error happens
+     */
+    protected function _generate_signature_in_document() {
+        $imagefilename = null;
+        $recttoappear = [ 0, 0, 0, 0];
+        $pagetoappear = 0;
+
+        if ($this->_appearance !== null) {
+            $imagefilename = $this->_appearance["image"];
+            $recttoappear = $this->_appearance["rect"];
+            $pagetoappear = $this->_appearance["page"];
+        }
+
         // First of all, we are searching for the root object (which should be in the trailer)
         $root = $this->_pdf_trailer_object["Root"];
 
@@ -213,16 +299,19 @@ class PDFDoc extends PDFBaseDoc {
             return p_error("invalid root object");
 
         // Now the object corresponding to the page number in which to appear
-        $page_obj = $this->get_page($page_to_appear);
+        $page_obj = $this->get_page($pagetoappear);
         if ($page_obj === false)
             return p_error("invalid page");
     
         // Prepare the signature object (we need references to it)
-        $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject");
-        $signature->set_certificate($certificate);
+        $signature = null;
+        if ($this->_certificate !== null) {
+            $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject");
+            $signature->set_certificate($this->_certificate);
+        }
         
         // Get the page height, to change the coordinates system (up to down)
-        $pagesize = $this->get_page_size($page_to_appear);
+        $pagesize = $this->get_page_size($pagetoappear);
         $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
 
         // Create the annotation object, annotate the offset and append the object
@@ -230,14 +319,14 @@ class PDFDoc extends PDFBaseDoc {
                 "Type" => "/Annot",
                 "Subtype" => "/Widget",
                 "FT" => "/Sig",
-                "V" => new PDFValueReference($signature->get_oid()),
+                "V" => $signature === null? new PDFValueString("") : new PDFValueReference($signature->get_oid()),
                 "T" => new PDFValueString('Signature' . get_random_string()),
                 "P" => new PDFValueReference($page_obj->get_oid()),
-                "Rect" => [ $rect_to_appear[0], $pagesize_h - $rect_to_appear[1], $rect_to_appear[2], $pagesize_h - $rect_to_appear[3] ],
+                "Rect" => [ $recttoappear[0], $pagesize_h - $recttoappear[1], $recttoappear[2], $pagesize_h - $recttoappear[3] ],
                 "F" => 132  // TODO: check this value
             ]
         );      
-        
+                    
         // If an image is provided, let's load it
         if ($imagefilename !== null) {
             // Signature with appearance, following the Adobe workflow: 
@@ -245,7 +334,7 @@ class PDFDoc extends PDFBaseDoc {
             //   2. layers /n0 (empty) and /n2
             // https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/acrobat_digital_signature_appearances_v9.pdf
 
-            $bbox = [ 0, 0, $rect_to_appear[2] - $rect_to_appear[0], $rect_to_appear[3] - $rect_to_appear[1]];
+            $bbox = [ 0, 0, $recttoappear[2] - $recttoappear[0], $recttoappear[3] - $recttoappear[1]];
             $form_object = $this->create_object([
                 "BBox" => $bbox,
                 "Subtype" => "/Form",
@@ -303,7 +392,7 @@ class PDFDoc extends PDFBaseDoc {
         }
 
         // The objects to update
-        $updated_objects = [ $annotation_object ];
+        $updated_objects = [ ];
 
         // Add the annotation to the page
         if (!isset($page_obj["Annots"]))
@@ -346,24 +435,50 @@ class PDFDoc extends PDFBaseDoc {
         if (!isset($acroform['Fields']))
             $acroform['Fields'] = new PDFValueList();
 
+        // Add the annotation object to the interactive form
+        if (!$acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
+            return p_error("could not create the signature field");
+        }
+
+        // Store the objects
+        foreach ($updated_objects as &$object) {
+            $this->add_object($object);
+        }     
+        
+        return $signature;
+    }
+
+    /**
+     * Function that updates the modification date of the document. If modifies two parts: the "info" field of the trailer object
+     *   and the xmp metadata field pointed by the root object.
+     * @param date a DateTime object that contains the date to be set; null to set "now"
+     * @return ok true if the date could be set; false otherwise
+     */
+    protected function update_mod_date(\DateTime $date = null) {
+        // First of all, we are searching for the root object (which should be in the trailer)
+        $root = $this->_pdf_trailer_object["Root"];
+
+        if (($root === false) || (($root = $root->get_object_referenced()) === false))
+            return p_error("could not find the root object from the trailer");
+
+        $root_obj = $this->get_object($root);
+        if ($root_obj === false)
+            return p_error("invalid root object");
+
+        if ($date === null)
+            $date = new \DateTime();
+
         // Update the xmp metadata if exists
         if (isset($root_obj["Metadata"])) {
             $metadata = $root_obj["Metadata"];
             if ((($referenced = $metadata->get_object_referenced()) !== false) && (!is_array($referenced))) {
                 $metadata = $this->get_object($referenced);
-                array_push($updated_objects, $metadata);
-
                 $metastream = $metadata->get_stream();
-                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . (new \DateTime())->format("c") . '</xmp:ModifyDate>', $metastream);
-                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . (new \DateTime())->format("c") . '</xmp:MetadataDate>', $metastream);
+                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . $date->format("c") . '</xmp:ModifyDate>', $metastream);
+                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . $date->format("c") . '</xmp:MetadataDate>', $metastream);
                 $metadata->set_stream($metastream, false);
                 $this->add_object($metadata);
             }
-        }
-
-        // Add the annotation object to the interactive form
-        if (!$acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
-            return p_error("could not create the signature field");
         }
 
         // Update the information object (not really needed)
@@ -375,17 +490,9 @@ class PDFDoc extends PDFBaseDoc {
         if ($info_obj === false)
             return p_error("invalid info object");
 
-        $info_obj["ModDate"] = $signature["M"];
+        $info_obj["ModDate"] = new PDFValueString(timestamp_to_pdfdatestring($date));
         $info_obj["Producer"] = "Modificado con SAPP";
-        array_push($updated_objects, $info_obj);
-
-        // Store the objects
-        foreach ($updated_objects as &$object) {
-            $this->add_object($object);
-        }
-
-        // And store the signature
-        $this->_signature = $signature;
+        $this->add_object($info_obj);
         return true;
     }
 
@@ -491,16 +598,28 @@ class PDFDoc extends PDFBaseDoc {
      */
     public function to_pdf_file_b($rebuild = false) : Buffer {
         // We made no updates, so return the original doc
-        if (($rebuild === false) && (count($this->_pdf_objects) === 0))
+        if (($rebuild === false) && (count($this->_pdf_objects) === 0) && ($this->_certificate === null) && ($this->_appearance === null))
             return new Buffer($this->_buffer);
 
+        // Save the state prior to generating the objects
+        $this->push_state();
+
+        $_signature = $this->_generate_signature_in_document();
+        if ($_signature === false) {
+            $this->pop_state();
+            return p_error("could not generate the signed document");
+        }
+
+        // Update the timestamp
+        $this->update_mod_date();
+    
         // Generate the first part of the document
         [ $_doc_to_xref, $_obj_offsets ] = $this->_generate_content_to_xref($rebuild);
         $xref_offset = $_doc_to_xref->size();
 
-        if ($this->_signature !== null) {
-            $_obj_offsets[$this->_signature->get_oid()] = $_doc_to_xref->size();
-            $xref_offset +=  strlen($this->_signature->to_pdf_entry());
+        if ($_signature !== null) {
+            $_obj_offsets[$_signature->get_oid()] = $_doc_to_xref->size();
+            $xref_offset +=  strlen($_signature->to_pdf_entry());
         }
 
         $doc_version_string = str_replace("PDF-", "", $this->_pdf_version_string);
@@ -584,12 +703,12 @@ class PDFDoc extends PDFBaseDoc {
             $_doc_from_xref->data("\nstartxref\n$xref_offset\n%%EOF\n");
         }
 
-        if ($this->_signature !== null) {
+        if ($_signature !== null) {
             // In case that the document is signed, calculate the signature
 
-            $this->_signature->set_sizes($_doc_to_xref->size(), $_doc_from_xref->size());
-            $this->_signature["Contents"] = new PDFValueSimple("");
-            $_signable_document = new Buffer($_doc_to_xref->get_raw() . $this->_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
+            $_signature->set_sizes($_doc_to_xref->size(), $_doc_from_xref->size());
+            $_signature["Contents"] = new PDFValueSimple("");
+            $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
 
             // We need to write the content to a temporary folder to use the pkcs7 signature mechanism
             $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
@@ -598,17 +717,19 @@ class PDFDoc extends PDFBaseDoc {
             fclose($temp_file);
 
             // Calculate the signature and remove the temporary file
-            $certificate = $this->_signature->get_certificate();
+            $certificate = $_signature->get_certificate();
             $signature_contents = self::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey']);
             unlink($temp_filename);
 
             // Then restore the contents field
-            $this->_signature["Contents"] = new PDFValueHexString($signature_contents);
+            $_signature["Contents"] = new PDFValueHexString($signature_contents);
 
             // Add this object to the content previous to this document xref
-            $_doc_to_xref->data($this->_signature->to_pdf_entry());
+            $_doc_to_xref->data($_signature->to_pdf_entry());
         }
 
+        // Reset the state to make signature objects not to mess with the user's objects
+        $this->pop_state();
         return new Buffer($_doc_to_xref->get_raw() . $_doc_from_xref->get_raw());
     }
 
