@@ -34,6 +34,7 @@
 */
 
 namespace ddn\sapp\helpers;
+use function ddn\sapp\helpers\p_error;
 
 function _parsejpg($filecontent)
 {

@@ -34,6 +34,7 @@ if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
 
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
+use function ddn\sapp\helpers\p_error;
 
 // The character used to end lines
 if (!defined('__EOL'))

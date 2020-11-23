@@ -35,6 +35,7 @@ use function ddn\sapp\helpers\get_random_string;
 use function ddn\sapp\helpers\mime_to_ext;
 use function ddn\sapp\helpers\_parsejpg;
 use function ddn\sapp\helpers\_parsepng;
+use function ddn\sapp\helpers\p_error;
 
 /**
  * Creates an image object in the document, using the content of "info"

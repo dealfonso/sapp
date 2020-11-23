@@ -35,6 +35,7 @@ use ddn\sapp\helpers\Buffer;
 use function ddn\sapp\helpers\get_random_string;
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
+use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
@@ -604,10 +605,13 @@ class PDFDoc extends PDFBaseDoc {
         // Save the state prior to generating the objects
         $this->push_state();
 
-        $_signature = $this->_generate_signature_in_document();
-        if ($_signature === false) {
-            $this->pop_state();
-            return p_error("could not generate the signed document");
+        $_signature = null;
+        if (($this->_appearance !== null) || ($this->_certificate !== null)) {
+            $_signature = $this->_generate_signature_in_document();
+            if ($_signature === false) {
+                $this->pop_state();
+                return p_error("could not generate the signed document");
+            }
         }
 
         // Update the timestamp
