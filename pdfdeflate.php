@@ -29,12 +29,12 @@ else {
     if (!file_exists($argv[1]))
         fwrite(STDERR, "failed to open file " . $argv[1]);
     else {
-        $obj = PDFDoc::from_string(file_get_contents($argv[1]));
+        $doc = PDFDoc::from_string(file_get_contents($argv[1]));
 
-        if ($obj === false)
+        if ($doc === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
         else {
-            foreach ($obj->get_object_iterator() as $oid => $object) {
+            foreach ($doc->get_object_iterator() as $oid => $object) {
                 if ($object === false)
                     continue;
                 if ($object["Filter"] == "/FlateDecode") {
@@ -43,12 +43,22 @@ else {
                         if ($stream !== false) {
                             unset($object["Filter"]);
                             $object->set_stream($stream, false);
-                            $obj->add_object($object);
+                            $doc->add_object($object);
                         }
                     }
                 }
+                // Not needed because we are rebuilding the document
+                if ($object["Type"] == "/ObjStm") {
+                    $object->set_stream("", false);
+                    $doc->add_object($object);
+                }
+                // Do not want images to be uncompressed
+                if ($object["Subtype"] == "/Image") {
+                    $object->set_stream("");
+                    $doc->add_object($object);
+                }
             }
-            echo $obj->to_pdf_file_s(true);
+            echo $doc->to_pdf_file_s(true);
         }
     }
 }

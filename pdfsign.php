@@ -42,7 +42,7 @@ else {
         if ($obj === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
         else {
-            $obj->set_signature_certificate($argv[3], $password);
+            $obj->set_signature_certificate($argv[2], $password);
             $docsigned = $obj->to_pdf_file_s();
             if ($docsigned === false)
                 fwrite(STDERR, "could not sign the document");
