@@ -62,6 +62,9 @@ class PDFValue implements ArrayAccess {
     public function get_object_referenced() {
         return false;
     }  
+    public function get_keys() {
+        return false;
+    }
     /**
      * Function that converts standard types into PDFValue* types
      *  - integer, double are translated into PDFValueSimple

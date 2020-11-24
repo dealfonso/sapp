@@ -70,6 +70,10 @@ class PDFObject implements ArrayAccess {
         $this->_value = $value;
     }
 
+    public function get_keys() {
+        return $this->_value->get_keys();
+    }
+
     public function set_oid($oid) {
         $this->_oid = $oid;
     }

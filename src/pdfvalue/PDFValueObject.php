@@ -68,6 +68,11 @@ class PDFValueObject extends PDFValue {
         if ($field !== null) return false;
         return new PDFValueObject($result);
     }
+
+    public function get_keys() {
+        return array_keys($this->value);
+    }
+
     /**
      * Function used to enable using [x] to set values to the fields of the object (from ArrayAccess interface)
      *  i.e. object[offset]=value
