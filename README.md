@@ -244,20 +244,6 @@ At this time, the main limitations are:
 - Not dealing with **encrypted documents**.
 - Other limitations, for sure :)
 
-### 4.1 Known issues
-
-Signatures may be chained using SAPP, and everything is ok with the Acrobat verification (i.e. Acrobat acknowledges that the documents and signatures are valid).
-
-But in a scenario when a document has been signed using Acrobat tools (either Pro or Reader), if signing with SAPP again somehow breaks the integrity and Acrobat does not acknowledge the previous signatures. The next signatures chained with SAPP are ok, even if signed with Acrobat tools.
-
-**Example**
-1. Signature 1 with Acrobat => ok
-1. Signature 2 with SAPP => the previous signatures are invalid, but this is ok
-1. Signature 3 with Acrobat => signature 1 is invalid, but 2 and 3 are ok
-1. Signature 4 with SAPP => signature 1 is invalid, but 2, 3 and 4 are ok
-
-I did a lot of debug, but I cannot find the problem. Maybe it is related to the certificate used or the metadata, but I could not found the problem, yet.
-
 ## 5. Future work
 
 My idea is to provide support for other cool features:
