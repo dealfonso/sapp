@@ -23,6 +23,6 @@ namespace ddn\sapp\pdfvalue;
 
 class PDFValueString extends PDFValue {
     public function __toString() {
-        return "(" . trim($this->value) . ")";
+        return "(" . $this->value . ")";
     }
 }
