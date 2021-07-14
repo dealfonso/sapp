@@ -10,10 +10,11 @@
         }
     ],
     "require": {
-        "php": "^7.4"
+        "php": ">=7.4"
     },
     "autoload": {
-        "psr-4": {"ddn\\sapp\\": "src/"}
+        "psr-4": {
+            "ddn\\sapp\\": "src/"}
     },
     "minimum-stability": "dev"
 }

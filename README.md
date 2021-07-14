@@ -250,6 +250,7 @@ My idea is to provide support for other cool features:
 
 1. Support for TSA timestamping
 1. Include document protection (i.e. lock documents)
+1. Document encryption (http://www.fpdf.org/en/script/script37.php)
 1. Try to provide support to write some text
 
 ## 6. Attributions

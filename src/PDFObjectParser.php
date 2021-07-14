@@ -34,6 +34,12 @@
 
     use ddn\sapp\helpers\Buffer;
 
+    use function ddn\sapp\helpers\p_debug;
+    use function ddn\sapp\helpers\p_debug_var;
+    use function ddn\sapp\helpers\p_error;
+    use function ddn\sapp\helpers\p_warning;
+    
+
     /**
      * Class devoted to parse a single PDF object
      * 
@@ -175,17 +181,63 @@
         protected function _c_is_separator() {
             $DSEPS =[ "<<", ">>" ];
 
-            return (($this->_c === false) || (strpos("%<([]/ \n\r\t", $this->_c) !== false) || ((array_search($this->_c . $this->_n, $DSEPS)) !== false));
+            return (($this->_c === false) || (strpos("%<>()[]{}/ \n\r\t", $this->_c) !== false) || ((array_search($this->_c . $this->_n, $DSEPS)) !== false));
         }
 
         /**
-         * Analyzes the buffer from the current char and gets the next token (text and type)
-         * @return [token, token type] the token string and the token type
+         * This function assumes that the next content is an hex string, so it should be called after "<" is detected; it skips the trailing ">"
+         *  @return string the hex string
          */
+        protected function _parse_hex_string() {
+            $token = "";
+
+            if ($this->_c !== "<") throw new Exception("Invalid hex string");
+
+            $this->nextchar();  // This char is "<"
+            while (($this->_c !== '>')&&(strpos("0123456789abcdefABCDEF \t\r\n\f", $this->_c) !== false)) {
+                $token .= $this->_c;
+                if ($this->nextchar() === false) {
+                    break;
+                }
+            }
+            if (($this->_c !== false) && (strpos(">0123456789abcdefABCDEF \t\r\n\f", $this->_c) === false))
+                throw new Exception("invalid hex string");
+
+            // The only way to get to here is that char is ">"
+            if ($this->_c !== ">") throw new Exception("Invalid hex string");
+
+            $this->nextchar();
+            return $token;
+        }
+
+        protected function _parse_string() {
+            $token = "";
+            if ($this->_c !== "(") throw new Exception("Invalid string");
+
+            $n_parenthesis = 1;
+            while ($this->_c !== false) {
+                $this->nextchar();
+                if ($this->_c === ')') {
+                    $n_parenthesis--;
+                    if ($n_parenthesis == 0)
+                        break;
+                } else {
+                    if ($this->_c === '(') {
+                        $n_parenthesis++;
+                    }
+                    $token .= $this->_c;
+                }
+            }
+
+            if ($this->_c !== ")") throw new Exception("Invalid string");
+            $this->nextchar();
+
+            return $token;
+        }
+
         protected function token() {
             if ($this->_c === false) return [ false, false ];
-
-            // The resulting token
+            
             $token = false;
 
             while ($this->_c !== false) {
@@ -194,8 +246,6 @@
 
                 $token_type = self::T_NOTOKEN;
 
-                // TODO: hexadecimal strings are not parsed properly, according to section 7.3.4; the hexadecimal string are <abcdef12345>; where all the shall be hexadecimal values or separators
-                // TODO: literal strings are not parsed properly, according to section 7.3.4.2: the strings may contain "balanced pairs of parentheses" and may "require no special treatment"; i.e. (this is a (correct) string)
                 // TODO: also the special characters are not "strictly" considered, according to section 7.3.4.2: \n \r \t \b \f \( \) \\ are valid; the other not; but also \bbb should be considered; all of them are "sufficiently" treated, but other unknown caracters such as \u are also accepted
                 switch ($this->_c) {
                     case '%':
@@ -206,7 +256,7 @@
                             $this->nextchar();
                         }
                         $token_type = self::T_COMMENT;
-                    break;
+                        break;
                     case '<':
                         if ($this->_n === '<') {
                             $this->nextchar();
@@ -214,19 +264,13 @@
                             $token = '<<';
                             $token_type = self::T_DICT_START;
                         } else {
-                            $token = "";
-                            $this->nextchar();
-                            while (($this->_c !== '>')&&(strpos("0123456789abcdefABCDEF \t\r\n\f", $this->_c) !== false)) {
-                                $token .= $this->_c;
-                                if ($this->nextchar() === false) {
-                                    break;
-                                }
-                            }
-                            if (($this->_c !== false) && (strpos(">0123456789abcdefABCDEF \t\r\n\f", $this->_c) === false))
-                                throw new Exception("invalid hex string");
+                            $token = $this->_parse_hex_string();
                             $token_type = self::T_HEX_STRING;
-                            $this->nextchar();
                         }
+                        break;
+                    case '(':
+                        $token = $this->_parse_string();
+                        $token_type = self::T_STRING;
                         break;
                     case '>':
                         if ($this->_n === '>') {
@@ -235,22 +279,6 @@
                             $token = '>>';
                             $token_type = self::T_DICT_END;
                         }
-                        break;
-                    case '(':
-                        $token = "";
-                        $this->nextchar();
-                        while ($this->_c !== ')') {
-                            if ($this->_c . $this->_n === "\\)") {
-                                $token .= $this->_c;
-                                $this->nextchar();
-                            }
-                            $token .= $this->_c;
-                            if ($this->nextchar() === false) {
-                                break;
-                            }
-                        }
-                        $token_type = self::T_STRING;
-                        $this->nextchar();
                         break;
                     case '[':
                         $token = $this->_c;
@@ -261,7 +289,7 @@
                         $token = $this->_c;
                         $this->nextchar();
                         $token_type = self::T_LIST_END;
-                        break;
+                        break;                        
                     case '/':
                         // Skip the field idenifyer
                         $this->nextchar();
@@ -272,9 +300,8 @@
                             if ($this->nextchar() === false) break;
                         }
                         $token_type = self::T_FIELD;
-                        break;
-                }
-
+                        break;                        
+                }   
                 if ($token === false) {
                     $token = "";
 
@@ -297,16 +324,8 @@
                     }
                     
                 }
-                return [ $token, $token_type ];
+                return [ $token, $token_type ];                             
             }
-        }
-
-        protected function _consume_simples() {
-            $value = $this->_parse_value();
-            while (array_search($this->_tt, self::T_SIMPLE_OBJECTS) !== false) {
-                $value->push($this->_parse_value());
-            }
-            return $value;
         }
 
         protected function _parse_obj() {
@@ -321,7 +340,7 @@
                     case self::T_FIELD:
                         $field = $this->_t;
                         $this->nexttoken();
-                        $object[$field] = $this->_consume_simples();
+                        $object[$field] = $this->_parse_value();
                         break;
                     case self::T_DICT_END:
                         $this->nexttoken();
@@ -351,12 +370,7 @@
                     case self::T_OBJECT_END:
                     case self::T_STREAM_BEGIN:
                     case self::T_STREAM_END:
-                    case self::T_SIMPLE:
-                        // Join simple values into a single one
-                        //$value = $this->_consume_simples();
-                        $value = new PDFValueSimple($this->_t);
-                        $this->nexttoken();
-                        array_push($list, $value);
+                        throw new Exception("Invalid list definition");
                         break;
                     default:
                         $value = $this->_parse_value();
@@ -393,19 +407,30 @@
                         $this->nexttoken();
                         return $field;
                     case self::T_OBJECT_BEGIN:
+                    case self::T_STREAM_END:
+                        throw new Exception("invalid keyword");
+
                     case self::T_OBJECT_END:
                     case self::T_STREAM_BEGIN:
-                    case self::T_STREAM_END:
-                        $special = new PDFValueSimple($this->_t);
+                        return null;
+                    case self::T_COMMENT:
                         $this->nexttoken();
-                        return $special;
-
-                    case self::T_SIMPLE:
-                        $simple = new PDFValueSimple($this->_t);
-                        $this->nexttoken();
-                        return $simple;
                         break;
+                    case self::T_SIMPLE:
+                        $simple_value = $this->_t;
+                        $this->nexttoken();
 
+                        while (($this->_t !== false) && ($this->_tt == self::T_SIMPLE))  {
+                            $simple_value .= " " . $this->_t;
+                            $this->nexttoken();
+                        }
+                        /*
+                        WON'T DO IT: the meaning of each element in a list is contextual; e.g. [ 10 10 0 R ] may mean [ 10 "reference to object 10" ], or [ 10 10 0 R ], where R is 
+                            a value for a flag... as SAPP is agnostic, we won't break it into objects; instead we offer the "get_referenced_object" for "simple" and "list" objects
+                            and then the app that uses SAPP will decide wether it may use the values as object references or not.
+                        */
+                        return new PDFValueSimple($simple_value);
+                        break;
             
                     default:
                         throw new Exception("Invalid token: $this");

@@ -32,11 +32,15 @@ use ddn\sapp\pdfvalue\PDFValueHexString;
 use ddn\sapp\pdfvalue\PDFValueString;
 use ddn\sapp\helpers\Buffer;
 use ddn\sapp\helpers\UUID;
+use ddn\sapp\helpers\DependencyTreeObject;
+use const ddn\sapp\helpers\BLACKLIST;
+use function ddn\sapp\helpers\references_in_object;
 
 use function ddn\sapp\helpers\get_random_string;
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
 use function ddn\sapp\helpers\p_error;
+use function ddn\sapp\helpers\p_warning;
 use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
@@ -49,6 +53,7 @@ if (!defined('__TMP_FOLDER'))
     define('__TMP_FOLDER', '/tmp');
 
 // TODO: move the signature of documents to a new class (i.e. PDFDocSignable)
+// TODO: create a new class "PDFDocIncremental"
 
 class PDFDoc extends Buffer {
 
@@ -116,9 +121,12 @@ class PDFDoc extends Buffer {
      * The function parses a document from a string: analyzes the structure and obtains and object
      *   of type PDFDoc (if possible), or false, if an error happens.
      * @param buffer a string that contains the file to analyze
+     * @param depth the number of previous versions to consider; if null, will consider any version; 
+     *              otherwise only the object ids from the latest $depth versions will be considered 
+     *              (if it is an incremental updated document)
      */
-    public static function from_string($buffer) {
-        $structure = PDFUtilFnc::acquire_structure($buffer);
+    public static function from_string($buffer, $depth = null) {
+        $structure = PDFUtilFnc::acquire_structure($buffer, $depth);
         if ($structure === false)
             return false;    
 
@@ -126,6 +134,7 @@ class PDFDoc extends Buffer {
         $version = $structure["version"];
         $xref_table = $structure["xref"];
         $xref_position = $structure["xrefposition"];
+        $revisions = $structure["revisions"];
 
         $pdfdoc = new PDFDoc();
         $pdfdoc->_pdf_version_string = $version;
@@ -133,18 +142,43 @@ class PDFDoc extends Buffer {
         $pdfdoc->_xref_position = $xref_position;
         $pdfdoc->_xref_table = $xref_table;
         $pdfdoc->_xref_table_version = $structure["xrefversion"];
+        $pdfdoc->_revisions = $revisions;
         $pdfdoc->_buffer = $buffer;
 
-        if ($trailer['Encrypt'] !== false)
-            p_error("encrypted documents are not fully supported; maybe you cannot get the expected results");
+        if ($trailer !== false)
+            if ($trailer['Encrypt'] !== false)
+                // TODO: include encryption (maybe borrowing some code: http://www.fpdf.org/en/script/script37.php)
+                p_error("encrypted documents are not fully supported; maybe you cannot get the expected results");
 
         $oids = array_keys($xref_table);
         sort($oids);
         $pdfdoc->_max_oid = array_pop($oids);
 
-        $pdfdoc->_acquire_pages_info();
+        if ($trailer === false)
+            p_warning("invalid trailer object");
+        else
+            $pdfdoc->_acquire_pages_info();
 
         return $pdfdoc;
+    }
+
+    public function get_revision($rev_i) {
+        if ($rev_i === null)
+            $rev_i = count($this->_revisions) - 1;
+        if ($rev_i < 0)
+            $rev_i = count($this->_revisions) + $rev_i - 1;
+
+        return substr($this->_buffer, 0, $this->_revisions[$rev_i]);
+    }
+
+    /**
+     * Function that builds the object list from the xref table
+     */
+    public function build_objects_from_xref() {
+        foreach ($this->_xref_table as $oid => $obj) {
+            $obj = $this->get_object($oid);
+            $this->add_object($obj);
+        }
     }
 
     /**
@@ -152,11 +186,24 @@ class PDFDoc extends Buffer {
      *   This mechanism enables to walk over any object, either they are new ones or they were in the original doc.
      *   Enables: 
      *         foreach ($doc->get_object_iterator() as $oid => obj) { ... }
+     * @param allobjects the iterator obtains any possible object, according to the oids; otherwise, only will return the
+     *      objects that appear in the current version of the xref
      * @return oid=>obj the objects
      */
-    public function get_object_iterator() {
-        for ($i = 0; $i < $this->_max_oid; $i++) {
-            yield $i => $this->get_object($i);
+    public function get_object_iterator($allobjects = false) {
+        if ($allobjects === true) {
+            for ($i = 0; $i <= $this->_max_oid; $i++) {
+                yield $i => $this->get_object($i);
+            }
+        } else {
+            foreach ($this->_xref_table as $oid => $offset) {
+                if ($offset === null) continue;
+    
+                $o = $this->get_object($oid);
+                if ($o === false) continue;
+
+                yield $oid => $o;
+            }
         }
     }
 
@@ -878,10 +925,108 @@ class PDFDoc extends Buffer {
             return p_error("could not find the root object from the trailer");
 
         $root = $this->get_object($root);
-        $pages = $root["Pages"];
-        if (($pages === false) || (($pages = $pages->get_object_referenced()) === false))
-            return p_error("could not find the pages for the document");
-        
-        $this->_pages_info = $this->_get_page_info($pages);
+        if ($root !== false) {
+            $pages = $root["Pages"];
+            if (($pages === false) || (($pages = $pages->get_object_referenced()) === false))
+                return p_error("could not find the pages for the document");
+            
+            $this->_pages_info = $this->_get_page_info($pages);
+        } else
+            p_warning("root object does not exist, so cannot get information about pages");
     }    
+
+
+    /**
+     * This function compares this document with other document, object by object. The idea is to compare the objects with the same oid in the
+     *  different documents, checking field by field; it does not take into account the streams.
+     */
+    public function compare($other) {
+        $other_objects = [];
+        foreach ($other->get_object_iterator(false) as $oid => $object) {
+            $other_objects[$oid] = $object;
+        }
+
+        $differences = [];
+
+        foreach ($this->get_object_iterator(false) as $oid => $object) {
+            if (isset($other_objects[$oid])) {
+                // The object exists, so we need to compare 
+                $diff = $object->get_value()->diff($other_objects[$oid]->get_value());
+                if ($diff !== null) {
+                    $differences[$oid] = new PDFObject($oid, $diff);
+                }
+            } else {
+                $differences[$oid] = new PDFObject($oid, $object->get_value());
+            }
+                
+        }
+        return $differences;
+    }
+
+    /**
+     * Obtains the tree of objects in the PDF Document. The result is an array of DependencyTreeObject objects (indexed by the oid), where
+     *  each element has a set of children that can be retrieved using the iterator (foreach $o->children() as $oid => $object ...)
+     */
+    public function get_object_tree() {
+
+        // Prepare the return value
+        $objects = [];
+
+        foreach ($this->_xref_table as $oid => $offset) {
+            if ($offset === null) continue;
+
+            $o = $this->get_object($oid);
+            if ($o === false) continue;
+
+        // foreach ($this->get_object_iterator() as $oid => $o) {
+
+            // Create the object in the dependency tree and add it to the list of objects
+            if (! array_key_exists($oid, $objects)) {
+                $objects[$oid] = new DependencyTreeObject($oid, $o["Type"]);
+            }
+
+            // The object is a PDFObject so we need the PDFValueObject to get the value of the fields
+            $object = $objects[$oid];
+            $val = $o->get_value();
+
+            // We'll only consider those objects that may create an structure (i.e. the objects, whose fields may include references to other objects)
+            if (is_a($val, "ddn\\sapp\\pdfvalue\\PDFValueObject")) {
+                $references = references_in_object($val, $oid);
+            } else {
+                $references = $val->get_object_referenced();
+                if ($references === false)
+                    continue;
+                if (!is_array($references)) $references = [ $references ];
+            }
+
+            // p_debug("$oid references " . implode(", ", $references));
+            foreach ($references as $r_object) {
+                if (! array_key_exists($r_object, $objects)) {
+                    $r_object_o = $this->get_object($r_object);
+                    $objects[$r_object] = new DependencyTreeObject($r_object, $r_object_o["Type"]);
+                }
+                $object->addchild($r_object, $objects[$r_object]);
+            }
+        }
+
+        // 
+        $xref_children = [];
+        foreach ($objects as $oid => $t_object) {
+            if ($t_object->info == "/XRef") {
+                array_push($xref_children, ...iterator_to_array($t_object->children()));
+            }
+        }
+
+        $xref_children = array_unique($xref_children);
+
+        // Remove those objects that are child of other objects from the top of the tree
+        foreach ($objects as $oid => $t_object) {
+            if (($t_object->is_child > 0) || (in_array($t_object->info, [ "/XRef", "/ObjStm"] ))) {
+                if (! in_array($oid, $xref_children)) 
+                    unset($objects[$oid]);
+            }
+        }
+        
+        return $objects;
+    }
 }

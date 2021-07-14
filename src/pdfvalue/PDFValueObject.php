@@ -30,6 +30,37 @@ class PDFValueObject extends PDFValue {
         parent::__construct($result);
     }
 
+    public function diff($other) {
+        $different = parent::diff($other);
+        if (($different === false) || ($different === null)) return $different;
+
+        $result = new PDFValueObject();
+        $differences = 0;
+
+        foreach ($this->value as $k => $v) {
+            if (isset($other->value[$k])) {
+                if (is_a($this->value[$k], "ddn\sapp\pdfvalue\PDFValue")) {
+                    $different = $this->value[$k]->diff($other->value[$k]);
+                    if ($different === false) {
+                        $result[$k] = $v;
+                        $differences++;
+                    } else 
+                    if ($different !== null) {
+                        $result[$k] = $different;
+                        $differences++;
+                    } 
+                }    
+            } else {
+                $result[$k] = $v;
+                $differences++;
+            }
+        }
+        if ($differences === 0)
+            return null;
+            
+        return $result;
+    }
+
     public static function fromarray($parts) {
         $k = array_keys($parts);
         $intkeys = false;

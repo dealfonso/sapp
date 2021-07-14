@@ -21,6 +21,7 @@
 
 namespace ddn\sapp\pdfvalue;
 use \ArrayAccess;
+use function ddn\sapp\helpers\p_debug_var;
 
 class PDFValue implements ArrayAccess {
     protected $value = null;
@@ -64,6 +65,17 @@ class PDFValue implements ArrayAccess {
     }  
     public function get_keys() {
         return false;
+    }
+    /**
+     * Returns the difference between this and other object (false means "cannot compare", null means "equal" and any value means "different": things in this object that are different from the other)
+     */
+    public function diff($other) {
+        if (!is_a($other, get_class($this)))
+            return false;
+        if ($this->value === $other->value) {
+            return null;
+        }
+        return $this->value;
     }
     /**
      * Function that converts standard types into PDFValue* types

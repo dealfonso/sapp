@@ -115,7 +115,14 @@ class PDFUtilFnc {
      * This function obtains the xref from the cross reference streams (7.5.8 Cross-Reference Streams)
      *   which started in PDF 1.5.
      */
-    public static function get_xref_1_5(&$_buffer, $xref_pos) {
+    public static function get_xref_1_5(&$_buffer, $xref_pos, $depth = null) {
+        if ($depth !== null) {
+            if ($depth <= 0)
+                return false;
+
+            $depth = $depth - 1;
+        }
+
         $xref_o = PDFUtilFnc::find_object_at_pos($_buffer, null, $xref_pos, []);
         if ($xref_o === false)
             return p_error("cross reference object not found when parsing xref at position $xref_pos", [false, false, false]);
@@ -149,17 +156,21 @@ class PDFUtilFnc {
         // Get the previous xref table, to build up on it
         $trailer_obj = null;
         $xref_table = [];
-        
-        if (isset($xref_o["Prev"])) {
-            $Prev = $xref_o["Prev"];
-            $Prev = $Prev->get_int();
-            if ($Prev === false)
-                return p_error("invalid reference to a previous xref table", [false, false, false]);
 
-            // When dealing with 1.5 cross references, we do not allow to use other than cross references
-            [ $xref_table, $trailer_obj ] = PDFUtilFnc::get_xref_1_5($_buffer, $Prev);
-            // p_debug_var($xref_table);
-        } 
+        if (($depth === null) || ($depth > 0)) {
+            // If still want to get more versions, let's check whether there is a previous xref table or not
+
+            if (isset($xref_o["Prev"])) {
+                $Prev = $xref_o["Prev"];
+                $Prev = $Prev->get_int();
+                if ($Prev === false)
+                    return p_error("invalid reference to a previous xref table", [false, false, false]);
+
+                // When dealing with 1.5 cross references, we do not allow to use other than cross references
+                [ $xref_table, $trailer_obj ] = PDFUtilFnc::get_xref_1_5($_buffer, $Prev, $depth);
+                // p_debug_var($xref_table);
+            } 
+        }
 
         // p_debug("xref table found at $xref_pos (oid: " . $xref_o->get_oid() . ")");
         $stream_v = new StreamReader($stream);
@@ -234,15 +245,15 @@ class PDFUtilFnc {
         return [ $xref_table, $xref_o->get_value(), "1.5" ];
     }
 
-    public static function get_xref(&$_buffer, $xref_pos) {
+    public static function get_xref_1_4(&$_buffer, $xref_pos, $depth = null) {
+        if ($depth !== null) {
+            if ($depth <= 0)
+                return false;
 
-        // Each xref is immediately followed by a trailer
-        $trailer_pos = strpos($_buffer, "trailer", $xref_pos);
-        if ($trailer_pos === false) {
-            [ $xref_table, $trailer_obj, $min_pdf_version ] = PDFUtilFnc::get_xref_1_5($_buffer, $xref_pos);
-            return [ $xref_table, $trailer_obj, $min_pdf_version ];
+            $depth = $depth - 1;
         }
 
+        $trailer_pos = strpos($_buffer, "trailer", $xref_pos);
         $min_pdf_version = "1.4";
 
         // Get the xref content and make sure that the buffer passed contains the xref tag at the offset provided
@@ -326,7 +337,7 @@ class PDFUtilFnc {
 
             $xref_prev_pos = intval($xref_prev_pos);
 
-            [ $prev_table, $prev_trailer, $prev_min_pdf_version ] = PDFUtilFnc::get_xref($_buffer, $xref_prev_pos);
+            [ $prev_table, $prev_trailer, $prev_min_pdf_version ] = PDFUtilFnc::get_xref_1_4($_buffer, $xref_prev_pos, $depth);
 
             if ($prev_min_pdf_version !== $min_pdf_version)
                 return p_error("mixed type of xref tables are not supported", [ false, false, false]);
@@ -344,7 +355,18 @@ class PDFUtilFnc {
         return [ $xref_table, $trailer_obj, $min_pdf_version ];
     }
 
-    public static function acquire_structure(&$_buffer) {
+    public static function get_xref(&$_buffer, $xref_pos, $depth = null) {
+        
+        // Each xref is immediately followed by a trailer
+        $trailer_pos = strpos($_buffer, "trailer", $xref_pos);
+        if ($trailer_pos === false) {
+            [ $xref_table, $trailer_obj, $min_pdf_version ] = PDFUtilFnc::get_xref_1_5($_buffer, $xref_pos, $depth);
+        } else
+            [ $xref_table, $trailer_obj, $min_pdf_version ] = PDFUtilFnc::get_xref_1_4($_buffer, $xref_pos, $depth);
+        return [ $xref_table, $trailer_obj, $min_pdf_version ];
+    }
+
+    public static function acquire_structure(&$_buffer, $depth = null) {
         // Get the first line and acquire the PDF version of the document
         $separator = "\r\n";
         $pdf_version = strtok($_buffer, $separator);
@@ -353,6 +375,18 @@ class PDFUtilFnc {
 
         if (preg_match('/^%PDF-[0-9]+\.[0-9]+$/', $pdf_version, $matches) !== 1)
             return p_error("PDF version string not found");
+
+        if (preg_match_all('/startxref\s*([0-9]+)\s*%%EOF($|[\r\n])/ms', $_buffer, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) === false)
+            return p_error("failed to get structure");
+
+        $_versions=[];
+        /*
+        print_r($matches);
+        exit();
+        */
+        foreach ($matches as $match) {
+            array_push($_versions, $match[2][1] + strlen($match[2][0]));
+        }
 
         // Now get the trailing part and make sure that it has the proper form
         $startxref_pos = strrpos($_buffer, "startxref");
@@ -364,7 +398,19 @@ class PDFUtilFnc {
 
         $xref_pos = intval($matches[1]);
 
-        [ $xref_table, $trailer_object, $min_pdf_version ] = PDFUtilFnc::get_xref($_buffer, $xref_pos);
+        if ($xref_pos === 0) {
+            // This is a dummy xref position from linearized documents
+            return [
+                "trailer" => false,
+                "version" => substr($pdf_version, 1),
+                "xref" => [],
+                "xrefposition" => 0,
+                "xrefversion" => substr($pdf_version, 1),
+                "revisions" => $_versions
+            ];    
+        }
+
+        [ $xref_table, $trailer_object, $min_pdf_version ] = PDFUtilFnc::get_xref($_buffer, $xref_pos, $depth);
 
         // We are providing a lot of information to be able to inspect the problems of a PDF file
         if ($xref_table === false) {
@@ -380,7 +426,8 @@ class PDFUtilFnc {
             "version" => substr($pdf_version, 1),
             "xref" => $xref_table,
             "xrefposition" => $xref_pos,
-            "xrefversion" => $min_pdf_version
+            "xrefversion" => $min_pdf_version,
+            "revisions" => $_versions
         ];
     }
 

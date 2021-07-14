@@ -20,6 +20,9 @@
 */
 
 namespace ddn\sapp\pdfvalue;
+use function ddn\sapp\helpers\p_debug_var;
+use function ddn\sapp\helpers\p_debug;
+use ddn\sapp\pdfvalue\PDFValueSimple;
 
 class PDFValueList extends PDFValue {
     public function __construct($value = []) {
@@ -28,16 +31,40 @@ class PDFValueList extends PDFValue {
     public function __toString() {
         return '[' . implode(' ', $this->value) . ']';
     }
-    public function val($recurse = false) {
-        if ($recurse === true) {
+
+    public function diff($other) {
+        $different = parent::diff($other);
+        if (($different === false) || ($different === null)) return $different;
+
+        $s1 = $this->__toString();
+        $s2 = $other->__toString();
+
+        if ($s1 === $s2) return null;
+        return $this;
+    }
+
+    /**
+     * This function 
+     */
+    public function val($list = false) {
+        if ($list === true) {
             $result = [];
             foreach ($this->value as $v) {
-                array_push($result, $v->val());
+                if (is_a($v, "ddn\\sapp\\pdfvalue\\PDFValueSimple")) {
+                    $v = explode(" ", $v->val());
+                } else {
+                    $v = [ $v->val() ];
+                }
+                array_push($result, ...$v);
             }
             return $result;
         } else
             return parent::val();
     }
+
+    /**
+     * This function returns a list of objects that are referenced in the list, only if all of them are references to objects
+     */
     public function get_object_referenced() {
         $ids = [];
         $plain_text_val = implode(' ', $this->value);
@@ -55,26 +82,14 @@ class PDFValueList extends PDFValue {
                 return false;
         }
         return $ids;
-
-        $COMMENT_OUT = function() {
-            foreach ($this->value as $value) {
-                $plain_text_val = "" . $value;
-                if (trim($plain_text_val) === "") continue;
-                if (preg_match_all('/(([0-9]+)\s+[0-9]+\s+R)[^0-9]*/ms', $plain_text_val, $matches) > 0) {
-                    $rebuilt = implode(" ", $matches[0]);
-                    $rebuilt = preg_replace('/\s+/ms', ' ', $rebuilt);
-                    $plain_text_val = preg_replace('/\s+/ms', ' ', $plain_text_val);
-                    if ($plain_text_val === $rebuilt) {
-                        // Any content is a reference
-                        foreach ($matches[2] as $id)
-                            array_push($ids, intval($id));
-                    } 
-                } else
-                    return false;
-            }
-            return $ids;
-        };
     }
+
+    /**
+     * This method pushes the parameter to the list; 
+     *  - if it is an array, the list is merged; 
+     *  - if it is a list object, the lists are merged; 
+     *  - otherwise the object is converted to a PDFValue* object and it is appended to the list
+     */
     public function push($v) {
         if (is_object($v) && (get_class($v) === get_class($this))) {
             // If a list is pushed to another list, the elements are merged
