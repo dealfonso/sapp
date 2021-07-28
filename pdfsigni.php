@@ -54,6 +54,7 @@ else {
             if ($pagesize === false)
                 return p_error("failed to get page size");
 
+            $pagesize = explode(" ", $pagesize[0]->val());
             // Calculate the position of the image according to its size and the size of the page;
             //   the idea is to keep the aspect ratio and center the image in the page with a size
             //   of 1/3 of the size of the page.

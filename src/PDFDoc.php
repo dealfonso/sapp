@@ -412,6 +412,7 @@ class PDFDoc extends Buffer {
     
             // Get the page height, to change the coordinates system (up to down)
             $pagesize = $this->get_page_size($pagetoappear);
+            $pagesize = explode(" ", $pagesize[0]->val());
             $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
 
             $bbox = [ 0, 0, $recttoappear[2] - $recttoappear[0], $recttoappear[3] - $recttoappear[1]];
