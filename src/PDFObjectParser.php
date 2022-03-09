@@ -223,8 +223,7 @@
                         break;
                 } else {
                     if ($this->_c === '(') {
-                        if ($token[strlen($token) - 1] !== '\\') 
-                            $n_parenthesis++;
+                        $n_parenthesis++;
                     }
                     $token .= $this->_c;
                 }
