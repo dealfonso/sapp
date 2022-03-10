@@ -23,8 +23,8 @@ use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
 
-if ($argc !== 2)
-    fwrite(STDERR, sprintf("usage: %s <filename>", $argv[0]));
+if (($argc < 2) || ($argc > 3))
+    fwrite(STDERR, sprintf("usage: %s <filename> [<output>]", $argv[0]));
 else {
     if (!file_exists($argv[1]))
         fwrite(STDERR, "failed to open file " . $argv[1]);
@@ -33,7 +33,11 @@ else {
 
         if ($obj === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
-        else
-            echo $obj->to_pdf_file_s(true);
+        else {
+            if ($argc == 3)
+                file_put_contents($argv[2], $obj->to_pdf_file_s(true));
+            else
+                echo $obj->to_pdf_file_s(true);
+        }
     }
 }
