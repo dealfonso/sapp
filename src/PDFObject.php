@@ -255,10 +255,10 @@ class PDFObject implements ArrayAccess {
      * Sets the value of the field offset, using notation $obj['field'] = $value
      * @param field the field to set the value
      * @param value the value to set
-     * @return value the value, to chain operations
+     * @return void
      */
-    public function offsetSet($field, $value) {
-        return $this->_value[$field] = $value;
+    public function offsetSet($field, $value) : void {
+        $this->_value[$field] = $value;
     }
     /**
      * Checks whether the field exists in the object or not (or if the index exists
@@ -266,7 +266,7 @@ class PDFObject implements ArrayAccess {
      * @param field the field to check wether exists or not
      * @return exists true if the field exists; false otherwise
      */
-    public function offsetExists ( $field ) {
+    public function offsetExists ( $field ) : bool {
         return $this->_value->offsetExists($field);
     }
     /**
@@ -274,14 +274,15 @@ class PDFObject implements ArrayAccess {
      * @param field the field to get the value
      * @return value the value of the field
      */
-    public function offsetGet ( $field ) {
+    #[\ReturnTypeWillChange]
+    public function offsetGet ( $field ) { 
         return $this->_value[$field];
     }
     /**
      * Unsets the value of the field (or the value at position)
      * @param field the field to unset the value
      */
-    public function offsetUnset($field ) {
+    public function offsetUnset($field ) : void {
         $this->_value->offsetUnset($field);
     }    
 

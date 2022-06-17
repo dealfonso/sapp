@@ -111,16 +111,16 @@ class PDFValueObject extends PDFValue {
      * @param value the value to set to that index (it will be converted to a PDFValue* object)
      * @return value the value set to the field
      */
-    public function offsetSet($offset , $value) {
+    public function offsetSet($offset , $value) : void {
         if ($value === null) {
             if (isset($this->value[$offset]))
                 unset($this->value[$offset]);
-            return null;
+            // return null;
         }
         $this->value[$offset] = self::_convert($value);
-        return $this->value[$offset];
+        // return $this->value[$offset];
     }
-    public function offsetExists ( $offset ) {
+    public function offsetExists ( $offset ) : bool {
         return isset($this->value[$offset]);
     }
 
