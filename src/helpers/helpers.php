@@ -21,6 +21,10 @@
 
 namespace ddn\sapp\helpers;
 
+if (! defined('STDERR')) {
+    define('STDERR', fopen('php://stderr', 'wb'));
+}
+
 /** 
  * Outputs a var to a string, using the PHP var_dump function
  * @param var the variable to output
