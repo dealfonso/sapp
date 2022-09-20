@@ -294,19 +294,27 @@ class PDFUtilFnc {
                 $obj_operation = $matches[3];
 
                 if ($obj_offset !== 0) {
-                    // TODO: Dealing with non-zero generation objects is a future work, as I do not know by now the implications of generation change
-                    if (!(($obj_id === 0) && ($obj_generation === 65535))) {
-                        if (intval($obj_generation) !== 0) {
-                            return p_error("SORRY, but do not know how to deal with non-0 generation objects", [false, false, false]);
-                        }
-                    }
-
                     // Make sure that the operation is one of those expected
                     switch ($obj_operation) {
                         case 'f':
+                            // * a "f" entry is read as:
+                            //      (e.g. for object_id = 6) 0000000015 00001 f
+                            //         the next free object is the one with id 15; if wanted to re-use this object id 6, it must be using generation 1
+                            //      if the next generation is 65535, it would mean that this ID cannot be used again.
+                            // - a "f" entry means that the object is "free" for now
+                            // - the "f" entries form a linked list, where the last element in the list must point to "0"
+                            //
+                            // For the purpose of the xref table, there is no need to take care of the free-object list. And for the purpose
+                            //   of SAPP, neither. If ever wanted to add a new object SAPP will get a greater ID than the actual greater one.
+                            // TODO: consider taking care of the free linked list, (e.g.) to check consistency
                             $xref_table[$obj_id] = null;
                             break;
                         case 'n':
+                            // - a "n" entry means that the object is in the offset, with the given generation
+                            // For the purpose of the xref table, there is no issue with non-zero generation; the problem may arise if
+                            //  for example, in the xref table we include a generation that is different from the generarion of the object
+                            //  in the actual offset.
+                            // TODO: consider creating a "generation table"
                             $xref_table[$obj_id] = $obj_offset;
                             break;
                         default:
