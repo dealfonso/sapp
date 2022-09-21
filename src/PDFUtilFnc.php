@@ -225,8 +225,12 @@ class PDFUtilFnc {
                     case 1:
                         // Add object
                         $xref_table[$object_i] = $f2;
+                        /*
+                        TODO: consider creating a generation table, but for the purpose of the xref there is no matter... if the document if well-formed.
+                        */
                         if ($f3 !== 0)
-                            return p_error("do not know how to deal with non-zero generation objects", [false, false, false]);
+                            p_warning("Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/");
+
                         break;
                     case 2:
                         // Stream object
@@ -316,6 +320,8 @@ class PDFUtilFnc {
                             //  in the actual offset.
                             // TODO: consider creating a "generation table"
                             $xref_table[$obj_id] = $obj_offset;
+                            if ($obj_generation != 0)
+                                p_warning("Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/");
                             break;
                         default:
                             // If it is not one of the expected, let's skip the object

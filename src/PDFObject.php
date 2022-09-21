@@ -35,6 +35,7 @@ if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
 use function ddn\sapp\helpers\p_error;
+use function ddn\sapp\helpers\p_warning;
 
 // The character used to end lines
 if (!defined('__EOL'))
@@ -51,7 +52,7 @@ class PDFObject implements ArrayAccess {
     
     public function __construct($oid, $value = null, $generation = 0) {
         if ($generation !== 0)
-            throw new Exception('sorry but non-zero generation objects are not supported');
+            p_warning("Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/");
 
         // If the value is null, we suppose that we are creating an empty object
         if ($value === null)
@@ -77,6 +78,10 @@ class PDFObject implements ArrayAccess {
 
     public function set_oid($oid) {
         $this->_oid = $oid;
+    }
+
+    public function get_generation() {
+        return $this->_generation;
     }
 
     public function __toString() {

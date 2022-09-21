@@ -609,14 +609,24 @@ class PDFDoc extends Buffer {
     /**
      * Adds a pdf object to the document (overwrites the one with the same oid, if existed)
      * @param pdf_object the object to add to the document
+     * @return true if the object was added; false otherwise (e.g. already exists an object of a greater generation)
      */
     public function add_object(PDFObject $pdf_object) {
         $oid = $pdf_object->get_oid();
+
+        if (isset($this->_pdf_objects[$oid])) {
+            if ($this->_pdf_objects[$oid]->get_generation() > $pdf_object->get_generation()) {
+                return false;
+            }
+        }
+
         $this->_pdf_objects[$oid] = $pdf_object;
 
         // Update the maximum oid
         if ($oid > $this->_max_oid)
             $this->_max_oid = $oid;
+
+        return true;
     }
 
     /**
