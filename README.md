@@ -241,7 +241,7 @@ echo $obj->to_pdf_file_s(true);
 ## 4. Limitations
 
 At this time, the main limitations are:
-- Not dealing with **non-zero generation** pdf objects: they are uncommon, but according to the definition of the PDF structure, they are possible. If you find one non-zero generation object (you get an exception or error in that sense), please send me the document and I'll try to support it.
+- Basic support for **non-zero generation** pdf objects: they are uncommon, but according to the definition of the PDF structure, they are possible. If you find one non-zero generation object please send me the document and I'll try to support it.
 - Not dealing with **encrypted documents**.
 - Other limitations, for sure :)
 
