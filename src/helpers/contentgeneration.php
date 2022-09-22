@@ -120,13 +120,15 @@ function _create_image_objects($info, $object_factory) {
  * @param y points from bottom in which to appear the image (the units are "content-defined" (i.e. depending on the size of the page))
  * @param w width of the rectangle in which to appear the image (image will be scaled, and the units are "content-defined" (i.e. depending on the size of the page))
  * @param h height of the rectangle in which to appear the image (image will be scaled, and the units are "content-defined" (i.e. depending on the size of the page))
+ * @param angle the rotation angle in degrees; the image will be rotated using the center
+ * @param keep_proportions if true, the image will keep the proportions when rotated, then the image will not occupy the full 
  * @return result an array with the next fields:
  *                  "images": objects of the corresponding images (i.e. position [0] is the image, the rest elements are masks, if needed)
  *                  "resources": PDFValueObject with keys that needs to be incorporated to the resources of the object in which the images will appear
  *                  "alpha": true if the image has alpha
  *                  "command": pdf command to draw the image
  */
-function _add_image($object_factory, $filename, $x=0, $y=0, $w=0, $h=0) {
+function _add_image($object_factory, $filename, $x=0, $y=0, $w=0, $h=0, $angle = 0, $keep_proportions = true) {
 
     if (empty($filename))
         return p_error('invalid image name or stream');
@@ -180,7 +182,64 @@ function _add_image($object_factory, $filename, $x=0, $y=0, $w=0, $h=0) {
     $images_objects = _create_image_objects($info, $object_factory);
 
     // Generate the command to translate and scale the image
-    $data = sprintf("q %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q", $w, $h, $x, $y, $info['i']);
+    $data = "q ";
+
+    function tx($x, $y) {
+        return sprintf(" 1 0 0 1 %.2F %.2F cm", $x, $y); 
+    }
+    function sx($w, $h) {
+        return sprintf(" %.2F 0 0 %.2F 0 0 cm", $w, $h);
+    }
+    function deg2rad($angle) {
+        return $angle * pi() / 180;
+    }
+    function rx($angle) {
+        $angle = deg2rad($angle);
+        return sprintf(" %.2F %.2F %.2F %.2F 0 0 cm", cos($angle), sin($angle), -sin($angle), cos($angle)); 
+    }
+
+    if ($keep_proportions) {
+        $angleRads = deg2rad($angle);
+        $W = abs($w * cos($angleRads) + $h * sin($angleRads));
+        $H = abs($w * sin($angleRads) + $h * cos($angleRads));
+        $rW = $W / $w;
+        $rH = $H / $h;
+        $r = min($rW, $rH);
+        $w = $W * $r;
+        $h = $H * $r;
+    }
+
+    // Now, how to apply the matrices...
+    //   the matrices are not added in the order that we want to apply them; instead, they should be added in the reverse order (as they should be multiplied)
+    //   i.e. the nearest matrix to the "/Image Do" will be the one applied.
+    //
+    // So, if we wanted to rotate using the center of the image and escale the image, we could
+    //   A) data = "q " . sx($w, $h) . tx(0.5, 0.5) . rx(90) . tx(-0.5, -0.5) . " /Image Do Q";
+    //   or B) data = "q " . tx($w/2, $h/2) . rx(90) . tx(-$w/2, -$h/2) . sx($x, $w)" /Image Do Q";
+
+    /* Option A
+    $data .= sx($h, $w);  <-- the order is inverted because now the image is rotated, so that it keeps the original size of the box where it should appear
+    $data .= tx(0.5, 0.5);
+    $data .= rx(90);
+    $data .= tx(-0.5,-0.5);
+    */
+
+    /* Option B
+    $data .= tx($w / 2, $h / 2);
+    $data .= rx(90);
+    $data .= tx(-$w / 2, -$h / 2);
+    $data .= sx($w, $h);
+    */
+
+    $data = "q";
+    $data .= tx($x, $y);
+    $data .= sx($w, $h);
+    if ($angle != 0) {
+        $data .= tx(0.5, 0.5);
+        $data .= rx($angle);
+        $data .= tx(-0.5,-0.5);
+    }
+    $data .= sprintf(" /%s Do Q", $info['i']);
 
     $resources = new PDFValueObject( [
         'ProcSet' => [ '/PDF', '/Text', '/ImageB', '/ImageC', '/ImageI' ],
