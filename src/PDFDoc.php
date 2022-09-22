@@ -366,6 +366,7 @@ class PDFDoc extends Buffer {
             $page_obj["Annots"] = new PDFValueList();
 
         $annots = &$page_obj["Annots"];
+        $page_rotation = $page_obj["Rotate"]??0;
 
         if ((($referenced = $annots->get_object_referenced()) !== false) && (!is_array($referenced))) {
             // It is an indirect object, so we need to update that object
@@ -455,7 +456,7 @@ class PDFDoc extends Buffer {
                 "Resources" => new PDFValueObject()
             ]);
 
-            $result = _add_image([$this, "create_object"], $imagefilename, ...$bbox);
+            $result = _add_image([$this, "create_object"], $imagefilename, $bbox[0], $bbox[1], $bbox[2], $bbox[3], $page_rotation->val());
             if ($result === false)
                 return p_error("could not add the image");
 
