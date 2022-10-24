@@ -366,7 +366,7 @@ class PDFDoc extends Buffer {
             $page_obj["Annots"] = new PDFValueList();
 
         $annots = &$page_obj["Annots"];
-        $page_rotation = $page_obj["Rotate"]??0;
+        $page_rotation = $page_obj["Rotate"]??new PDFValueSimple(0);
 
         if ((($referenced = $annots->get_object_referenced()) !== false) && (!is_array($referenced))) {
             // It is an indirect object, so we need to update that object
