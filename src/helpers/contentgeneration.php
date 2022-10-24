@@ -124,6 +124,20 @@ function _create_image_objects($info, $object_factory) {
     return $objects;
 }
 
+function is_base64($string){
+    // Check if there are valid base64 characters
+    if (!preg_match('/^[a-zA-Z0-9\/\r\n+]*={0,2}$/', $string)) return false;
+
+    // Decode the string in strict mode and check the results
+    $decoded = base64_decode($string, true);
+    if(false === $decoded) return false;
+
+    // Encode the string again
+    if(base64_encode($decoded) != $string) return false;
+
+    return true;
+}
+
 /**
  * This function creates the objects needed to add an image to the document, at a specific position and size.
  *   The function is agnostic from the place in which the image is to be created, and just creates the objects
@@ -149,6 +163,8 @@ function _add_image($object_factory, $filename, $x=0, $y=0, $w=0, $h=0, $angle =
 
     if ($filename[0] === '@') {
         $filecontent = substr($filename, 1);
+    } else if (is_base64($filename)) {
+        $filecontent = base64_decode($filename);
     } else {
         $filecontent = @file_get_contents($filename);
 
