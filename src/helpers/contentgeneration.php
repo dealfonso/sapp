@@ -36,6 +36,20 @@ use function ddn\sapp\helpers\_parsejpg;
 use function ddn\sapp\helpers\_parsepng;
 use function ddn\sapp\helpers\p_error;
 
+function tx($x, $y) {
+    return sprintf(" 1 0 0 1 %.2F %.2F cm", $x, $y);
+}
+function sx($w, $h) {
+    return sprintf(" %.2F 0 0 %.2F 0 0 cm", $w, $h);
+}
+function deg2rad($angle) {
+    return $angle * pi() / 180;
+}
+function rx($angle) {
+    $angle = deg2rad($angle);
+    return sprintf(" %.2F %.2F %.2F %.2F 0 0 cm", cos($angle), sin($angle), -sin($angle), cos($angle)); 
+}
+
 /**
  * Creates an image object in the document, using the content of "info"
  *   NOTE: the image inclusion is taken from http://www.fpdf.org/; this is a translation
@@ -183,20 +197,6 @@ function _add_image($object_factory, $filename, $x=0, $y=0, $w=0, $h=0, $angle =
 
     // Generate the command to translate and scale the image
     $data = "q ";
-
-    function tx($x, $y) {
-        return sprintf(" 1 0 0 1 %.2F %.2F cm", $x, $y); 
-    }
-    function sx($w, $h) {
-        return sprintf(" %.2F 0 0 %.2F 0 0 cm", $w, $h);
-    }
-    function deg2rad($angle) {
-        return $angle * pi() / 180;
-    }
-    function rx($angle) {
-        $angle = deg2rad($angle);
-        return sprintf(" %.2F %.2F %.2F %.2F 0 0 cm", cos($angle), sin($angle), -sin($angle), cos($angle)); 
-    }
 
     if ($keep_proportions) {
         $angleRads = deg2rad($angle);
