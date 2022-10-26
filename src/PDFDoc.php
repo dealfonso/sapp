@@ -1041,4 +1041,53 @@ class PDFDoc extends Buffer {
         
         return $objects;
     }
+
+    
+    /**
+     * Retrieve the signatures in the document
+     * @return array of signatures in the original document
+     */
+    public function get_signatures() {
+
+        // Prepare the return value
+        $signatures = [];
+
+        foreach ($this->_xref_table as $oid => $offset) {
+            if ($offset === null) continue;
+
+            $o = $this->get_object($oid);
+            if ($o === false) continue;
+
+            $o_value = $o->get_value()->val();
+            if (! is_array($o_value) || ! isset($o_value['Type'])) continue;
+            if ($o_value['Type']->val() != 'Sig') continue;
+
+            $signature = ['content' => $o_value['Contents']->val()];
+
+            try {
+                $cert=[];
+
+                openssl_pkcs7_read(
+                    "-----BEGIN CERTIFICATE-----\n"
+                       . chunk_split(base64_encode(hex2bin($signature['content'])), 64, "\n")
+                       . "-----END CERTIFICATE-----\n",
+                   $cert
+                );
+
+                $signature += openssl_x509_parse($cert[0]);
+            } catch (\Exception $e) {}
+
+            $signatures[] = $signature;
+        }
+
+        return $signatures;
+    }
+
+    /**
+     * Retrieve the number of signatures in the document
+     * @return int signatures number in the original document
+     */
+    public function get_signature_count() {
+        return count($this->get_signatures());
+    }
 }
