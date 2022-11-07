@@ -672,9 +672,12 @@ class PDFDoc extends Buffer {
     /**
      * This functions outputs the document to a buffer object, ready to be dumped to a file.
      * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
+     * @param calculate_signature_hash if a document is to be signed, instructs sapp whether the signature hash has to be calculated or not. 
+     *        (*) This is useful to get the document ready to be signed, with a placeholder for the document hash, and calculate it using an 
+     *            external application.
      * @return buffer a buffer that contains a pdf dumpable document
      */
-    public function to_pdf_file_b($rebuild = false) : Buffer {
+    public function to_pdf_file_b($rebuild = false, $calculate_signature_hash = true) : Buffer {
         // We made no updates, so return the original doc
         if (($rebuild === false) && (count($this->_pdf_objects) === 0) && ($this->_certificate === null) && ($this->_appearance === null))
             return new Buffer($this->_buffer);
@@ -789,22 +792,25 @@ class PDFDoc extends Buffer {
             // In case that the document is signed, calculate the signature
 
             $_signature->set_sizes($_doc_to_xref->size(), $_doc_from_xref->size());
-            $_signature["Contents"] = new PDFValueSimple("");
-            $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
 
-            // We need to write the content to a temporary folder to use the pkcs7 signature mechanism
-            $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
-            $temp_file = fopen($temp_filename, 'wb');
-            fwrite($temp_file, $_signable_document->get_raw());
-            fclose($temp_file);
+            if ($calculate_signature_hash === true) {
+                $_signature["Contents"] = new PDFValueSimple("");
+                $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
 
-            // Calculate the signature and remove the temporary file
-            $certificate = $_signature->get_certificate();
-            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER);
-            unlink($temp_filename);
+                // We need to write the content to a temporary folder to use the pkcs7 signature mechanism
+                $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
+                $temp_file = fopen($temp_filename, 'wb');
+                fwrite($temp_file, $_signable_document->get_raw());
+                fclose($temp_file);
 
-            // Then restore the contents field
-            $_signature["Contents"] = new PDFValueHexString($signature_contents);
+                // Calculate the signature and remove the temporary file
+                $certificate = $_signature->get_certificate();
+                $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER);
+                unlink($temp_filename);
+
+                // Then restore the contents field
+                $_signature["Contents"] = new PDFValueHexString($signature_contents);
+            }
 
             // Add this object to the content previous to this document xref
             $_doc_to_xref->data($_signature->to_pdf_entry());
@@ -817,9 +823,13 @@ class PDFDoc extends Buffer {
 
     /**
      * This functions outputs the document to a string, ready to be written
+     * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
+     * @param calculate_signature_hash if a document is to be signed, instructs sapp whether the signature hash has to be calculated or not. 
+     *        (*) This is useful to get the document ready to be signed, with a placeholder for the document hash, and calculate it using an 
+     *            external application.
      * @return buffer a buffer that contains a pdf document
      */
-    public function to_pdf_file_s($rebuild = false) {
+    public function to_pdf_file_s($rebuild = false, $calculate_signature_hash = true) {
         $pdf_content = $this->to_pdf_file_b($rebuild);
         return $pdf_content->get_raw();
     }
@@ -827,9 +837,13 @@ class PDFDoc extends Buffer {
     /**
      * This function writes the document to a file
      * @param filename the name of the file to be written (it will be overwritten, if exists)
+     * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
+     * @param calculate_signature_hash if a document is to be signed, instructs sapp whether the signature hash has to be calculated or not. 
+     *        (*) This is useful to get the document ready to be signed, with a placeholder for the document hash, and calculate it using an 
+     *            external application.
      * @return written true if the file has been correcly written to the file; false otherwise
      */
-    public function to_pdf_file($filename, $rebuild = false) {
+    public function to_pdf_file($filename, $rebuild = false, $calculate_signature_hash = true) {
         $pdf_content = $this->to_pdf_file_b($rebuild);
 
         $file = fopen($filename, "wb");
