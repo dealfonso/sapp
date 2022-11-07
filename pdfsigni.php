@@ -76,12 +76,15 @@ else {
 
             // Set the image appearance and the certificate file
             $obj->set_signature_appearance(0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $image);
-            $obj->set_signature_certificate($argv[3], $password);
-            $docsigned = $obj->to_pdf_file_s();
-            if ($docsigned === false)
-                fwrite(STDERR, "could not sign the document");
-            else
-                echo $docsigned;
+            if (!$obj->set_signature_certificate($argv[3], $password)) {
+                fwrite(STDERR, "the certificate is not valid");
+            } else {
+                $docsigned = $obj->to_pdf_file_s();
+                if ($docsigned === false)
+                    fwrite(STDERR, "could not sign the document");
+                else
+                    echo $docsigned;
+            }
         }
     }
 }
