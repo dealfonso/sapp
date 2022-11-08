@@ -67,7 +67,7 @@ class PDFSignatureObject extends PDFObject {
      */
     public function __construct($oid) {
         $this->_prev_content_size = 0;
-        $this->_post_content_size = null;
+        $this->_document_size = null;
         parent::__construct($oid, [
             'Filter' => "/Adobe.PPKLite",
             'Type' => "/Sig",
@@ -92,12 +92,12 @@ class PDFSignatureObject extends PDFObject {
     }
     /**
      * Function that sets the size of the content that will appear in the file, previous to this object,
-     *   and the content that will be included after. This is needed to get the range of bytes of the
+     *   and the size of the whole document. This is needed to get the range of bytes of the
      *   signature.
      */
-    public function set_sizes($prev_content_size, $post_content_size = null) {
+    public function set_sizes($prev_content_size, $document_size = null) {
         $this->_prev_content_size = $prev_content_size;
-        $this->_post_content_size = $post_content_size;
+        $this->_document_size = $document_size;
     }
     /**
      * This function gets the offset of the marker, relative to this object. To make correct, the offset of the object
@@ -125,7 +125,7 @@ class PDFSignatureObject extends PDFObject {
         $byterange_str =  "[ 0 " . 
             ($this->_prev_content_size + $offset) . " " .
             ($starting_second_part) . " " .
-            ($this->_post_content_size!==null?$this->_post_content_size + ($signature_size - $contents_size - $offset):0) . " ]";
+            ($this->_document_size===null?0:$this->_document_size - $starting_second_part) . " ]";
 
         $this->_value['ByteRange'] = 
             new PDFValueSimple($byterange_str . str_repeat(" ", __BYTERANGE_SIZE - strlen($byterange_str) + 1)

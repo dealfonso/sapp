@@ -394,15 +394,11 @@ class PDFDoc extends Buffer {
         );      
 
         // Prepare the signature object (we need references to it)
-        $signature = null;
-        if ($this->_certificate !== null) {
-            $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject", false);
-            // $signature = new PDFSignatureObject([]);
-            $signature->set_certificate($this->_certificate);
+        $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject", false);
+        $signature->set_certificate($this->_certificate);
 
-            // Update the value to the annotation object
-            $annotation_object["V"] = new PDFValueReference($signature->get_oid());
-        }
+        // Update the value to the annotation object
+        $annotation_object["V"] = new PDFValueReference($signature->get_oid());
         
         // If an image is provided, let's load it
         if ($imagefilename !== null) {
@@ -511,6 +507,9 @@ class PDFDoc extends Buffer {
             $this->add_object($object);
         }     
         
+        // Add the signature object in the last position, to make sure that it appears later than anyone in this block
+        $this->add_object($signature);
+
         return $signature;
     }
 
@@ -631,53 +630,228 @@ class PDFDoc extends Buffer {
     }
 
     /**
-     * This function generates all the contents of the file up to the xref entry. 
-     * @param rebuild whether to generate the xref with all the objects in the document (true) or
-     *                consider only the new ones (false)
-     * @return xref_data [ the text corresponding to the objects, array of offsets for each object ]
+     * Generates the heading of the document. It may consist of the PDF version string (e.g. PDF-1.5) or the whole previous
+     *   document, if the document is incremental.
+     * @return buffer the bytes of the heading for the document
      */
-    protected function _generate_content_to_xref($rebuild = false) {
+    protected function _generate_heading($rebuild = false) : Buffer {
         if ($rebuild === true) {
             $result  = new Buffer("%$this->_pdf_version_string" . __EOL);
         }  else {
             $result = new Buffer($this->_buffer);
         }
+        return $result;
+    }
 
-        // Need to calculate the objects offset
-        $offsets = [];
-        $offsets[0] = 0;
-
-        // The objects
-        $offset = $result->size();
+    /**
+     * Generates the content of the PDF document, due to the (new) objects in the PDF document ;)
+     * @param rebuild - if true, the document will be rebuilt to remove the unused objects and the old versions of them (if any)
+     * @return buffer - the bytes of the document resulting of the new objects
+     */
+    protected function _generate_PDF_content($rebuild = false) : Buffer {
+        $result = new Buffer();
 
         if ($rebuild === true) {
             for ($i = 0; $i <= $this->_max_oid; $i++) {
                 if (($object = $this->get_object($i)) ===  false) continue;
 
                 $result->data($object->to_pdf_entry());    
-                $offsets[$i] = $offset;
-                $offset = $result->size();
             }
         } else {
             foreach ($this->_pdf_objects as $obj_id => $object) {
                 $result->data($object->to_pdf_entry());
-                $offsets[$obj_id] = $offset;
-                $offset = $result->size();
             }
         }
 
-        return [ $result, $offsets ];
+        return $result;
+    }
+
+    /**
+     * Retrieves the offsets in bytes of each object, in the document
+     * @param rebuild - if true, the document will be rebuilt to remove the unused objects and the old versions of them (if any)
+     * @return dict of offsets, indexed by the oid, where the value is the offset in bytes of object oid in the document
+     */
+    protected function _get_object_offsets($rebuild) {
+        $offsets = [];
+        $offsets[0] = 0;
+
+        if ($rebuild === true) {
+            $offset = strlen("%$this->_pdf_version_string" . __EOL);
+            for ($i = 0; $i <= $this->_max_oid; $i++) {
+                if (($object = $this->get_object($i)) ===  false) continue;
+                $offsets[$i] = $offset;
+                $offset = $offset + strlen($object->to_pdf_entry());
+            }
+        } else {
+            $offset = strlen($this->_buffer);
+            foreach ($this->_pdf_objects as $obj_id => $object) {
+                $offsets[$obj_id] = $offset;
+                $offset = $offset + strlen($object->to_pdf_entry());
+            }
+        }
+        return [ $offsets, $offset ];
+    }
+
+    /**
+     * Generates the trailer for the document. The trailer is a part that is added to the document, where the index of the objects is set.
+     *   The form is "startxref\n...\n%%EOF" and it must be appended to the end of the document. 
+     * 
+     * In case that the target version is greater or equal to 1.5 and it is possible to use cross references, SAPP will use them. So this
+     *   function will add an object that contains the cross reference table in the 1.5 format.
+     * 
+     * @return buffer - a buffer that contains the content of the trailing part of the document.
+     */
+    protected function _generate_trailer($rebuild = false) : Buffer {
+        $target_version = $this->_get_target_version();
+        $trailer = new Buffer();
+
+        if ($target_version >= "1.5") {
+            p_debug("generating xref using cross-reference streams");
+
+            // Create a new object for the trailer
+            $trailer_obj = $this->create_object(
+                clone $this->_pdf_trailer_object
+            );
+
+            // Get the objects offset to create the xref table
+            [ $_obj_offsets, $end_of_pdf ] = $this->_get_object_offsets($rebuild);
+            $xref_offset = $_obj_offsets[ $trailer_obj->get_oid() ];
+
+            // Generate the xref cross-reference stream
+            $xref = PDFUtilFnc::build_xref_1_5($_obj_offsets);
+
+            // Set the parameters for the trailer_obj
+            $trailer_obj["Index"] = explode(" ", $xref["Index"]);
+            $trailer_obj["W"] = $xref["W"];
+            $trailer_obj["Size"] = $this->_max_oid + 1;
+            $trailer_obj["Type"] = "/XRef";
+
+            // Not needed to generate new IDs, as in metadata the IDs will be set
+            // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref["stream"]);
+            $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
+            // $trailer_obj["ID"] = [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ];
+            $trailer_obj["ID"] = [ $trailer_obj["ID"][0], new PDFValueHexString(strtoupper($ID2)) ];
+
+            // We are not using predictors nor encoding
+            if (isset($trailer_obj["DecodeParms"])) unset($trailer_obj["DecodeParms"]);
+
+            // We are not compressing the stream
+            if (isset($trailer_obj["Filter"])) unset($trailer_obj["Filter"]);
+            $trailer_obj->set_stream($xref["stream"], false);
+
+            // If creating an incremental modification, point to the previous xref table
+            if ($rebuild === false)
+                $trailer_obj['Prev'] = $this->_xref_position;
+            else
+                // If rebuilding the document, remove the references to previous xref tables, because it will be only one
+                if (isset($trailer_obj['Prev']))
+                    unset($trailer_obj['Prev']);
+
+
+            $trailer->data("startxref" . __EOL . "$xref_offset" . __EOL ."%%EOF" . __EOL);
+        } else {
+            p_debug("generating xref using classic xref...trailer");
+
+            // Get the objects offset to create the xref table
+            [ $_obj_offsets, $xref_offset ] = $this->_get_object_offsets($rebuild);
+
+            $xref_content = PDFUtilFnc::build_xref($_obj_offsets);
+
+            // Update the trailer
+            $this->_pdf_trailer_object['Size'] = $this->_max_oid + 1;
+
+            if ($rebuild === false)
+                $this->_pdf_trailer_object['Prev'] = $this->_xref_position;
+
+            // Not needed to generate new IDs, as in metadata the IDs may be set
+            // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref_content);
+            // $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
+            // $this->_pdf_trailer_object['ID'] = new PDFValueList(
+            //    [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ]
+            // );
+
+            // Generate the part of the document related to the xref
+            $trailer->data($xref_content);
+            $trailer->data("trailer\n$this->_pdf_trailer_object");
+            $trailer->data("\nstartxref\n$xref_offset\n%%EOF\n");
+        }
+        return $trailer;
+    }
+
+    /** 
+     * Obtains the target version for the PDF document, depending on the original version and the version of the new contents
+     * @return version the string version for the PDF document (e.g. PDF-1.5)
+     */
+    protected function _get_target_version() {
+        $doc_version_string = str_replace("PDF-", "", $this->_pdf_version_string);
+
+        // The version considered for the cross reference table depends on the version of the current xref table,
+        //   as it is not possible to mix xref tables. Anyway we are 
+        $target_version = $this->_xref_table_version;
+        if ($this->_xref_table_version >= "1.5") {
+            // i.e. xref streams
+            if ($doc_version_string > $target_version)
+                $target_version = $doc_version_string;
+        } else {
+            // i.e. xref+trailer
+            if ($doc_version_string < $target_version)
+                $target_version = $doc_version_string;
+        }
+
+        return $target_version;
+    } 
+
+    /**
+     * This functions outputs the document to a buffer object, ready to be dumped to a file, assuming that it is going to be signed. So a placeholder
+     *   for the signature hash is included in the document. The placeholder consists of <00000...0000> where the amount if 0 is defined by constant __SIGNATURE_MAX_LENGTH
+     * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
+     * @return buffer a buffer that contains a pdf document with a signature placeholder
+     */
+    public function to_pdf_with_signature_placeholder($rebuild = false) : Buffer {
+        // Save the state prior to generating the objects
+        $this->push_state();
+
+        // Update the timestamp
+        $this->update_mod_date();
+
+        // Generate the placeholder for the signature
+        $_signature = $this->_generate_signature_in_document();
+        if ($_signature === false) {
+            $this->pop_state();
+            return p_error("could not generate the signed document");
+        }
+
+        // We'll calculate the trailer in first place, because it may add some objects, depending on the PDF version
+        $pdf_trailer = $this->_generate_trailer($rebuild);
+
+        // Geneate the heading of the document (it may contain the PDF version only, or the previous documents if this is iscremental)
+        $pdf_heading = $this->_generate_heading($rebuild);
+
+        // And now the content of the PDF
+        $pdf_content = $this->_generate_PDF_content($rebuild);
+
+        // In case that the document is signed, calculate the signature
+        [ $offsets, $eod_offset ] = $this->_get_object_offsets($rebuild);
+        $_signature->set_sizes($offsets[$_signature->get_oid()], $pdf_heading->size() + $pdf_content->size() + $pdf_trailer->size());
+        $pdf_content = $this->_generate_PDF_content($rebuild);
+
+        // Finally compose the document
+        $pdf_document = new Buffer();
+        $pdf_document->append($pdf_heading);
+        $pdf_document->append($pdf_content);
+        $pdf_document->append($pdf_trailer);
+
+        // Reset the state to make signature objects not to mess with the user's objects
+        $this->pop_state();
+        return $pdf_document;    
     }
 
     /**
      * This functions outputs the document to a buffer object, ready to be dumped to a file.
      * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
-     * @param calculate_signature_hash if a document is to be signed, instructs sapp whether the signature hash has to be calculated or not. 
-     *        (*) This is useful to get the document ready to be signed, with a placeholder for the document hash, and calculate it using an 
-     *            external application.
      * @return buffer a buffer that contains a pdf dumpable document
      */
-    public function to_pdf_file_b($rebuild = false, $calculate_signature_hash = true) : Buffer {
+    public function to_pdf_file_b($rebuild = false) : Buffer {
         // We made no updates, so return the original doc
         if (($rebuild === false) && (count($this->_pdf_objects) === 0) && ($this->_certificate === null) && ($this->_appearance === null))
             return new Buffer($this->_buffer);
@@ -697,128 +871,54 @@ class PDFDoc extends Buffer {
             }
         }
 
-        // Generate the first part of the document
-        [ $_doc_to_xref, $_obj_offsets ] = $this->_generate_content_to_xref($rebuild);
-        $xref_offset = $_doc_to_xref->size();
+        // We'll calculate the trailer in first place, because it may add some objects, depending on the PDF version
+        $pdf_trailer = $this->_generate_trailer($rebuild);
 
-        if ($_signature !== null) {
-            $_obj_offsets[$_signature->get_oid()] = $_doc_to_xref->size();
-            $xref_offset +=  strlen($_signature->to_pdf_entry());
-        }
+        // Geneate the heading of the document (it may contain the PDF version only, or the previous documents if this is iscremental)
+        $pdf_heading = $this->_generate_heading($rebuild);
 
-        $doc_version_string = str_replace("PDF-", "", $this->_pdf_version_string);
-
-        // The version considered for the cross reference table depends on the version of the current xref table,
-        //   as it is not possible to mix xref tables. Anyway we are 
-        $target_version = $this->_xref_table_version;
-        if ($this->_xref_table_version >= "1.5") {
-            // i.e. xref streams
-            if ($doc_version_string > $target_version)
-                $target_version = $doc_version_string;
-        } else {
-            // i.e. xref+trailer
-            if ($doc_version_string < $target_version)
-                $target_version = $doc_version_string;
-        }
-
-        if ($target_version >= "1.5") {
-            p_debug("generating xref using cross-reference streams");
-
-            // Create a new object for the trailer
-            $trailer = $this->create_object(
-                clone $this->_pdf_trailer_object
-            );
-
-            // Add this object to the offset table, to be also considered in the xref table
-            $_obj_offsets[$trailer->get_oid()] = $xref_offset;
-
-            // Generate the xref cross-reference stream
-            $xref = PDFUtilFnc::build_xref_1_5($_obj_offsets);
-
-            // Set the parameters for the trailer
-            $trailer["Index"] = explode(" ", $xref["Index"]);
-            $trailer["W"] = $xref["W"];
-            $trailer["Size"] = $this->_max_oid + 1;
-            $trailer["Type"] = "/XRef";
-
-            // Not needed to generate new IDs, as in metadata the IDs will be set
-            // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref["stream"]);
-            $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
-            // $trailer["ID"] = [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ];
-            $trailer["ID"] = [ $trailer["ID"][0], new PDFValueHexString(strtoupper($ID2)) ];
-
-            // We are not using predictors nor encoding
-            if (isset($trailer["DecodeParms"])) unset($trailer["DecodeParms"]);
-
-            // We are not compressing the stream
-            if (isset($trailer["Filter"])) unset($trailer["Filter"]);
-            $trailer->set_stream($xref["stream"], false);
-
-            // If creating an incremental modification, point to the previous xref table
-            if ($rebuild === false)
-                $trailer['Prev'] = $this->_xref_position;
-            else
-                // If rebuilding the document, remove the references to previous xref tables, because it will be only one
-                if (isset($trailer['Prev']))
-                    unset($trailer['Prev']);
-
-            // And generate the part of the document related to the xref
-            $_doc_from_xref = new Buffer($trailer->to_pdf_entry());
-            $_doc_from_xref->data("startxref" . __EOL . "$xref_offset" . __EOL ."%%EOF" . __EOL);
-        } else {
-            p_debug("generating xref using classic xref...trailer");
-            $xref_content = PDFUtilFnc::build_xref($_obj_offsets);
-
-            // Update the trailer
-            $this->_pdf_trailer_object['Size'] = $this->_max_oid + 1;
-
-            if ($rebuild === false)
-                $this->_pdf_trailer_object['Prev'] = $this->_xref_position;
-
-            // Not needed to generate new IDs, as in metadata the IDs may be set
-            // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref_content);
-            // $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
-            // $this->_pdf_trailer_object['ID'] = new PDFValueList(
-            //    [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ]
-            // );
-
-            // Generate the part of the document related to the xref
-            $_doc_from_xref = new Buffer($xref_content);
-            $_doc_from_xref->data("trailer\n$this->_pdf_trailer_object");
-            $_doc_from_xref->data("\nstartxref\n$xref_offset\n%%EOF\n");
-        }
+        // And now the content of the PDF
+        $pdf_content = $this->_generate_PDF_content($rebuild);
 
         if ($_signature !== null) {
             // In case that the document is signed, calculate the signature
 
-            $_signature->set_sizes($_doc_to_xref->size(), $_doc_from_xref->size());
+            [ $offsets, $eod_offset ] = $this->_get_object_offsets($rebuild);
+            $_signature->set_sizes($offsets[$_signature->get_oid()], $pdf_heading->size() + $pdf_content->size() + $pdf_trailer->size());
 
-            if ($calculate_signature_hash === true) {
-                $_signature["Contents"] = new PDFValueSimple("");
-                $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
+            // We'll use a simple trick to get the document to sign, that consists in removing the content of field "Contents" and generating
+            // the whole document, again.
+            // WARNING: the trailer must not be generated again, as it may add some objects, depending on the version
+            $_signature["Contents"] = new PDFValueSimple("");
+            $_signable_document = new Buffer($pdf_heading->get_raw() . $this->_generate_PDF_content($rebuild)->get_raw() . $pdf_trailer->get_raw());
 
-                // We need to write the content to a temporary folder to use the pkcs7 signature mechanism
-                $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
-                $temp_file = fopen($temp_filename, 'wb');
-                fwrite($temp_file, $_signable_document->get_raw());
-                fclose($temp_file);
+            // We need to write the content to a temporary folder to use the pkcs7 signature mechanism
+            $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
+            $temp_file = fopen($temp_filename, 'wb');
+            fwrite($temp_file, $_signable_document->get_raw());
+            fclose($temp_file);
 
-                // Calculate the signature and remove the temporary file
-                $certificate = $_signature->get_certificate();
-                $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER);
-                unlink($temp_filename);
+            // Calculate the signature and remove the temporary file
+            $certificate = $_signature->get_certificate();
+            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER);
+            unlink($temp_filename);
 
-                // Then restore the contents field
-                $_signature["Contents"] = new PDFValueHexString($signature_contents);
-            }
+            // Then restore the contents field
+            $_signature["Contents"] = new PDFValueHexString($signature_contents);
 
-            // Add this object to the content previous to this document xref
-            $_doc_to_xref->data($_signature->to_pdf_entry());
+            // If the signature hash has been calculated, we need to rebuild the final PDF content to contain the hash
+            $pdf_content = $this->_generate_PDF_content($rebuild);
         }
+
+        // Finally compose the document
+        $pdf_document = new Buffer();
+        $pdf_document->append($pdf_heading);
+        $pdf_document->append($pdf_content);
+        $pdf_document->append($pdf_trailer);
 
         // Reset the state to make signature objects not to mess with the user's objects
         $this->pop_state();
-        return new Buffer($_doc_to_xref->get_raw() . $_doc_from_xref->get_raw());
+        return $pdf_document;
     }
 
     /**
@@ -829,7 +929,7 @@ class PDFDoc extends Buffer {
      *            external application.
      * @return buffer a buffer that contains a pdf document
      */
-    public function to_pdf_file_s($rebuild = false, $calculate_signature_hash = true) {
+    public function to_pdf_file_s($rebuild = false) {
         $pdf_content = $this->to_pdf_file_b($rebuild);
         return $pdf_content->get_raw();
     }
@@ -838,12 +938,9 @@ class PDFDoc extends Buffer {
      * This function writes the document to a file
      * @param filename the name of the file to be written (it will be overwritten, if exists)
      * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
-     * @param calculate_signature_hash if a document is to be signed, instructs sapp whether the signature hash has to be calculated or not. 
-     *        (*) This is useful to get the document ready to be signed, with a placeholder for the document hash, and calculate it using an 
-     *            external application.
      * @return written true if the file has been correcly written to the file; false otherwise
      */
-    public function to_pdf_file($filename, $rebuild = false, $calculate_signature_hash = true) {
+    public function to_pdf_file($filename, $rebuild = false) {
         $pdf_content = $this->to_pdf_file_b($rebuild);
 
         $file = fopen($filename, "wb");
@@ -1055,7 +1152,6 @@ class PDFDoc extends Buffer {
         
         return $objects;
     }
-
     
     /**
      * Retrieve the signatures in the document
