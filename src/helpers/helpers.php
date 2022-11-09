@@ -21,6 +21,10 @@
 
 namespace ddn\sapp\helpers;
 
+if (! defined("_DEBUG_LEVEL")) {
+    define('_DEBUG_LEVEL', 3);
+}
+
 if (! defined('STDERR')) {
     define('STDERR', fopen('php://stderr', 'wb'));
 }
@@ -42,6 +46,9 @@ function var_dump_to_string($var) {
  * @return str the var_dump output of the variables
  */
 function debug_var(...$vars) {
+    // If the debug level is less than 3, suppress debug messages
+    if (_DEBUG_LEVEL < 3) return;
+
     $result = [];
     foreach ($vars as $var) {
         array_push($result, var_dump_to_string($var));
@@ -53,6 +60,9 @@ function debug_var(...$vars) {
  * @param vars comma separated list of variables to output
  */
 function p_debug_var(...$vars) {
+    // If the debug level is less than 3, suppress debug messages
+    if (_DEBUG_LEVEL < 3) return;
+    
     foreach ($vars as $var) {
         $e = var_dump_to_string($var);
         p_stderr($e, "Debug");
@@ -97,7 +107,10 @@ function p_stderr(&$e, $tag = "Error", $level = 1) {
  * @return retval
  */
 function p_debug($e, $retval = false) {
-    p_stderr($e, "Debug");
+    // If the debug level is less than 3, suppress debug messages
+    if (_DEBUG_LEVEL >= 3) {
+        p_stderr($e, "Debug");
+    }
     return $retval;
 }
 /**
@@ -107,7 +120,10 @@ function p_debug($e, $retval = false) {
  * @return retval
  */
 function p_warning($e, $retval = false) {
-    p_stderr($e, "Warning");
+    // If the debug level is less than 2, suppress warning messages
+    if (_DEBUG_LEVEL >= 2) {
+        p_stderr($e, "Warning");
+    }
     return $retval;
 }
 /**
@@ -117,7 +133,10 @@ function p_warning($e, $retval = false) {
  * @return retval
  */
 function p_error($e, $retval = false) {
-    p_stderr($e, "Error");
+    // If the debug level is less than 1, suppress error messages
+    if (_DEBUG_LEVEL >= 1) {
+        p_stderr($e, "Error");
+    }
     return $retval;
 }
 /**
