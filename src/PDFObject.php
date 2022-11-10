@@ -21,6 +21,7 @@
 
 namespace ddn\sapp;
 
+use ddn\sapp\pdfvalue\PDFValue;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use \ArrayAccess;
@@ -73,7 +74,7 @@ class PDFObject implements ArrayAccess {
     }
 
     public function get_keys() {
-        return $this->_value->get_keys();
+        return is_a($this->_value, PDFValue::class) ? $this->_value->get_keys() : false;
     }
 
     public function set_oid($oid) {
