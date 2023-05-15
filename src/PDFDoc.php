@@ -68,6 +68,8 @@ class PDFDoc extends Buffer {
     protected $_backup_state = [];
     protected $_certificate = null;
     protected $_appearance = null;
+    protected $_xref_table_version;
+    protected $_revisions;
 
     // Array of pages ordered by appearance in the final doc (i.e. index 0 is the first page rendered; index 1 is the second page rendered, etc.)
     // Each entry is an array with the following fields:
@@ -1089,5 +1091,81 @@ class PDFDoc extends Buffer {
      */
     public function get_signature_count() {
         return count($this->get_signatures());
+    }
+
+
+    /**
+     * Generates a new document that is the result of signing the current
+     * document
+     * @param certfile a file that contains a user certificate in pkcs12 format, or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem> ]
+     *                 that would be the output of openssl_pkcs12_read
+     * @param password the password to read the private key
+     * @param page_to_appear the page (zero based) in which the signature will appear
+     * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect
+     * @param rect the rectangle (in page-based coordinates) where the signature will appear in that page
+     */
+    public function sign_document($certfile, $password = null, $page_to_appear = 0, $imagefilename = null, $px = 0, $py = 0, $size = null) {
+
+        if ($imagefilename !== null) {
+            $position = [ ];
+            $imagesize = @getimagesize($imagefilename);
+            if ($imagesize === false) {
+                return p_warning("failed to open the image $image");
+            }
+            if (($page_to_appear < 0) || ($page_to_appear > $this->get_page_count())) {
+                return p_error("invalid page number");
+            }
+            $pagesize = $this->get_page_size($page_to_appear);
+            if ($pagesize === false) {
+                return p_error("failed to get page size");
+            }
+
+            $pagesize = explode(" ", $pagesize[0]->val());
+
+            // Get the bounding box for the image
+            $p_x = intval("". $pagesize[0]);
+            $p_y = intval("". $pagesize[1]);
+            $p_w = intval("". $pagesize[2]) - $p_x;
+            $p_h = intval("". $pagesize[3]) - $p_y;
+
+            // Add the position for the image
+            $p_x = $p_x + $px;
+            $p_y = $p_y + $py;
+
+            $i_w = $imagesize[0];
+            $i_h = $imagesize[1];
+
+            if (is_array($size)) {
+                if (count($size) != 2) {
+                    return p_error("invalid size");
+                }
+                $width = $size[0];
+                $height = $size[1];
+            } else if ($size === null) {
+                $width = $i_w;
+                $height = $i_h;
+            } else if (is_float($size) || is_int($size)) {
+                $width = $i_w * $size;
+                $height = $i_h * $size;
+            } else {
+                return p_error("invalid size format");
+            }
+            
+            $i_w = $width===null?$imagesize[0]:$width;
+            $i_h = $height===null?$imagesize[1]:$height;
+
+            // Set the image appearance and the certificate file
+            $this->set_signature_appearance(0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $imagefilename);
+        }
+        
+        if (!$this->set_signature_certificate($certfile, $password)) {
+            return p_error("the certificate or the signature is not valid");
+        }
+        
+        $docsigned = $this->to_pdf_file_s();
+        if ($docsigned === false) {
+            return p_error("failed to sign the document");
+        } 
+        return PDFDoc::from_string($docsigned);
     }
 }
