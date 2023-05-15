@@ -1102,7 +1102,12 @@ class PDFDoc extends Buffer {
      * @param password the password to read the private key
      * @param page_to_appear the page (zero based) in which the signature will appear
      * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect
-     * @param rect the rectangle (in page-based coordinates) where the signature will appear in that page
+     * @param px
+     * @param py x and y position for the signature.
+     * @param size 
+     *          - if float, it will be a scale for the size of the image to be included as a signature appearance
+     *          - if array [ width, height ], it will be the width and the height for the image to be included as a signature appearance (if 
+     *            one of these values is null, it will fallback to the actual width or height of the image)
      */
     public function sign_document($certfile, $password = null, $page_to_appear = 0, $imagefilename = null, $px = 0, $py = 0, $size = null) {
 
