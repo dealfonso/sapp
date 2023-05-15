@@ -63,6 +63,7 @@ In the root folder of the source code you can find two simple examples:
 1. `pdfrebuild.php`: this example gets a PDF file, loads it and rebuilds it to make every PDF object to be in order, and also reducing the amount of text to define the document. 
 1. `pdfsign.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate.
 1. `pdfsigni.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate, and adds an image that makes visible the signature in the document.
+1. `pdfsignx.php`: alternate example that gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate, and adds an image that makes visible the signature in the document.
 1. `pdfcompare.php`: this example compares two PDF files and checks the differences between them (object by object, field by field).
 
 ### 3.1. Rebuild PDF files with `pdfrebuild.php`
@@ -189,7 +190,57 @@ else {
 }
 ```
 
-### 3.3. Sign PDF files with an image, using `pdfsigni.php`
+### 3.3. Sign PDF files with an image, using `pdfsignx.php`
+
+To sign a PDF document that contains an image associated to the signature, it is possible to use the script `pdfsignx.php`:
+
+```bash
+$ php pdfsignx.php examples/testdoc.pdf "https://www.google.es/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" caralla.p12 > testdoc-signed.pdf
+```
+
+And now the document is signed, and a cool image appears. If you wanted to add a second signature, it is as easy as signing the resulting document again.
+
+**The code: (full working example)**
+
+```php
+use ddn\sapp\PDFDoc;
+
+require_once('vendor/autoload.php');
+
+if ($argc !== 4)
+    fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));
+else {
+    if (!file_exists($argv[1]))
+        fwrite(STDERR, "failed to open file " . $argv[1]);
+    else {
+        fwrite(STDERR, "Password: ");
+        system('stty -echo');
+        $password = trim(fgets(STDIN));
+        system('stty echo');
+        fwrite(STDERR, "\n");
+
+        $file_content = file_get_contents($argv[1]);
+        $obj = PDFDoc::from_string($file_content);
+        
+        if ($obj === false)
+            fwrite(STDERR, "failed to parse file " . $argv[1]);
+        else {
+            $signedDoc = $obj->sign_document($argv[3], $password, 0, $argv[2]);
+            if ($signedDoc === false) {
+                fwrite(STDERR, "failed to sign the document");
+            } else {
+                $docsigned = $signedDoc->to_pdf_file_s();
+                if ($docsigned === false)
+                    fwrite(STDERR, "could not sign the document");
+                else
+                    echo $docsigned;
+            }
+        }
+    }
+}
+```
+
+### 3.4. Sign PDF files with an image, using `pdfsigni.php`
 
 To sign a PDF document that contains an image associated to the signature, it is possible to use the script `pdfsigni.php`:
 
@@ -199,7 +250,7 @@ $ php pdfsigni.php examples/testdoc.pdf "https://www.google.es/images/branding/g
 
 And now the document is signed, and a cool image appears. If you wanted to add a second signature, it is as easy as signing the resulting document again.
 
-The main difference with the previous code is the next:
+The main difference with the previous code is that in this case, the signature is considered a stage of editing the document, but it will not be signed until the document is generated. So it is possible to edit the document (i.e. add text or images) and defer the signature until the document is finally generated.
 
 **The code:**
 
@@ -220,7 +271,7 @@ if (!$obj->set_signature_certificate($argv[3], $password)) {
 ...
 ```
 
-### 3.4. Decompress the streams of any object with `pdfdeflate.php`
+### 3.5. Decompress the streams of any object with `pdfdeflate.php`
 
 This is an example of how to manipulate the objects in a document. The example walks over any object in the document, obtains its stream deflated, removes the filter (i.e. compression method), and restores it to the document. So that the objects are not compressed anymore (e.g. you can read in plain text the commands used to draw the elements).
 
