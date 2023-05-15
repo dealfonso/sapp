@@ -1101,7 +1101,8 @@ class PDFDoc extends Buffer {
      *                 that would be the output of openssl_pkcs12_read
      * @param password the password to read the private key
      * @param page_to_appear the page (zero based) in which the signature will appear
-     * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect
+     * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect; if 
+     *                      set to null, the signature will be invisible.
      * @param px
      * @param py x and y position for the signature.
      * @param size 
