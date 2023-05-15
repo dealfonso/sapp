@@ -46,9 +46,14 @@ if (!defined('__EOL'))
  *   ease the generation of the PDF entries for an individual object.
  */
 class PDFObject implements ArrayAccess {
+    protected static $_revisions;
+    protected static $_xref_table_version;
+
     protected $_oid = null;
     protected $_stream = null;
     protected $_value = null;
+    protected $_generation;
+
     
     public function __construct($oid, $value = null, $generation = 0) {
         if ($generation !== 0)

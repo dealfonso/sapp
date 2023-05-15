@@ -44,6 +44,9 @@ if (!defined('__BYTERANGE_SIZE'))
 
 // This is an special object that has a set of fields
 class PDFSignatureObject extends PDFObject {
+    protected $_prev_content_size = 0;
+    protected $_post_content_size = null;
+
     // A placeholder for the certificate to use to sign the document
     protected $_certificate = null;
     /**

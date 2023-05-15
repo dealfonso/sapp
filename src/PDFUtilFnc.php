@@ -681,7 +681,7 @@ class PDFUtilFnc {
             if ($k[$i] === $c_k + 1) {
                 $count++;
             } else {
-                $result = $result . "$i_k ${count}\n$references";
+                $result = $result . "$i_k {$count}\n$references";
                 $count = 1;
                 $i_k = $k[$i];
                 $references = "";
@@ -689,7 +689,7 @@ class PDFUtilFnc {
             $references .= sprintf("%010d 00000 n \n", $offsets[$k[$i]]);
             $c_k = $k[$i];
         }
-        $result = $result . "$i_k ${count}\n$references";
+        $result = $result . "$i_k {$count}\n$references";
 
         return "xref\n$result";            
     }    

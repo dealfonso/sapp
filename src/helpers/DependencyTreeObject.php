@@ -62,12 +62,12 @@ class DependencyTreeObject {
         // $info = $this->oid . ($this->info?" ($this->info)":"") . (($this->is_child > 1)?" $this->is_child":"");
         $info = $this->oid . ($this->info?" ($this->info)":"");
         if ($spaces === null) {
-            $lines = [ "${spaces}  " . json_decode('"\u2501"') . " $info" ];
+            $lines = [ "{$spaces}  " . json_decode('"\u2501"') . " $info" ];
         } else
             if ($mychcount == 0)
-                $lines = [ "${spaces}  " . json_decode('"\u2514\u2500"') . " $info" ];
+                $lines = [ "{$spaces}  " . json_decode('"\u2514\u2500"') . " $info" ];
             else
-                $lines = [ "${spaces}  " . json_decode('"\u251c\u2500"') . " $info" ];
+                $lines = [ "{$spaces}  " . json_decode('"\u251c\u2500"') . " $info" ];
         if (isset($this->children)) {
             $chcount = count($this->children);
             foreach ($this->children as $oid => $child) {
@@ -83,7 +83,7 @@ class DependencyTreeObject {
 
     protected function _old_getstr($depth = 0) {
         $spaces = str_repeat("   " . json_decode('"\u2502"'), $depth);
-        $lines = [ "${spaces}   " . json_decode('"\u251c\u2500"') ." " . $this->oid . ($this->info?" ($this->info)":"") . (($this->is_child > 1)?" $this->is_child":"") ];
+        $lines = [ "{$spaces}   " . json_decode('"\u251c\u2500"') ." " . $this->oid . ($this->info?" ($this->info)":"") . (($this->is_child > 1)?" $this->is_child":"") ];
         if (isset($this->children)) {
             foreach ($this->children as $oid => $child) {
                 array_push($lines, $child->_getstr($depth + 1));
