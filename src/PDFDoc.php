@@ -291,14 +291,11 @@ class PDFDoc extends Buffer {
         // First we read the certificate
         if (is_array($certfile)) {
             $certificate = $certfile;
+            $certificate["pkey"] = [$certificate["pkey"], $certpass];
 
             // If a password is provided, we'll try to decode the private key
-            $t_pkey = openssl_pkey_get_private($certificate["pkey"], $certpass);
-            if ($t_pkey === false)
+            if (openssl_pkey_get_private($certificate["pkey"]) === false)
                 return p_error("invalid private key");
-
-            openssl_pkey_export($t_pkey, $t_decpkey);
-            $certificate["pkey"] = $t_decpkey;
 
             // TODO: check the certificate
         } else {
