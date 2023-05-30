@@ -296,8 +296,8 @@ class PDFDoc extends Buffer {
             // If a password is provided, we'll try to decode the private key
             if (openssl_pkey_get_private($certificate["pkey"]) === false)
                 return p_error("invalid private key");
-
-            // TODO: check the certificate
+            if (! openssl_x509_check_private_key($certificate["cert"], $certificate["pkey"]))
+                return p_error("private key doesn't corresponds to certificate");
         } else {
             $certfilecontent = file_get_contents($certfile);
             if ($certfilecontent === false)
