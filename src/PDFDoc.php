@@ -289,18 +289,38 @@ class PDFDoc extends Buffer {
         $this->_certificate = null;
     }
 
+    private function file_get_content($input) {
+        // Define a threshold for the maximum file path length
+        $maxFilePathLength = 1024;
+
+        if (is_string($input) && strlen($input) <= $maxFilePathLength && @is_file($input)) {
+            return @file_get_contents($input) ?: $input;
+        } else {
+            return $input;
+        }
+    }
+
     /**
      * Function that stores the certificate to use, when signing the document
      * @param certfile a file that contains a user certificate in pkcs12 format,
      *                 or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem>, 'extracerts' => <extracerts.pem|null> ]
      *                 that would be the output of openssl_pkcs12_read
-     * @param password the password to read the private key
+     * @param certpass the password to read the private key
      * @return valid true if the certificate can be used to sign the document, false otherwise
      */
     public function set_signature_certificate($certfile, $certpass = null) {
         // First we read the certificate
         if (is_array($certfile)) {
             $certificate = $certfile;
+            try {
+                $certificate["cert"] = $this->file_get_content($certificate["cert"]);
+                $certificate["pkey"] = $this->file_get_content($certificate["pkey"]);
+                if (isset($certificate['extracerts']))
+                    $certificate["extracerts"] = $this->file_get_content($certificate["extracerts"]);
+            } catch (\Throwable $e) {
+                return p_error("invalid certs array");
+            }
+
             $certificate["pkey"] = [$certificate["pkey"], $certpass];
 
             // If a password is provided, we'll try to decode the private key
