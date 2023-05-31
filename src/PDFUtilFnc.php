@@ -34,6 +34,8 @@ use ddn\sapp\helpers\LoadHelpers;
 if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
     new LoadHelpers;
 
+class_alias('\phpseclib'.(class_exists(\phpseclib3\File\ASN1::class) ? '3' :'').'\File\ASN1', '\ddn\sapp\ASN1');
+
 // TODO: use the streamreader to deal with the document in the file, instead of a buffer
 
 class PDFUtilFnc {
@@ -453,7 +455,7 @@ class PDFUtilFnc {
      * @param tmpfolder the folder in which to store a temporary file needed
      * @return signature the signature, in hexadecimal string, padded to the maximum length (i.e. for PDF) or false in case of error
      */
-    public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tmpfolder = "/tmp") {    
+    public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tsa = [], $tmpfolder = "/tmp") {    
         $filesize_original = filesize($filenametosign);
         if ($filesize_original === false)
             return p_error("could not open file $filenametosign");
@@ -475,6 +477,14 @@ class PDFUtilFnc {
 
         $tmparr = explode("\n\n", $signature);
         $signature = $tmparr[1];
+
+        // timestamp
+        try {
+            $signature = static::add_timestamp_to_signature($signature, $tsa[0] ?? null, $tsa[1] ?? null, $tsa[2] ?? null);
+        } catch(\Throwable $exception) {
+            return p_error("failed to get timestamp");
+        }
+
         // decode signature
         $signature = base64_decode(trim($signature));
 
@@ -692,5 +702,191 @@ class PDFUtilFnc {
         $result = $result . "$i_k {$count}\n$references";
 
         return "xref\n$result";            
-    }    
+    }
+
+    
+    private static function _extract_ber($cmsString){
+        if (class_exists(\phpseclib\File\X509::class)) {
+            $x509 = new \phpseclib\File\X509();
+            return $x509->_extractBER($cmsString);
+        }
+
+        return ASN1::extractBER($cmsString);
+    }
+
+    private static function _decode_ber($cmsBytes){
+        if (class_exists(\phpseclib\File\ASN1::class)) {
+            $phpseclibAsn1 = new ASN1();
+            return $phpseclibAsn1->decodeBER($cmsBytes);
+        }
+
+        return ASN1::decodeBER($cmsBytes);
+    }
+
+    private static function _encode_der($contentInfo, $asn1Mapping){
+        // NOTE that we are using a preceding @ symbol, otherwise "PHP Notice:  Undefined variable: temp in .../vendor/phpseclib/phpseclib/phpseclib/File/ASN1.php on line 1096" would be produced because of the hack in the method '_imported_value_type_declaration_asn1'.
+        if (class_exists(\phpseclib\File\ASN1::class)) {
+            $phpseclibAsn1 = new ASN1();
+            return @$phpseclibAsn1->encodeDER($contentInfo, $asn1Mapping);
+        }
+
+        return @ASN1::encodeDER($contentInfo, $asn1Mapping);
+    }
+
+    // NOTE that this is hack!. TODO check better the resulting inner workings of phpseclib because of this.
+    private static function _imported_value_type_declaration_asn1($tagNumber)
+    {
+        return ['type' => ASN1::TYPE_OCTET_STRING, "class" => 0x00, "cast" => $tagNumber];
+    }
+
+    private static function _format_value_der($bytes)
+    {
+        return class_exists(\phpseclib\File\ASN1::class) ? base64_encode($bytes) : $bytes;
+    }
+
+    private static function _get_original_value_der($originalCmsBytes, $item)
+    {
+        $originalValue = substr($originalCmsBytes, $item['start'] + $item['headerlength'], $item['length'] - $item['headerlength']);
+        // We are encoding to Base64 because it is required by phpseclib 2.0.7.
+        return static::_format_value_der($originalValue);
+    }
+
+    /**
+     * @param $originalCms string PEM encoded original CMS
+     * @param $tsaUrl
+     * @return string updated CMS structure encoded as PEM
+     * @throws \Exception if there is any failure retrieving the TST
+     */
+    private static function add_timestamp_to_signature($originalCms, $tsaUrl = null, $tsaUser = null, $tsaPass = null)
+    {
+        if (! $tsaUrl) {
+            return $originalCms;
+        }
+
+        // Loading the original CMS.         
+        $originalCmsBytes = static::_extract_ber($originalCms);
+        $decodedOriginalCms = static::_decode_ber($originalCmsBytes);
+        // TODO check if these hardcoded indexes won't produce problems.
+        $originalContentInfo = $decodedOriginalCms[0]['content'];
+        $originalSignedData = $originalContentInfo[1]['content'][0]['content'];
+        $originalSignerInfo = $originalSignedData[4]['content'][0]['content'];
+        $signatureValue = $originalSignerInfo[5]['content'];
+
+        // Build TimeStampQuery in ASN1 using SHA-512
+        $tsq  = "\x30\x59\x02\x01\x01\x30\x51\x30\x0d\x06\x09\x60\x86\x48\x01\x65\x03\x04\x02\x03\x05\x00\x04\x40";
+        $tsq .= hash('sha512', $signatureValue, true);
+        $tsq .= "\x01\x01\xff";
+
+        // Send query to TSA endpoint
+        $chOpts = [
+            CURLOPT_URL => $tsaUrl,
+            CURLOPT_RETURNTRANSFER => 1,
+            CURLOPT_SSL_VERIFYPEER => 0,
+            CURLOPT_FOLLOWLOCATION => 1,
+            CURLOPT_CONNECTTIMEOUT => 0,
+            CURLOPT_TIMEOUT => 10, // 10 seconds timeout
+            CURLOPT_POST => 1,
+            CURLOPT_POSTFIELDS => $tsq,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/timestamp-query'],
+        ];
+        if ($tsaUser !== null && $tsaPass !== null) {
+            $chOpts[CURLOPT_USERPWD] = $tsaUser . ':' . $tsaPass;
+        }
+        $ch = curl_init();
+        curl_setopt_array($ch, $chOpts);
+        $tsr = curl_exec($ch);
+        if ($tsr === false) {
+            throw new \RuntimeException('Failed to get TSR from server: ' . curl_error($ch));
+        }
+        curl_close($ch);
+        unset($ch);
+
+        // Validate TimeStampReply
+        $responseCode = substr($tsr, 6, 3);
+        if ($responseCode !== "\x02\x01\x00") { // Bytes for INTEGER 0 in ASN1
+            throw new \RuntimeException('Invalid TSR response code: 0x' . bin2hex($responseCode));
+        }
+        $tstBytes = substr($tsr, 9);
+
+        // Updating the CMS with the retrieved timestamp.
+        $updatedContentInfo = [
+            'contentType' => self::_get_original_value_der($originalCmsBytes, $originalContentInfo[0]),
+            'content' => [
+                'version' => self::_get_original_value_der($originalCmsBytes, $originalSignedData[0]),
+                'digestAlgorithms' => self::_get_original_value_der($originalCmsBytes, $originalSignedData[1]),
+                'encapContentInfo' => self::_get_original_value_der($originalCmsBytes, $originalSignedData[2]),
+                'certificates' => self::_get_original_value_der($originalCmsBytes, $originalSignedData[3]),
+                'signerInfos' => [
+                    'signerInfo' => [
+                        'version' => self::_get_original_value_der($originalCmsBytes, $originalSignerInfo[0]),
+                        'sid' => self::_get_original_value_der($originalCmsBytes, $originalSignerInfo[1]),
+                        'digestAlgorithm' => self::_get_original_value_der($originalCmsBytes, $originalSignerInfo[2]),
+                        'signedAttrs' => self::_get_original_value_der($originalCmsBytes, $originalSignerInfo[3]),
+                        'signatureAlgorithm' => self::_get_original_value_der($originalCmsBytes, $originalSignerInfo[4]),
+                        'signature' => self::_get_original_value_der($originalCmsBytes, $originalSignerInfo[5]),
+                        'unsignedAttrs' => [
+                            'attribute' => [
+                                // id-aa-timeStampToken.
+                                'attrType' => '1.2.840.113549.1.9.16.2.14',
+                                // We are encoding to Base64 because it is required by phpseclib 2.0.7.
+                                'attrValues' => static::_format_value_der($tstBytes)
+                            ]
+                        ]
+                    ]
+                ],
+            ]
+        ];
+        // TODO look for a way to modify an object structure loaded with \phpseclib\File\ASN1::decodeBER and then just write it using \phpseclib\File\ASN1::encodeDER without the need to create a map like the following... if it doesn't exist in phpseclib it could be contributed, or a helper could be created.
+        $asn1Mapping = [
+            'type' => ASN1::TYPE_SEQUENCE,
+            'children' => [
+                'contentType' => self::_imported_value_type_declaration_asn1(0x06),
+                'content' => [
+                    'type' => ASN1::TYPE_SEQUENCE,
+                    "class" => 0x02, // TODO check if the class is right in this context, otherwise set cast to A0 directly and class to 0x00.
+                    "cast" => 0x20,
+                    "explicit" => true,
+                    'children' => [
+                        'version' => self::_imported_value_type_declaration_asn1(0x02),
+                        'digestAlgorithms' => self::_imported_value_type_declaration_asn1(0x31),
+                        'encapContentInfo' => self::_imported_value_type_declaration_asn1(0x30),
+                        'certificates' => self::_imported_value_type_declaration_asn1(0xA0),
+                        'signerInfos' => [
+                            'type' => ASN1::TYPE_SET,
+                            'children' => [
+                                'signerInfo' => [
+                                    'type' => ASN1::TYPE_SEQUENCE,
+                                    'children' => [
+                                        'version' => self::_imported_value_type_declaration_asn1(0x02),
+                                        'sid' => self::_imported_value_type_declaration_asn1(0x30),
+                                        'digestAlgorithm' => self::_imported_value_type_declaration_asn1(0x30),
+                                        'signedAttrs' => self::_imported_value_type_declaration_asn1(0xA0),
+                                        'signatureAlgorithm' => self::_imported_value_type_declaration_asn1(0x30),
+                                        'signature' => self::_imported_value_type_declaration_asn1(0x04),
+                                        'unsignedAttrs' => [
+                                            'type' => ASN1::TYPE_SET,
+                                            "class" => 0x02, // TODO check if the class is right in this context, otherwise set cast to A0 directly and class to 0x00.
+                                            "cast" => 0x21,
+                                            'children' => [
+                                                'attribute' => [
+                                                    'type' => ASN1::TYPE_SEQUENCE,
+                                                    'children' => [
+                                                        'attrType' => [
+                                                            'type' => ASN1::TYPE_OBJECT_IDENTIFIER
+                                                        ],
+                                                        'attrValues' => self::_imported_value_type_declaration_asn1(0x31)]
+                                                ]
+                                            ],
+                                        ]
+                                    ],
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        return chunk_split(base64_encode(static::_encode_der($updatedContentInfo, $asn1Mapping)), 64);
+    }
 }

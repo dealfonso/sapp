@@ -67,6 +67,7 @@ class PDFDoc extends Buffer {
     protected $_buffer = "";    
     protected $_backup_state = [];
     protected $_certificate = null;
+    protected $_tsa = [];
     protected $_appearance = null;
     protected $_xref_table_version;
     protected $_revisions;
@@ -308,6 +309,27 @@ class PDFDoc extends Buffer {
 
         // Store the certificate
         $this->_certificate = $certificate;
+
+        return true;
+    }
+
+    /**
+     * Removes the tsa configuration (i.e. the document will not have timestamp)
+     */
+    public function clear_tsa_authority() {
+        $this->_tsa = [];
+    }
+
+    /**
+     * Function that stores the tsa configuration to use, when signing the document
+     * @param tsaurl  Link to tsa service 
+     * @param tsauser the user for tsa service
+     * @param tsapass the password for tsa service
+     * @return valid true if the certificate can be used to sign the document, false otherwise
+     */
+    public function set_tsa_authority($tsaurl, $tsauser = null, $tsapass = null) {
+        // Store the tsa config
+        $this->_tsa = [$tsaurl, $tsauser, $tsapass];
 
         return true;
     }
@@ -799,7 +821,7 @@ class PDFDoc extends Buffer {
 
             // Calculate the signature and remove the temporary file
             $certificate = $_signature->get_certificate();
-            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER);
+            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], $this->_tsa, __TMP_FOLDER);
             unlink($temp_filename);
 
             // Then restore the contents field
