@@ -282,7 +282,7 @@ class PDFDoc extends Buffer {
     
     /**
      * Function that stores the certificate to use, when signing the document
-     * @param certfile a file that contains a user certificate in pkcs12 format, or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem> ]
+     * @param certfile a file that contains a user certificate in pkcs12 format, or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem>, 'extracerts' => [<key.pem>] ]
      *                 that would be the output of openssl_pkcs12_read
      * @param password the password to read the private key
      * @return valid true if the certificate can be used to sign the document, false otherwise
@@ -799,7 +799,8 @@ class PDFDoc extends Buffer {
 
             // Calculate the signature and remove the temporary file
             $certificate = $_signature->get_certificate();
-            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER);
+            $extracerts = (array_key_exists('extracerts', $certificate)) ? $certificate['extracerts'] : null;
+            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER, $extracerts);
             unlink($temp_filename);
 
             // Then restore the contents field
