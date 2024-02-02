@@ -1158,7 +1158,7 @@ class PDFDoc extends Buffer {
             $i_h = $height===null?$imagesize[1]:$height;
 
             // Set the image appearance and the certificate file
-            $this->set_signature_appearance(0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $imagefilename);
+            $this->set_signature_appearance($page_to_appear, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $imagefilename);
         }
         
         if (!$this->set_signature_certificate($certfile, $password)) {
