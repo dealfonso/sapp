@@ -1073,8 +1073,8 @@ class PDFDoc extends Buffer {
                    $cert
                 );
 
-                $signature += openssl_x509_parse($cert[0]);
-            } catch (\Exception $e) {}
+                $signature += openssl_x509_parse($cert[0] ?? '') ?: [];
+            } catch (\Throwable $e) {}
 
             $signatures[] = $signature;
         }
