@@ -1115,7 +1115,7 @@ class PDFDoc extends Buffer {
             if ($imagesize === false) {
                 return p_warning("failed to open the image $image");
             }
-            if (($page_to_appear < 0) || ($page_to_appear > $this->get_page_count())) {
+            if (($page_to_appear < 0) || ($page_to_appear > $this->get_page_count() - 1)) {
                 return p_error("invalid page number");
             }
             $pagesize = $this->get_page_size($page_to_appear);
