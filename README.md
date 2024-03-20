@@ -50,7 +50,7 @@ Altenatively you can clone the repository and use [composer](https://getcomposer
 ```bash
 $ git clone https://github.com/dealfonso/sapp
 $ cd sapp
-$ composer dump-autoload
+$ composer install
 $ php pdfrebuild.php examples/testdoc.pdf > testdoc-rebuilt.pdf
 ```
 
@@ -63,6 +63,7 @@ In the root folder of the source code you can find two simple examples:
 1. `pdfrebuild.php`: this example gets a PDF file, loads it and rebuilds it to make every PDF object to be in order, and also reducing the amount of text to define the document. 
 1. `pdfsign.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate.
 1. `pdfsigni.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate, and adds an image that makes visible the signature in the document.
+1. `pdfsignt.php`: this example gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate and it adds timestamp.
 1. `pdfsignx.php`: alternate example that gets a PDF file and digitally signs it using a pkcs12 (pfx) certificate, and adds an image that makes visible the signature in the document.
 1. `pdfcompare.php`: this example compares two PDF files and checks the differences between them (object by object, field by field).
 

@@ -35,7 +35,7 @@ use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 // The maximum signature length, needed to create a placeholder to calculate the range of bytes
 // that will cover the signature.
 if (!defined('__SIGNATURE_MAX_LENGTH'))
-    define('__SIGNATURE_MAX_LENGTH', 11742);
+    define('__SIGNATURE_MAX_LENGTH', 19742);
 
 // The maximum expected length of the byte range, used to create a placeholder while the size
 // is not known. 68 digits enable 20 digits for the size of the document

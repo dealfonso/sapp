@@ -10,7 +10,8 @@
         }
     ],
     "require": {
-        "php": ">=7.4"
+        "php": ">=7.4",
+        "phpseclib/phpseclib": "^2.0.7|^3.0.0"
     },
     "autoload": {
         "psr-4": {
