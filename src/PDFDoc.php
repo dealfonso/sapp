@@ -799,7 +799,7 @@ class PDFDoc extends Buffer {
 
             // Calculate the signature and remove the temporary file
             $certificate = $_signature->get_certificate();
-            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER);
+            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER, $certificate['extracerts']);
             unlink($temp_filename);
 
             // Then restore the contents field

@@ -24,6 +24,7 @@ namespace ddn\sapp;
 use ddn\sapp\PDFObjectParser;
 use ddn\sapp\helpers\StreamReader;
 use ddn\sapp\helpers\Buffer;
+use ddn\sapp\helpers\asn1;
 
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
@@ -454,7 +455,7 @@ class PDFUtilFnc {
      * @param tmpfolder the folder in which to store a temporary file needed
      * @return signature the signature, in hexadecimal string, padded to the maximum length (i.e. for PDF) or false in case of error
      */
-    public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tmpfolder = "/tmp") {    
+    public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tmpfolder = "/tmp", $extracerts) {    
         $filesize_original = filesize($filenametosign);
         if ($filesize_original === false)
             return p_error("could not open file $filenametosign");
@@ -464,8 +465,18 @@ class PDFUtilFnc {
         if ($temp_filename === false)
             return p_error("could not create a temporary filename");
 
-        if (openssl_pkcs7_sign($filenametosign, $temp_filename, $certificate, $key, array(), PKCS7_BINARY | PKCS7_DETACHED) !== true) {
+        $temp_extracerts = tempnam($tmpfolder, "extracerts");
+
+        if ($temp_extracerts === false)
+            return p_error("could not create a extracerts temporary filename");
+
+        $h = fopen($temp_extracerts, 'w');
+        fwrite($h, implode("\n", $extracerts));
+        fclose($h);
+
+        if (openssl_pkcs7_sign($filenametosign, $temp_filename, $certificate, $key, array(), PKCS7_BINARY | PKCS7_DETACHED, $temp_extracerts) !== true) {
             unlink($temp_filename);
+			unlink($temp_extracerts);
             return p_error("failed to sign file $filenametosign");
         }
 
@@ -481,11 +492,58 @@ class PDFUtilFnc {
 
         // convert signature to hex
         $signature = current(unpack('H*', $signature));
+
+
+        $h = fopen('hida_signature.txt','w');
+        fwrite($h, $signature);
+        fclose($h);
+
+
+		//require('tcpdf_cmssignature.php');
+		//$signature = $this->applyTSA($signature);
+		//$signature = PDFUtilFnc::applyTSA($signature);
+		$signature = (new self)->applyTSA($signature);
+
+
         $signature = str_pad($signature, __SIGNATURE_MAX_LENGTH, '0');       
 
         return $signature;
     }   
     
+    
+    
+	/**
+	 * Applying TSA for a timestamp.
+	 * @param string $signature Digital signature as hex string
+	 * @return hex string Timestamped digital signature
+	 * @protected
+	 * @author M Hida
+	 * @since 6.6.2 (2023-05-25)
+	 */
+	protected function applyTSA($signature) {
+		//if (!$this->tsa_timestamp) {
+		//	return $signature;
+		//}
+		//require_once(dirname(__FILE__).'/include/tcpdf_cmssignature.php');
+		//require('tcpdf_cmssignature.php');
+		//$tcpdf_cms = new tcpdf_cms_signature();
+		$tcpdf_cms = new asn1();
+		$tcpdf_cms->pkcs7_data($signature);
+		$tsaQuery = $tcpdf_cms->tsa_query($tcpdf_cms->pkcs7_EncryptedDigest);
+		//if(!$tsaResp = $tcpdf_cms->tsa_send($tsaQuery, $this->tsa_data['tsa_host'], $this->tsa_data['tsa_username'], $this->tsa_data['tsa_password'])) {
+
+		if(!$tsaResp = $tcpdf_cms->tsa_send($tsaQuery, 'http://localhost/phptsa/', '', '')) {
+			$this->Error("Can't send TSA Request to: ".$this->tsa_data['tsa_host']." error:".$tcpdf_cms->errorMsg);
+		}
+		if(@$signatureWithTs = $tcpdf_cms->pkcs7_appendTsa($tsaResp)) {
+			$signature = $signatureWithTs;
+		} else {
+			$this->Error("Can't append TSA data! error: ".$tcpdf_cms->errorMsg);
+		}
+		return $signature;
+	}
+
+
     /**
      * Function that finds a the object at the specific position in the buffer
      * @param buffer the buffer from which to read the document
