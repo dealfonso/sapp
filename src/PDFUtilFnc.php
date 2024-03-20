@@ -466,14 +466,13 @@ class PDFUtilFnc {
         if ($temp_filename === false)
             return p_error("could not create a temporary filename");
 
-        $temp_extracerts = tempnam($tmpfolder, "extracerts");
-
-        if ($temp_extracerts === false)
-            return p_error("could not create a extracerts temporary filename");
-
-        $h = fopen($temp_extracerts, 'w');
-        fwrite($h, implode("\n", $extracerts));
-        fclose($h);
+        $temp_extracerts = null;
+        if(is_array($extracerts)) {
+			$temp_extracerts = tempnam($tmpfolder, "extracerts");
+			if ($temp_extracerts === false)
+				return p_error("could not create a extracerts temporary filename");
+			file_put_contents($temp_extracerts, implode(PHP_EOL, $extracerts));
+        }
 
         if (openssl_pkcs7_sign($filenametosign, $temp_filename, $certificate, $key, array(), PKCS7_BINARY | PKCS7_DETACHED, $temp_extracerts) !== true) {
             unlink($temp_filename);
