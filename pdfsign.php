@@ -24,7 +24,7 @@ use ddn\sapp\PDFDoc;
 require_once('vendor/autoload.php');
 
 if ($argc !== 3)
-    fwrite(STDERR, sprintf("usage: %s <filename> <certfile>", $argv[0]));
+    fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <optional-crlfile> <optional-tsa_url>", $argv[0]));
 else {
     if (!file_exists($argv[1]))
         fwrite(STDERR, "failed to open file " . $argv[1]);

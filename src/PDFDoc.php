@@ -70,6 +70,7 @@ class PDFDoc extends Buffer {
     protected $_appearance = null;
     protected $_xref_table_version;
     protected $_revisions;
+    protected $_h_tsaurl;
 
     // Array of pages ordered by appearance in the final doc (i.e. index 0 is the first page rendered; index 1 is the second page rendered, etc.)
     // Each entry is an array with the following fields:
@@ -287,7 +288,7 @@ class PDFDoc extends Buffer {
      * @param password the password to read the private key
      * @return valid true if the certificate can be used to sign the document, false otherwise
      */
-    public function set_signature_certificate($certfile, $certpass = null) {    
+    public function set_signature_certificate($certfile, $certpass = null, $crl = null, $tsaurl = null) {    
         // First we read the certificate
         if (is_array($certfile)) {
             $certificate = $certfile;
@@ -308,6 +309,8 @@ class PDFDoc extends Buffer {
 
         // Store the certificate
         $this->_certificate = $certificate;
+        $this->_h_crl = $crl;
+        $this->_h_tsaurl = $tsaurl;
 
         return true;
     }
@@ -799,7 +802,6 @@ class PDFDoc extends Buffer {
 
             // Calculate the signature and remove the temporary file
             $certificate = $_signature->get_certificate();
-            // Add last parameter for chain certs
             $extracerts = (array_key_exists('extracerts', $certificate)) ? $certificate['extracerts'] : null;
             $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER, $extracerts);
             unlink($temp_filename);

@@ -13,8 +13,9 @@
  * @version 1.0.001
  * @author M Hida
  */
+ 
 namespace ddn\sapp\helpers;
-
+//class tcpdf_cms_signature {
 class asn1 {
 	/**
 	 * Catch error.
@@ -98,9 +99,11 @@ class asn1 {
 		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/timestamp-query','User-Agent: TCPDF'));
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $binarytsReqData);
 		$tsResponse = curl_exec($ch);
-		
+		//curl_close($ch);
 
 		if($tsResponse) {
+			//echo "aaaaaaaaaaaaaaaaaaaaaaa=";
+			//echo $ch;
 			$header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
 			$header = substr($tsResponse, 0, $header_size);
 			$body = substr($tsResponse, $header_size);
@@ -118,11 +121,10 @@ class asn1 {
 				return false;
 			}
 			$contentTypeHeader = $this->getResponseHeader("Content-Type", $header);
-			//if($contentTypeHeader != 'application/timestamp-reply') {
-			//	$this->errorMsg = "tsa response content type not application/timestamp-reply, but: $contentTypeHeader.";
-			//	return false;
-			//}
-			curl_close($ch);
+			if($contentTypeHeader != 'application/timestamp-reply') {
+				$this->errorMsg = "tsa response content type not application/timestamp-reply, but: $contentTypeHeader.";
+				return false;
+			}
 			return $body; // binary response
 		}
 		curl_close($ch);
@@ -219,41 +221,8 @@ class asn1 {
 															)
 											);
 
-		$embedCrl = 					$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']['ct']['hexdump'].
-										$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']['st']['hexdump'].
-										$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']['md']['hexdump'].
-										$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']['smimec']['hexdump']
-										.tcpdf_asn1::seq("06092A864886F72F010108".
-															tcpdf_asn1::set(tcpdf_asn1::seq(tcpdf_asn1::explicit(0,tcpdf_asn1::seq(bin2hex(file_get_contents('crl.crl'))))))
-														)
-										;
-
-		$tohash = tcpdf_asn1::set($embedCrl);
-
-
-		
-		$myhash = hash('sha256',hex2bin($tohash));
-		$toencrypt =  tcpdf_asn1::seq(
-										"300d06096086480165030402010500".
-										tcpdf_asn1::oct(
-														$myhash
-														)
-										);
-		$encryptedDigest = openssl_private_encrypt(hex2bin($toencrypt), $encryptedviaprivatekey, file_get_contents('user_test.pem'),OPENSSL_PKCS1_PADDING);
-		$encryptedviaprivatekeyHex = bin2hex($encryptedviaprivatekey);
-		//echo $encryptedviaprivatekeyHex;
-
-
 		$time = tcpdf_asn1::seq(
-								//$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['value_hex']. // ocsp & crl is here
-								$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['version']['hexdump']. // ocsp & crl is here
-								$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['issuerAndSerialNumber']['hexdump']. // ocsp & crl is here
-								$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['digestAlgorithm']['hexdump']. // ocsp & crl is here
-								//$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']['hexdump']. // ocsp & crl is here
-								tcpdf_asn1::explicit(0,$embedCrl).
-								$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['digestEncryptionAlgorithm']['hexdump']. // ocsp & crl is here
-								//$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['encryptedDigest']['hexdump']. // ocsp & crl is here
-								tcpdf_asn1::oct($encryptedviaprivatekeyHex).
+								$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['value_hex']. // ocsp & crl is here
 								tcpdf_asn1::explicit(1,$TimeStampToken)
 								);
 		$pkcs7contentSignedData=tcpdf_asn1::seq(
@@ -264,27 +233,9 @@ class asn1 {
 												tcpdf_asn1::set($time)
 												);
 		$pkcs7ContentInfo = tcpdf_asn1::seq(
-											"06092A864886F70D010702". // Hexadecimal form of pkcs7-signedData
+											"06092A864886F70D010702".
 											tcpdf_asn1::explicit(0,$pkcs7contentSignedData)
 											);
-		//$h = fopen('../signatureinfo.txt','w');
-		//fwrite($h, print_r($this->pkcs7_dataArray,1));
-		//fclose($h);
-		
-		
-//$dte = $this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['encryptedDigest']['value_hex'];
-//openssl_public_decrypt( hex2bin($dte), $decrypted, file_get_contents('../user_test.pem'));
-//echo "<pre>";
-//while ($msg = openssl_error_string())
-//    echo $msg . "<br />\n";
-//echo "aa====".$this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']['value_hex']."====\n";
-//echo "myhash====".hash('sha256',hex2bin(tcpdf_asn1::set($this->pkcs7_dataArray['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']['value_hex'])))."====\n";
-//echo "myhhhh==$myhash\n";
-//echo "decrr====".substr(bin2hex($decrypted),-64)."====\n";
-		//$h = fopen('../decrypted.der','w');
-		//fwrite($h, $decrypted);
-		//fclose($h);
-
 		return $pkcs7ContentInfo;
 	}
 
@@ -298,7 +249,7 @@ class asn1 {
 	 */
 	public function pkcs7_data($hex) {
 		$tcpdf_asn1 = new tcpdf_asn1;
-		if(!@$ar = $tcpdf_asn1->parse_recursive($hex, 6)) {
+		if(!@$ar = $tcpdf_asn1->parse_recursive($hex, 5)) {
 			 $this->errorMsg = "can't parse pkcs7 data.";
 			return false;
 		}
@@ -395,47 +346,10 @@ class asn1 {
 				} else if($value['type'] == '04') {
 					$curr['encryptedDigest']=$curr[$key];
 					unset($curr[$key]);
-				} else if($value['type'] == 'a1') {
-					$curr['explicit1']=$curr[$key];
-					unset($curr[$key]);
 				}
 			}
 		}
 		$ar['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']=$curr;
-
-
-
-		$curr=$ar['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes'];
-		foreach($curr as $key=>$value) {
-			if(is_numeric($key)) {
-				if($value['type'] == '02') {
-					$curr['a']=$curr[$key];
-					unset($curr[$key]);
-				} else if($value['type'] == '30' && !array_key_exists('ct', $curr)) {
-					$curr['ct']=$curr[$key];
-					unset($curr[$key]);
-				} else if($value['type'] == '30'&& !array_key_exists('st', $curr)) {
-					$curr['st']=$curr[$key];
-					unset($curr[$key]);
-				} else if($value['type'] == '30'&& !array_key_exists('md', $curr)) {
-					$curr['md']=$curr[$key];
-					unset($curr[$key]);
-				} else if($value['type'] == '30'&& !array_key_exists('smimec', $curr)) {
-					$curr['smimec']=$curr[$key];
-					unset($curr[$key]);
-				} else if($value['type'] == '30'&& !array_key_exists('other0', $curr)) {
-					$curr['other0']=$curr[$key];
-					unset($curr[$key]);
-				} else if($value['type'] == '30'&& !array_key_exists('other1', $curr)) {
-					$curr['other1']=$curr[$key];
-					unset($curr[$key]);
-				} else if($value['type'] == '30') {
-					$curr['zzzz']=$curr[$key];
-					unset($curr[$key]);
-				}
-			}
-		}
-		$ar['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['authenticatedAttributes']=$curr;
 
 		$this->pkcs7_dataArray = $ar;
 		$this->pkcs7_EncryptedDigest=hex2bin($ar['ContentInfo']['content']['SignedData']['signerinfos']['signerinfo']['encryptedDigest']['value_hex']);

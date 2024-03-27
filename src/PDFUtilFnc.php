@@ -455,7 +455,6 @@ class PDFUtilFnc {
      * @param tmpfolder the folder in which to store a temporary file needed
      * @return signature the signature, in hexadecimal string, padded to the maximum length (i.e. for PDF) or false in case of error
      */
-    // Add last parameter for chain certs
     public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tmpfolder = "/tmp", $extracerts) {    
         $filesize_original = filesize($filenametosign);
         if ($filesize_original === false)
@@ -499,9 +498,6 @@ class PDFUtilFnc {
         fclose($h);
 
 
-		//require('tcpdf_cmssignature.php');
-		//$signature = $this->applyTSA($signature);
-		//$signature = PDFUtilFnc::applyTSA($signature);
 		$signature = (new self)->applyTSA($signature);
 
 
