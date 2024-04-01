@@ -316,30 +316,29 @@ class PDFDoc extends Buffer {
     /**
      * Function that stores the certificate info to use, when signing the document
      *
-     * @param options an associative array with the following keys: Name, Reason, Location, ContactInfo
+     * @param name refers to the identity of the signer
+     * @param reason describes the purpose or justification for applying the digital signature
+     * @param location indicates the geographical location where the digital signature was applied
+     * @param contact_info provides contact information associated with the signer
      * @return void
      */
-    public function set_signature_options($options): void
+    public function set_signature_options($name = null, $reason = null, $location = null, $contact_info = null): void
     {
-        if(!is_array($options)){
-            return;
+        // Update the signature options, but only with allowed fields
+        if($name){
+            $this->_certificate_options['Name'] = new PDFValueString($name);
         }
 
-        // Update the certificate info, but only with allowed fields
-        if(array_key_exists('Name', $options) && $options['Name']){
-            $this->_certificate_options['Name'] = new PDFValueString($options['Name']);
+        if($reason){
+            $this->_certificate_options['Reason'] = new PDFValueString($reason);
         }
 
-        if(array_key_exists('Reason', $options) && $options['Reason']){
-            $this->_certificate_options['Reason'] = new PDFValueString($options['Reason']);
+        if($location){
+            $this->_certificate_options['Location'] = new PDFValueString($location);
         }
 
-        if(array_key_exists('Location', $options) && $options['Location']){
-            $this->_certificate_options['Location'] = new PDFValueString($options['Location']);
-        }
-
-        if(array_key_exists('ContactInfo', $options) && $options['ContactInfo']){
-            $this->_certificate_options['ContactInfo'] = new PDFValueString($options['ContactInfo']);
+        if($contact_info){
+            $this->_certificate_options['ContactInfo'] = new PDFValueString($contact_info);
         }
     }
 
@@ -428,7 +427,6 @@ class PDFDoc extends Buffer {
         if ($this->_certificate !== null) {
             $signature = $this->create_object($this->_certificate_options, "ddn\sapp\PDFSignatureObject", false);
             //$signature = new PDFSignatureObject([]);
-            //$signature->set_metadata(reason: "Signature");
             $signature->set_certificate($this->_certificate);
 
             // Update the value to the annotation object
