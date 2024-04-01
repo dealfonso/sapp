@@ -70,6 +70,7 @@ class PDFDoc extends Buffer {
     protected $_appearance = null;
     protected $_xref_table_version;
     protected $_revisions;
+    protected $_certificate_options = [];
 
     // Array of pages ordered by appearance in the final doc (i.e. index 0 is the first page rendered; index 1 is the second page rendered, etc.)
     // Each entry is an array with the following fields:
@@ -313,6 +314,36 @@ class PDFDoc extends Buffer {
     }
 
     /**
+     * Function that stores the certificate info to use, when signing the document
+     *
+     * @param options an associative array with the following keys: Name, Reason, Location, ContactInfo
+     * @return void
+     */
+    public function set_signature_options($options): void
+    {
+        if(!is_array($options)){
+            return;
+        }
+
+        // Update the certificate info, but only with allowed fields
+        if(array_key_exists('Name', $options) && $options['Name']){
+            $this->_certificate_options['Name'] = new PDFValueString($options['Name']);
+        }
+
+        if(array_key_exists('Reason', $options) && $options['Reason']){
+            $this->_certificate_options['Reason'] = new PDFValueString($options['Reason']);
+        }
+
+        if(array_key_exists('Location', $options) && $options['Location']){
+            $this->_certificate_options['Location'] = new PDFValueString($options['Location']);
+        }
+
+        if(array_key_exists('ContactInfo', $options) && $options['ContactInfo']){
+            $this->_certificate_options['ContactInfo'] = new PDFValueString($options['ContactInfo']);
+        }
+    }
+
+    /**
      * Function that creates and updates the PDF objects needed to sign the document. The workflow for a signature is:
      * - create a signature object
      * - create an annotation object whose value is the signature object
@@ -395,8 +426,9 @@ class PDFDoc extends Buffer {
         // Prepare the signature object (we need references to it)
         $signature = null;
         if ($this->_certificate !== null) {
-            $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject", false);
-            // $signature = new PDFSignatureObject([]);
+            $signature = $this->create_object($this->_certificate_options, "ddn\sapp\PDFSignatureObject", false);
+            //$signature = new PDFSignatureObject([]);
+            //$signature->set_metadata(reason: "Signature");
             $signature->set_certificate($this->_certificate);
 
             // Update the value to the annotation object
