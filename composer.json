@@ -1,6 +1,7 @@
 {
     "name": "ddn/sapp",
     "description": "Simple and Agnostic PDF Parser (SAPP): Edit, manipulate and sign PDF documents usign PHP",
+    "keywords": ["php", "pdf", "signature", "sign", "electronic signature"],
     "type": "library",
     "license": "LGPL-3.0-or-later",
     "authors": [
