@@ -14,7 +14,7 @@ namespace ddn\sapp\helpers;
  * @version 1.1
  * @author M Hida
  */
-class cms {
+class CMS {
   
   /**
    * string to logged
@@ -54,7 +54,7 @@ class cms {
       }
       $logs .= $newlines;
       $logs .= "========== END LOG ==========\n\n";
-      echo $logs;
+      // echo $logs;
       if(@$h = fopen($this->logFile, 'w')) {
         fwrite($h, $logs);
         fclose($h);
