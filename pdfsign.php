@@ -18,55 +18,78 @@
     You should have received a copy of the GNU Lesser General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-echo "<pre>";
+
 use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
-$pdfs = array();
-if($handle = opendir('./test')) {
-  while(false !== ($entry = readdir($handle))) {
-    if(substr($entry, -4)=='.pdf') {
-      $pdfs[] = $entry;
-      //echo substr($entry, -4)."\n";
+
+if ($argc < 3)
+    //             $argc           1      2           3             4                         5                       6                   7                 8
+    //             $argv           0      1           2             3                         4                       5                   6                 7
+    fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <optional-tsaUrl> <optional-LTVenabled=true> <optional-LtvOcsp> <optional-LtvCrl> <optional-LtvIssuer>\n
+filename pdf              - pdf document to sign
+certfile pkcs12           - certificate file to sign pdf
+optional-tsaUrl           - TSA server url to timestamp pdf document. set \"notsa\" to skip for add next argument
+optional-LTVenabled       - optional set \"true\" to enable.
+optional-LtvOcsp          - optional custom OCSP Url to validate cert file.\n                            set \"noocsp\" to disable, set \"ocspaia\" to lookup in cetificate attributes.
+optional-crlUrlorFile     - optional custom Crl filename/url to validate cert.\n                            set \"crlcdp\" to use default crl cdp address lookup in cert attributes.
+optional-IssuerUrlorFile  - optional custom issuer filename/url.\n                            will lookup in certificate attributes if not set.
+\n", $argv[0]));
+else {
+    if (!file_exists($argv[1]))
+        fwrite(STDERR, "failed to open file " . $argv[1]);
+    else {
+        // Silently prompt for the password
+        fwrite(STDERR, "Password: ");
+        system('stty -echo');
+        $password = trim(fgets(STDIN));
+        system('stty echo');
+        fwrite(STDERR, "\n");
+
+        $file_content = file_get_contents($argv[1]);
+        $obj = PDFDoc::from_string($file_content);
+        
+        if ($obj === false)
+            fwrite(STDERR, "failed to read file " . $argv[1]);
+        else {
+            if (!$obj->set_signature_certificate($argv[2], $password)) {
+                fwrite(STDERR, "the certificate is not valid");
+            } else {
+                if ($argc > 3) {
+                    $obj->set_tsa($argv[3]);
+                }
+                if ($argc > 4) {
+                    if ($argv[4] === 'true') {
+                        if ($argc > 5) {
+                          if ($argv[5] === 'noocsp') {
+                              $ocspUrl = false;
+                          } elseif ($argv[5] === 'ocspaia') {
+                              $ocspUrl = null;
+                          } else {
+                              $ocspUrl = $argv[5];
+                          }
+                        }
+                        if ($argc > 6) {
+                          if ($argv[6] === 'crlcdp') {
+                              $crl = null;
+                          } else {
+                              $crl = $argv[6];
+                          }
+                        }
+                        
+                        $issuer = false;
+                        if ($argc > 7) {
+                            $issuer = $argv[7];
+                        }
+                        $obj->set_ltv($ocspUrl, $crl ,$issuer);
+                    }
+                }
+                $docsigned = $obj->to_pdf_file_s();
+                if ($docsigned === false)
+                    fwrite(STDERR, "could not sign the document");
+                else
+                    echo $docsigned;
+            }
+        }
     }
-  }
-  closedir($handle);
 }
-$filenum = count($pdfs);
-echo "File NUM=$filenum\n";
-
-$file_in = './test/signed_'.$filenum.'.pdf';
-$file_content = file_get_contents($file_in);
-//$file_content = file_get_contents('examples/testdoc.pdf');
-$pfx = "examples/PDF User.chain.pfx";
-//$pfx = "examples/PDF User.nochain.pfx";
-$issuer = "examples/Root CA Test.crt";
-$crl = "examples/RootCATest.der.crl";
-
-echo "Signing file \"$file_in\" ...\n\n";
-$obj = PDFDoc::from_string($file_content);
-if($obj === false) {
-  echo "failed to parse file $file_in\n";
-} else {
-  //$obj->set_ltv(); // ocsp host, crl addr, issuer
-  $obj->set_ltv(false, $crl, $issuer); // ocsp host, crl addr, issuer
-  //$obj->set_tsa('http://localhost/phptsa/'); //tsa uri
-  $obj->set_tsa('http://timestamp.apple.com/ts01');
-
-  $password = '';
-  if(!$obj->set_signature_certificate($pfx, $password)) {
-    echo "the certificate is not valid\n";
-  } else {
-    $docsigned = $obj->to_pdf_file_s();
-    if($docsigned === false) {
-      echo "could not sign the document\n";
-    } else {
-      $file_out = './test/signed_'.($filenum+1).'.pdf';
-      echo "OK. file \"$file_in\" signed to \"$file_out\"\n";
-      $h = fopen($file_out,'w');
-      fwrite($h, $docsigned);
-      fclose($h);
-    }
-  }
-}
-?>
