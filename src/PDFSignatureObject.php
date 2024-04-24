@@ -50,6 +50,8 @@ class PDFSignatureObject extends PDFObject {
 
     // A placeholder for the certificate to use to sign the document
     protected $_certificate = null;
+    protected $_signature_ltv_data = null;
+    protected $_signature_tsa = null;
     /**
      * Sets the certificate to use to sign
      * @param cert the pem-formatted certificate and private to use to sign as 
@@ -58,12 +60,24 @@ class PDFSignatureObject extends PDFObject {
     public function set_certificate($certificate) {
         $this->_certificate = $certificate;
     }
+    public function set_signature_ltv($signature_ltv_data) {
+        $this->_signature_ltv_data = $signature_ltv_data;
+    }
+    public function set_signature_tsa($signature_tsa) {
+        $this->_signature_tsa = $signature_tsa;
+    }
     /**
      * Obtains the certificate set with function set_certificate
      * @return cert the certificate
      */
     public function get_certificate() {
         return $this->_certificate;
+    }
+    public function get_tsa() {
+        return $this->_signature_tsa;
+    }
+    public function get_ltv() {
+        return $this->_signature_ltv_data;
     }
     /**
      * Constructs the object and sets the default values needed to sign

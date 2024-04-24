@@ -18,39 +18,55 @@
     You should have received a copy of the GNU Lesser General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
-
+echo "<pre>";
 use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
-
-if ($argc !== 3)
-    fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <optional-crlfile> <optional-tsa_url>", $argv[0]));
-else {
-    if (!file_exists($argv[1]))
-        fwrite(STDERR, "failed to open file " . $argv[1]);
-    else {
-        // Silently prompt for the password
-        fwrite(STDERR, "Password: ");
-        system('stty -echo');
-        $password = trim(fgets(STDIN));
-        system('stty echo');
-        fwrite(STDERR, "\n");
-
-        $file_content = file_get_contents($argv[1]);
-        $obj = PDFDoc::from_string($file_content);
-        
-        if ($obj === false)
-            fwrite(STDERR, "failed to parse file " . $argv[1]);
-        else {
-            if (!$obj->set_signature_certificate($argv[2], $password)) {
-                fwrite(STDERR, "the certificate is not valid");
-            } else {
-                $docsigned = $obj->to_pdf_file_s();
-                if ($docsigned === false)
-                    fwrite(STDERR, "could not sign the document");
-                else
-                    echo $docsigned;
-            }
-        }
+$pdfs = array();
+if($handle = opendir('./test')) {
+  while(false !== ($entry = readdir($handle))) {
+    if(substr($entry, -4)=='.pdf') {
+      $pdfs[] = $entry;
+      //echo substr($entry, -4)."\n";
     }
+  }
+  closedir($handle);
 }
+$filenum = count($pdfs);
+echo "File NUM=$filenum\n";
+
+$file_in = './test/signed_'.$filenum.'.pdf';
+$file_content = file_get_contents($file_in);
+//$file_content = file_get_contents('examples/testdoc.pdf');
+$pfx = "examples/PDF User.chain.pfx";
+//$pfx = "examples/PDF User.nochain.pfx";
+$issuer = "examples/Root CA Test.crt";
+$crl = "examples/RootCATest.der.crl";
+
+echo "Signing file \"$file_in\" ...\n\n";
+$obj = PDFDoc::from_string($file_content);
+if($obj === false) {
+  echo "failed to parse file $file_in\n";
+} else {
+  //$obj->set_ltv(); // ocsp host, crl addr, issuer
+  $obj->set_ltv(false, $crl, $issuer); // ocsp host, crl addr, issuer
+  //$obj->set_tsa('http://localhost/phptsa/'); //tsa uri
+  $obj->set_tsa('http://timestamp.apple.com/ts01');
+
+  $password = '';
+  if(!$obj->set_signature_certificate($pfx, $password)) {
+    echo "the certificate is not valid\n";
+  } else {
+    $docsigned = $obj->to_pdf_file_s();
+    if($docsigned === false) {
+      echo "could not sign the document\n";
+    } else {
+      $file_out = './test/signed_'.($filenum+1).'.pdf';
+      echo "OK. file \"$file_in\" signed to \"$file_out\"\n";
+      $h = fopen($file_out,'w');
+      fwrite($h, $docsigned);
+      fclose($h);
+    }
+  }
+}
+?>

@@ -30,6 +30,9 @@ use ddn\sapp\pdfvalue\PDFValueType;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueHexString;
 use ddn\sapp\pdfvalue\PDFValueString;
+use ddn\sapp\helpers\cms;
+use ddn\sapp\helpers\x509;
+use ddn\sapp\helpers\asn1;
 use ddn\sapp\helpers\Buffer;
 use ddn\sapp\helpers\UUID;
 use ddn\sapp\helpers\DependencyTreeObject;
@@ -67,6 +70,8 @@ class PDFDoc extends Buffer {
     protected $_buffer = "";    
     protected $_backup_state = [];
     protected $_certificate = null;
+    protected $_signature_ltv = null;
+    protected $_signature_tsa = null;
     protected $_appearance = null;
     protected $_xref_table_version;
     protected $_revisions;
@@ -288,7 +293,7 @@ class PDFDoc extends Buffer {
      * @param password the password to read the private key
      * @return valid true if the certificate can be used to sign the document, false otherwise
      */
-    public function set_signature_certificate($certfile, $certpass = null, $crl = null, $tsaurl = null) {    
+    public function set_signature_certificate($certfile, $certpass = null) {
         // First we read the certificate
         if (is_array($certfile)) {
             $certificate = $certfile;
@@ -309,10 +314,17 @@ class PDFDoc extends Buffer {
 
         // Store the certificate
         $this->_certificate = $certificate;
-        $this->_h_crl = $crl;
-        $this->_h_tsaurl = $tsaurl;
 
         return true;
+    }
+    public function set_ltv($ocspURI=null, $crlURIorFILE=null, $issuerURIorFILE=null) {
+      $this->_signature_ltv_data['ocspURI'] = $ocspURI;
+      $this->_signature_ltv_data['crlURIorFILE'] = $crlURIorFILE;
+      $this->_signature_ltv_data['issuerURIorFILE'] = $issuerURIorFILE;
+      $this->_signature_ltv = true;
+    }
+    public function set_tsa($tsa) {
+      $this->_signature_tsa['host'] = $tsa;
     }
 
     /**
@@ -401,6 +413,12 @@ class PDFDoc extends Buffer {
             $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject", false);
             // $signature = new PDFSignatureObject([]);
             $signature->set_certificate($this->_certificate);
+            if($this->_signature_tsa !== null) {
+              $signature->set_signature_tsa($this->_signature_tsa);
+            }
+            if($this->_signature_ltv !== null) {
+              $signature->set_signature_ltv($this->_signature_ltv_data);
+            }
 
             // Update the value to the annotation object
             $annotation_object["V"] = new PDFValueReference($signature->get_oid());
@@ -795,16 +813,33 @@ class PDFDoc extends Buffer {
             $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
 
             // We need to write the content to a temporary folder to use the pkcs7 signature mechanism
-            $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
-            $temp_file = fopen($temp_filename, 'wb');
-            fwrite($temp_file, $_signable_document->get_raw());
-            fclose($temp_file);
+            // $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
+            // $temp_file = fopen($temp_filename, 'wb');
+            // fwrite($temp_file, $_signable_document->get_raw());
+            // fclose($temp_file);
+
+
 
             // Calculate the signature and remove the temporary file
             $certificate = $_signature->get_certificate();
+            $tsa = $_signature->get_tsa();
+            $ltv = $_signature->get_ltv();
             $extracerts = (array_key_exists('extracerts', $certificate)) ? $certificate['extracerts'] : null;
-            $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER, $extracerts);
-            unlink($temp_filename);
+            // $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER, $extracerts);
+            // $signature_contents_length = strlen($signature_contents);
+            // $signature_contents_bin = rtrim(hex2bin($signature_contents));
+            // $signature_contents_hex = bin2hex($signature_contents_bin);
+            $cms = new cms;
+            $cms->signature_data['hashAlgorithm'] = 'sha256';
+            $cms->signature_data['privkey'] = $certificate['pkey'];
+            $cms->signature_data['extracerts'] = $extracerts;
+            $cms->signature_data['signcert'] =  $certificate['cert'];
+            $cms->signature_data_ltv = ($ltv !==null)?$ltv:array();
+            $cms->signature_data_tsa = ($tsa !==null)?$tsa:array();
+            $signature_contents = $cms->pkcs7_sign($_signable_document->get_raw());
+            // unlink($temp_filename);
+
+
 
             // Then restore the contents field
             $_signature["Contents"] = new PDFValueHexString($signature_contents);
@@ -1165,7 +1200,7 @@ class PDFDoc extends Buffer {
             $this->set_signature_appearance($page_to_appear, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $imagefilename);
         }
         
-        if (!$this->set_signature_certificate($certfile, $password)) {
+        if (!$this->set_signature_certifidcate($certfile, $password)) {
             return p_error("the certificate or the signature is not valid");
         }
         

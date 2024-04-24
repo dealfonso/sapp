@@ -1,0 +1,26 @@
+2024-04-24 16:04:11
+========== START LOG ==========
+info      : hash algorithm is "sha256"
+info      :  LTV Validation start...
+info      :     getting OCSP address...
+info      :       OCSP is skipped by FALSE argument.
+info      :     getting CRL address...
+info      :       CRL uri or file is set manually...OK. address:"examples/RootCATest.der.crl"
+info      :     getting Issuer address...
+info      :     issuer location manually specified (examples/Root CA Test.crt)OK. address:"examples/Root CA Test.crt"
+info      :     getting issuer from "examples/Root CA Test.crt"...OK. size 1.76Kb
+info      :       reading issuer certificate...OK
+info      :       check if issuer is cert issuer...OK.
+info      :     processing CRL validation since OCSP not done/failed...
+info      :       getting crl from "examples/RootCATest.der.crl"...OK. crl size 0.7Kb
+info      :       reading crl...OK
+info      :       checking if crl issued by CA...OK
+info      :       check if cert not revoked...OK. VALID
+info      :  LTV Validation end Success
+info      :  TimeStamping start...
+info      :     sending TSA query to "http://timestamp.apple.com/ts01"...
+info      :     TSA query OK
+info      :     Parsing Timestamp response...OK
+info      :  TimeStamping end Success.
+========== END LOG ==========
+
