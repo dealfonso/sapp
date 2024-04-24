@@ -1199,6 +1199,10 @@ class PDFDoc extends Buffer {
             $this->set_signature_appearance($page_to_appear, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $imagefilename);
         }
         
+        if (!$this->set_signature_certificate($certfile, $password)) {
+            return p_error("the certificate or the signature is not valid");
+        }
+        
         $docsigned = $this->to_pdf_file_s();
         if ($docsigned === false) {
             return p_error("failed to sign the document");
