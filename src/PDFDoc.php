@@ -75,7 +75,6 @@ class PDFDoc extends Buffer {
     protected $_appearance = null;
     protected $_xref_table_version;
     protected $_revisions;
-    protected $_h_tsaurl;
 
     // Array of pages ordered by appearance in the final doc (i.e. index 0 is the first page rendered; index 1 is the second page rendered, etc.)
     // Each entry is an array with the following fields:
@@ -1198,10 +1197,6 @@ class PDFDoc extends Buffer {
 
             // Set the image appearance and the certificate file
             $this->set_signature_appearance($page_to_appear, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $imagefilename);
-        }
-        
-        if (!$this->set_signature_certifidcate($certfile, $password)) {
-            return p_error("the certificate or the signature is not valid");
         }
         
         $docsigned = $this->to_pdf_file_s();
