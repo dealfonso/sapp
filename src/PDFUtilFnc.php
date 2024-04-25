@@ -24,8 +24,6 @@ namespace ddn\sapp;
 use ddn\sapp\PDFObjectParser;
 use ddn\sapp\helpers\StreamReader;
 use ddn\sapp\helpers\Buffer;
-use ddn\sapp\helpers\asn1;
-
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
 use function ddn\sapp\helpers\p_error;
