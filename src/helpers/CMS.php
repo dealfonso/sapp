@@ -15,53 +15,9 @@ namespace ddn\sapp\helpers;
  * @author M Hida
  */
 class CMS {
-  
-  /**
-   * string to logged
-   */
-  public $log;
-
-  /**
-   * write log to file
-   */
-  public $writeLog = true;
-
-  /**
-   * log file
-   */
-  public $logFile = 'signature.log';
-
   public $signature_data;
   public $signature_data_ltv = array();
   public $signature_data_tsa = array();
-
-  /**
-   * logging at end
-   * @public
-   */
-  public function __destruct() {
-    if($this->writeLog) {
-      $logs = date("Y-m-d H:i:s")."\n";
-      $logs .= "========== START LOG ==========\n";
-      $arrLog = explode("\n", rtrim($this->log));
-      $newlines = '';
-      foreach($arrLog as $line) {
-        $head = trim(substr($line, 0, strpos($line, ":")));
-        $newhead = str_pad($head, 10, " ");
-        $ct = rtrim(substr($line, strpos($line, ":")+1));
-        $newline = "$newhead: $ct\n";
-        $newlines .= $newline;
-      }
-      $logs .= $newlines;
-      $logs .= "========== END LOG ==========\n\n";
-      // echo $logs;
-      if(@$h = fopen($this->logFile, 'w')) {
-        fwrite($h, $logs);
-        fclose($h);
-      }
-    }
-  }
-
 
   /**
    * send tsa/ocsp query with curl
@@ -70,9 +26,9 @@ class CMS {
    * @public
    */
   public function sendReq($reqData) {
-		if (!function_exists('curl_init')) {
-			$this->Error('Please enable cURL PHP extension!');
-		}
+    if (!function_exists('curl_init')) {
+      p_error('         Please enable cURL PHP extension!');
+    }
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $reqData['uri']);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -96,7 +52,7 @@ class CMS {
         }
       }
       if($code != '200') {
-        $this->log .= "error:      response error! Code=\"$code\", Status=\"".trim($status)."\"\n";
+        p_error("      response error! Code=\"$code\", Status=\"".trim($status)."\"");
         return false;
       }
       $contentTypeHeader = '';
@@ -109,8 +65,11 @@ class CMS {
         }
       }
       if($contentTypeHeader != $reqData['resp_contentType']) {
-        $this->log .= "error:      response content type not {$reqData['resp_contentType']}, but: \"$contentTypeHeader\"\n";
+        p_error("      response content type not {$reqData['resp_contentType']}, but: \"$contentTypeHeader\"");
         return false;
+      }
+      if(empty($body)) {
+        p_error('         error empty response!');
       }
       return $body; // binary response
     }
@@ -124,7 +83,7 @@ class CMS {
    */
   private function tsa_parseResp($binaryTsaRespData) {
     if(!@$ar = asn1::parse(bin2hex($binaryTsaRespData), 3)) {
-      $this->log .= "info:    can't parse invalid tsa Response.\n";
+      p_error("      can't parse invalid tsa Response.");
       return false;
     }
     $curr = $ar;
@@ -181,9 +140,10 @@ class CMS {
 
   /**
    * Create timestamp
-   * @param string $data
+   * @param string $data binary data to hashed/digested
+   * @param string $hashAlg hash algorithm
    * @return string hex TSTinfo.
-   * @public
+   * @protected
    */
   protected function createTimestamp($data, $hashAlg='sha1') {
     $TSTInfo=false;
@@ -194,16 +154,16 @@ class CMS {
                     'req_contentType'=>'application/timestamp-query',
                     'resp_contentType'=>'application/timestamp-reply'
                     );
-    $this->log .= "info:    sending TSA query to \"".$this->signature_data_tsa['host']."\"...\n";
+    p_debug("    sending TSA query to \"".$this->signature_data_tsa['host']."\"...");
     if(!$binaryTsaResp = self::sendReq($reqData)) {
-      $this->log .= "error:    TSA query FAILED!\n";
+      p_error("      TSA query send FAILED!");
     } else {
-      $this->log .= "info:    TSA query OK\n";
-      $this->log .= "info:    Parsing Timestamp response...";
+      p_debug("      TSA query send OK");
+      p_debug("    Parsing Timestamp response...");
       if(!$tsaResp = $this->tsa_parseResp($binaryTsaResp)) {
-        $this->log .= "FAILED!\n";
+        p_error("    parsing FAILED!");
       }
-      $this->log .= "OK\n";
+      p_debug("    parsing OK");
       $TSTInfo = $tsaResp['TimeStampResp']['timeStampToken']['hexdump'];
     }
     return $TSTInfo;
@@ -211,87 +171,91 @@ class CMS {
 
   /**
    * Perform OCSP/CRL Validation
-   * @param
+   * @param array $parsedCert
+   * @param string $ocspURI
+   * @param string $crlURIorFILE
+   * @param string $issuerURIorFILE
    * @return array
-   * @public
+   * @protected
    */
-  public function LTVvalidation($parsedCert, $ocspURI=null, $crlURIorFILE=null, $issuerURIorFILE=false) {
+  protected function LTVvalidation($parsedCert, $ocspURI=null, $crlURIorFILE=null, $issuerURIorFILE=false) {
     $ltvResult['issuer']=false;
     $ltvResult['ocsp']=false;
     $ltvResult['crl']=false;
     $x509 = new x509;
     $certSigner_parse = $parsedCert;
-    $this->log .= "info:    getting OCSP address...\n";
+    p_debug("    getting OCSP address...");
     if($ocspURI===false) {
-      $this->log .= "info:      OCSP is skipped by FALSE argument.\n";
+      p_debug("       OCSP is skipped by request.");
     } else {
       if(empty(trim($ocspURI))) {
-        $msglog = ":      OCSP address \"$ocspURI\" is empty/not set. try getting from certificate AIA OCSP attribute...";
+        p_debug("      OCSP address \"$ocspURI\" is empty/not set. try getting from certificate AIA OCSP attribute...");
         $ocspURI = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.1'][0];
       } else {
-        $msglog = ":     OCSP address is set manually...";
+        p_debug("      OCSP address is set manually...");
       }
-      $this->log .= (empty(trim($ocspURI)))?"warning".$msglog."FAILED! got empty address:\"$ocspURI\"\n":"info".$msglog."OK. address:\"$ocspURI\"\n";
+      if(empty(trim($ocspURI))) {
+        p_warning("      OCSP address FAILED! got empty address:\"$ocspURI\"");
+      } else {
+        p_debug("      OCSP got address:\"$ocspURI\"");
+      }
     }
     $ocspURI = trim($ocspURI);
-    $this->log .= "info:    getting CRL address...\n";
+    p_debug("    getting CRL address...");
     if(empty(trim($crlURIorFILE))) {
+      p_debug("      CRL address \"$crlURIorFILE\" is empty/not set. try getting location from certificate CDP attribute...");
       $crlURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['2.5.29.31']['value'][0];
-      $msglog = ":      CRL address \"$ocspURI\" is empty/not set. try getting location from certificate CDP attribute...";
     } else {
-      // $this->log .= "info:      CRL uri or file is set manually...";
-      $msglog = ":      CRL uri or file is set manually...";
+      p_debug("      CRL uri or file is set manually to \"".trim($crlURIorFILE)."\"");
     }
-    $this->log .= (empty(trim($crlURIorFILE)))?"warning".$msglog."FAILED! got empty address:\"$crlURIorFILE\"\n":"info".$msglog."OK. address:\"$crlURIorFILE\"\n";
     if(empty($ocspURI) && empty($crlURIorFILE)) {
-      $this->log .= "error:    can't get OCSP/CRL address! Process terminated.\n";
+      p_error("    can't get OCSP/CRL address! Process terminated.");
     } else { // Perform if either ocspURI/crlURIorFILE exists
-      $this->log .= "info:    getting Issuer address...\n";
+      p_debug("    getting Issuer address...");
       if(empty(trim($issuerURIorFILE))) {
-        $this->log .= "info:      issuer location address \"$issuerURIorFILE\" is empty/not set. use AIA Issuer attribute from certificate...";
+        p_debug("      issuer location address \"$issuerURIorFILE\" is empty/not set. use AIA Issuer attribute from certificate...");
         $issuerURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.2'][0];
       } else {
-        $this->log .= "info:    issuer location manually specified ($issuerURIorFILE)";
+        p_debug("      issuer location manually specified ($issuerURIorFILE)");
       }
-      $this->log .= (empty(trim($issuerURIorFILE)))?"FAILED. empty address:\"$issuerURIorFILE\"\n":"OK. address:\"$issuerURIorFILE\"\n";
       $issuerURIorFILE = trim($issuerURIorFILE);
       if(empty($issuerURIorFILE)) {
-        $this->log .= "error:    cant get issuer location! Process terminated.\n";
+        p_error("      cant get issuer location! Process terminated.");
       } else {
-        $this->log .= "info:    getting issuer from \"$issuerURIorFILE\"...";
+        p_debug("      getting issuer from \"$issuerURIorFILE\"...");
         if($issuerCert = @file_get_contents($issuerURIorFILE)) {
-          $this->log .= "OK. size ".round(strlen($issuerCert)/1024,2)."Kb\n";
-          $this->log .= "info:      reading issuer certificate...";
+          p_debug("        issuer get OK. size ".round(strlen($issuerCert)/1024,2)."Kb");
+          p_debug("      reading issuer certificate...");
           if($issuer_certDER = x509::get_cert($issuerCert)) {
-            $this->log .= "OK\n";
-            $this->log .= "info:      check if issuer is cert issuer...";
+            p_debug("        reading issuer cert OK");
+            p_debug("      check if issuer is cert issuer...");
             $certIssuer_parse = $x509::readcert($issuer_certDER, 'oid'); // Parsing Issuer cert
             $certSigner_signatureField = $certSigner_parse['signatureValue'];
             if(openssl_public_decrypt(hex2bin($certSigner_signatureField), $decrypted, $x509::x509_der2pem($issuer_certDER), OPENSSL_PKCS1_PADDING)) {
-              $this->log .= "OK.\n";
+              p_debug("        OK issuer is cert issuer.");
               $ltvResult['issuer'] = $issuer_certDER;
             } else {
-              $this->log .= "FAILED! CA is not issuer.\n";
+              p_error("        FAILED! issuer is not cert issuer.");
             }
           } else {
-            $this->log .= "FAILED!\n";
+            p_error("        reading issuer cert FAILED!");
           }
         } else {
-          $this->log .= "FAILED.\n";
+          p_error("        issuer get FAILED.");
         }
       }
     }
 
     if($ltvResult['issuer']) {
       if(!empty($ocspURI)) {
-        $this->log .= "info:    OCSP start.\n";
+        p_debug("    OCSP start.");
         $ocspReq_serialNumber = $certSigner_parse['tbsCertificate']['serialNumber'];
         $ocspReq_issuerNameHash = $certIssuer_parse['tbsCertificate']['subject']['sha1'];
         $ocspReq_issuerKeyHash = $certIssuer_parse['tbsCertificate']['subjectPublicKeyInfo']['sha1'];
         $ocspRequestorSubjName = $certSigner_parse['tbsCertificate']['subject']['hexdump'];
-        $this->log .= "info:      OCSP create request...";
+        p_debug("      OCSP create request...");
         if($ocspReq = $x509::ocsp_request($ocspReq_serialNumber, $ocspReq_issuerNameHash, $ocspReq_issuerKeyHash, $this->signature_data['signcert'], $this->signature_data['privkey'], $ocspRequestorSubjName)) {
-          $this->log .= "OK.\n";
+          p_debug("        create request OK.");
           $ocspBinReq = pack("H*", $ocspReq);
           $reqData = array(
                           'data'=>$ocspBinReq,
@@ -299,16 +263,16 @@ class CMS {
                           'req_contentType'=>'application/ocsp-request',
                           'resp_contentType'=>'application/ocsp-response'
                           );
-          $this->log .= "info:      OCSP send request to \"$ocspURI\"...\n";
+          p_debug("      OCSP send request to \"$ocspURI\"...");
           if($ocspResp = self::sendReq($reqData)) {
-            $this->log .= "info:      OCSP send request OK.\n";
-            $this->log .= "info:      OCSP parse response...";
+            p_debug("        OCSP send request OK.");
+            p_debug("      OCSP parsing response...");
             if($ocsp_parse = $x509::ocsp_response_parse($ocspResp, $return)) {
-              $this->log .= "OK.\n";
-              $this->log .= "info:      OCSP check cert validity...";
+              p_debug("        ocsp response parsed.");
+              p_debug("      OCSP check cert validity...");
               $certStatus = $ocsp_parse['responseBytes']['response']['BasicOCSPResponse']['tbsResponseData']['responses'][0]['certStatus'];
               if($certStatus == 'valid') {
-                $this->log .= "OK. cert VALID.\n";
+                p_debug("        OK. cert VALID.");
                 $ocspRespHex = $ocsp_parse['hexdump'];
                 $appendOCSP = asn1::expl(1,
                                           asn1::seq(
@@ -317,44 +281,44 @@ class CMS {
                                           );
                 $ltvResult['ocsp'] = $appendOCSP;
               } else {
-                $this->log .= "FAILED! cert invalid, status:\"$certStatus\"\n";
+                p_error("        FAILED! cert invalid, status:\"$certStatus\"");
               }
             } else {
-              $this->log .= "FAILED! Ocsp server status \"$return\"\n";
+              p_error("        ocsp parse FAILED! Ocsp server status \"$return\"");
             }
           } else {
-            $this->log .= "error:      FAILED! OCSP FAILED!\n";
+            p_error("        ocsp send request FAILED!");
           }
         } else {
-          $this->log .= "FAILED!\n";
+          p_error("      create request FAILED!");
         }
       }
 
       if(!$ltvResult['ocsp']) {// CRL not processed if OCSP validation already success
         if(!empty($crlURIorFILE)) {
-          $this->log .= "info:    processing CRL validation since OCSP not done/failed...\n";
-          $this->log .= "info:      getting crl from \"$crlURIorFILE\"...";
+          p_debug("    processing CRL validation since OCSP not done/failed...");
+          p_debug("      getting crl from \"$crlURIorFILE\"...");
           if($crl = @file_get_contents($crlURIorFILE)) {
-            $this->log .= "OK. crl size ".round(strlen($crl)/1024,2)."Kb\n";
-            $this->log .= "info:      reading crl...";
+            p_debug("        OK. crl size ".round(strlen($crl)/1024,2)."Kb");
+            p_debug("      reading crl...");
             if($crlread=$x509->crl_read($crl)) {
-              $this->log .= "OK\n";
-              $this->log .= "info:      checking if crl issued by CA...";
+              p_debug("        crl read OK");
+              p_debug("      checking if crl issued by CA...");
               $crl_signatureField = $crlread['parse']['signature'];
               if(openssl_public_decrypt(hex2bin($crl_signatureField), $decrypted, $x509::x509_der2pem($issuer_certDER), OPENSSL_PKCS1_PADDING)) {
-                $this->log .= "OK\n";
+                p_debug("        OK crl issued by ca");
                 $crl_parse=$crlread['parse'];
                 $crlCertValid=true;
-                $this->log .= "info:      check if cert not revoked...";
+                p_debug("      check if cert not revoked...");
                 if(array_key_exists('revokedCertificates', $crl_parse['TBSCertList'])) {
                   $certSigner_serialNumber = $certSigner_parse['tbsCertificate']['serialNumber'];
                   if(array_key_exists($certSigner_serialNumber, $crl_parse['TBSCertList']['revokedCertificates']['lists'])) {
                     $crlCertValid=false;
-                    $this->log .= "FAILED! Certificate Revoked!\n";
+                    p_error("        FAILED! Certificate Revoked!");
                   }
                 }
                 if($crlCertValid == true) {
-                  $this->log .= "OK. VALID\n";
+                  p_debug("        OK. VALID");
                   $crlHex = current(unpack('H*', $crlread['der']));
                   $appendCrl = asn1::expl(0,
                                             asn1::seq(
@@ -364,13 +328,13 @@ class CMS {
                   $ltvResult['crl'] = $appendCrl;
                 }
               } else {
-                $this->log .= "FAILED! Wrong CRL.\n";
+                p_error("        FAILED! Wrong CRL.");
               }
             } else {
-              $this->log .= "FAILED!\n";
+              p_error("        FAILED! cant read crl");
             }
           } else {
-            $this->log .= "FAILED!\n";
+            p_error("        FAILED! cant get crl");
           }
         }
       }
@@ -384,7 +348,7 @@ class CMS {
   /**
    * Perform PKCS7 Signing
    * @param string $binaryData
-   * @return string hex
+   * @return string hex + padding 0
    * @public
    */
   public function pkcs7_sign($binaryData) {
@@ -400,10 +364,10 @@ class CMS {
                             );
     $hashAlgorithm = $this->signature_data['hashAlgorithm'];
     if(!array_key_exists($hashAlgorithm, $hexOidHashAlgos)) {
-      $this->log .= "error:not support hash algorithm!\n";
+      p_error("not support hash algorithm!");
       return false;
     }
-    $this->log .= "info:hash algorithm is \"$hashAlgorithm\"\n";
+    p_debug("hash algorithm is \"$hashAlgorithm\"");
     $pkey = $this->signature_data['privkey'];
     $x509 = new x509;
     $extCertsAr = $this->signature_data['extracerts'];
@@ -412,16 +376,15 @@ class CMS {
       $hexExtracerts .= bin2hex($x509->x509_pem2der($cert));
     }
     if(!$certParse = $x509->readcert($this->signature_data['signcert'])) {
-      $this->log .= "error:certificate error! check certificate\n";
+      p_error("certificate error! check certificate");
     }
 
     $appendLTV = '';
     if(!empty($this->signature_data_ltv)) {
-      $this->log .= "info: LTV Validation start...\n";
+      p_debug("  LTV Validation start...");
       $LTVvalidation = self::LTVvalidation($certParse, $this->signature_data_ltv['ocspURI'], $this->signature_data_ltv['crlURIorFILE'], $this->signature_data_ltv['issuerURIorFILE']);
-      $this->log .= "info: LTV Validation end ";
       if($LTVvalidation) {
-        $this->log .= "Success\n";
+        p_debug("  LTV Validation SUCCESS");
         $hexExtracerts .= bin2hex($LTVvalidation['issuer']);
         $appendLTV = asn1::seq("06092A864886F72F010108". // adbe-revocationInfoArchival (1.2.840.113583.1.1.8)
                                   asn1::set(
@@ -432,7 +395,7 @@ class CMS {
                                             )
                                 );
       } else {
-        $this->log .= "Failed!\n";
+        p_warning("  LTV Validation FAILED!");
       }
     }
 
@@ -462,14 +425,15 @@ class CMS {
                             asn1::oct($hash)
                             );
     if(!openssl_private_encrypt(hex2bin($toencrypt), $encryptedDigest, $pkey, OPENSSL_PKCS1_PADDING)) {
-      $this->log .= "error:openssl_private_encrypt error! can't encrypt\n";
+      p_error("openssl_private_encrypt error! can't encrypt");
+      return false;
     }
     $hexencryptedDigest = bin2hex($encryptedDigest);
     $timeStamp = '';
     if(!empty($this->signature_data_tsa)) {
-      $this->log .= "info: TimeStamping start...\n";
+      p_debug("  Timestamping process start...");
       if($TSTInfo = self::createTimestamp($encryptedDigest, $hashAlgorithm)) {
-        $this->log .= "info: TimeStamping end Success.\n";
+        p_debug("  Timestamping SUCCESS.");
         $TimeStampToken = asn1::seq(
                                     "060B2A864886F70D010910020E". // OBJ_id_smime_aa_timeStampToken 1.2.840.113549.1.9.16.2.14
                                     asn1::set(
@@ -478,7 +442,7 @@ class CMS {
                                     );
         $timeStamp = asn1::expl(1,$TimeStampToken);
       } else {
-        $this->log .= "info: TimeStamping end Failed!\n";
+        p_warning("  Timestamping FAILED!");
       }
     }
     $issuerName = $certParse['tbsCertificate']['issuer']['hexdump'];
@@ -499,7 +463,7 @@ class CMS {
                               $timeStamp
                             );
     $crl = asn1::expl(1,
-                        '0500' // crls
+                        '00' // crls (not yet used)
                         );
     $crl = '';
     $certs = asn1::expl(0,bin2hex($x509->get_cert($this->signature_data['signcert'])).$hexExtracerts);
@@ -565,7 +529,7 @@ class x509 {
   }
 
   /**
-   * Calculate 32 openssl subject hash old and new
+   * Calculate 32bit (8 hex) openssl subject hash old and new
    * @param string $hex_subjSequence hex subject name sequence
    * @return array subject hash old and new
    */
