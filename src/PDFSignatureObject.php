@@ -54,7 +54,7 @@ class PDFSignatureObject extends PDFObject {
     protected $_signature_tsa = null;
     /**
      * Sets the certificate to use to sign
-     * @param cert the pem-formatted certificate and private to use to sign as 
+     * @param cert the pem-formatted certificate and private to use to sign as
      *             [ 'cert' => ..., 'pkey' => ... ]
      */
     public function set_certificate($certificate) {
@@ -103,10 +103,18 @@ class PDFSignatureObject extends PDFObject {
      * @param contact the contact info
      */
     public function set_metadata($name = null, $reason = null, $location = null, $contact = null) {
-        $this->_value["Name"] = $name;
-        $this->_value["Reason"] = $reason;
-        $this->_value["Location"] = $location;
-        $this->_value["ContactInfo"] = $contact;
+        if ($name !== null) {
+            $this->_value["Name"] = new PDFValueString($name);
+        }
+        if ($reason !== null) {
+            $this->_value["Reason"] = new PDFValueString($reason);
+        }
+        if ($location !== null) {
+            $this->_value["Location"] = new PDFValueString($location);
+        }
+        if ($contact !== null) {
+            $this->_value["ContactInfo"] = new PDFValueString($contact);
+        }
     }
     /**
      * Function that sets the size of the content that will appear in the file, previous to this object,
@@ -140,12 +148,12 @@ class PDFSignatureObject extends PDFObject {
 
         $contents_size = strlen("" . $this->_value['Contents']);
 
-        $byterange_str =  "[ 0 " . 
+        $byterange_str =  "[ 0 " .
             ($this->_prev_content_size + $offset) . " " .
             ($starting_second_part) . " " .
             ($this->_post_content_size!==null?$this->_post_content_size + ($signature_size - $contents_size - $offset):0) . " ]";
 
-        $this->_value['ByteRange'] = 
+        $this->_value['ByteRange'] =
             new PDFValueSimple($byterange_str . str_repeat(" ", __BYTERANGE_SIZE - strlen($byterange_str) + 1)
         );
 
