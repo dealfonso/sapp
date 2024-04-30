@@ -23,9 +23,7 @@ use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
 
-if ($argc < 3)
-    //             $argc           1      2           3             4                         5                       6                   7                 8
-    //             $argv           0      1           2             3                         4                       5                   6                 7
+if ($argc < 3) {
     fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <optional-tsaUrl> <optional-LTVenabled=true> <optional-LtvOcsp> <optional-LtvCrl> <optional-LtvIssuer>\n
 filename pdf              - pdf document to sign
 certfile pkcs12           - certificate file to sign pdf
@@ -35,10 +33,10 @@ optional-LtvOcsp          - optional custom OCSP Url to validate cert file.\n   
 optional-crlUrlorFile     - optional custom Crl filename/url to validate cert.\n                            set \"crlcdp\" to use default crl cdp address lookup in cert attributes.
 optional-IssuerUrlorFile  - optional custom issuer filename/url.\n                            will lookup in certificate attributes if not set.
 \n", $argv[0]));
-else {
-    if (!file_exists($argv[1]))
+} else {
+    if (!file_exists($argv[1])) {
         fwrite(STDERR, "failed to open file " . $argv[1]);
-    else {
+    } else {
         // Silently prompt for the password
         fwrite(STDERR, "Password: ");
         system('stty -echo');
@@ -49,9 +47,9 @@ else {
         $file_content = file_get_contents($argv[1]);
         $obj = PDFDoc::from_string($file_content);
         
-        if ($obj === false)
+        if ($obj === false) {
             fwrite(STDERR, "failed to read file " . $argv[1]);
-        else {
+        } else {
             if (!$obj->set_signature_certificate($argv[2], $password)) {
                 fwrite(STDERR, "the certificate is not valid");
             } else {
@@ -85,10 +83,11 @@ else {
                     }
                 }
                 $docsigned = $obj->to_pdf_file_s();
-                if ($docsigned === false)
+                if ($docsigned === false) {
                     fwrite(STDERR, "could not sign the document");
-                else
+                } else {
                     echo $docsigned;
+                }
             }
         }
     }
