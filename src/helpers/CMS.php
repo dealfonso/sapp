@@ -3,7 +3,7 @@ namespace ddn\sapp\helpers;
 /*
 // File name   : CMS.php
 // Version     : 1.1
-// Last Update : 2024-04-30
+// Last Update : 2024-05-02
 // Author      : Hida - https://github.com/hidasw
 // License     : GNU GPLv3
 */
@@ -184,13 +184,13 @@ class CMS {
       if(empty(trim($ocspURI))) {
         p_debug("      OCSP address \"$ocspURI\" is empty/not set. try getting from certificate AIA OCSP attribute...");
         $ocspURI = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.1'][0];
+        if(empty(trim($ocspURI))) {
+          p_warning("      OCSP address FAILED! got empty address:\"$ocspURI\"");
+        } else {
+          p_debug("      OCSP got AIA address:\"$ocspURI\"");
+        }
       } else {
-        p_debug("      OCSP address is set manually...");
-      }
-      if(empty(trim($ocspURI))) {
-        p_warning("      OCSP address FAILED! got empty address:\"$ocspURI\"");
-      } else {
-        p_debug("      OCSP got address:\"$ocspURI\"");
+        p_debug("      OCSP address is set manually to \"".trim($ocspURI)."\"");
       }
     }
     $ocspURI = trim($ocspURI);
@@ -198,6 +198,11 @@ class CMS {
     if(empty(trim($crlURIorFILE))) {
       p_debug("      CRL address \"$crlURIorFILE\" is empty/not set. try getting location from certificate CDP attribute...");
       $crlURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['2.5.29.31']['value'][0];
+      if(empty(trim($crlURIorFILE))) {
+        p_warning("      CRL address FAILED! got empty address:\"$crlURIorFILE\"");
+      } else {
+        p_debug("      CRL got CDP address:\"$crlURIorFILE\"");
+      }
     } else {
       p_debug("      CRL uri or file is set manually to \"".trim($crlURIorFILE)."\"");
     }
@@ -300,34 +305,47 @@ class CMS {
               $crl_signatureField = $crlread['parse']['signature'];
               if(openssl_public_decrypt(hex2bin($crl_signatureField), $decrypted, $x509::x509_der2pem($issuer_certDER), OPENSSL_PKCS1_PADDING)) {
                 p_debug("        OK crl issued by ca");
+                p_debug("      check CRL validity...");
                 $crl_parse=$crlread['parse'];
-                $crlCertValid=true;
-                p_debug("      check if cert not revoked...");
-                if(array_key_exists('revokedCertificates', $crl_parse['TBSCertList'])) {
-                  $certSigner_serialNumber = $certSigner_parse['tbsCertificate']['serialNumber'];
-                  if(array_key_exists($certSigner_serialNumber, $crl_parse['TBSCertList']['revokedCertificates']['lists'])) {
-                    $crlCertValid=false;
-                    p_error("        FAILED! Certificate Revoked!");
+                $thisUpdate = str_pad($crl_parse['TBSCertList']['thisUpdate'], 15, "20", STR_PAD_LEFT);
+                $thisUpdateTime = strtotime($thisUpdate);
+                $nextUpdate = str_pad($crl_parse['TBSCertList']['nextUpdate'], 15, "20", STR_PAD_LEFT);
+                $nextUpdateTime = strtotime($nextUpdate);
+                $nowz = strtotime("now");
+                if(($nowz-$thisUpdateTime) < 0) { // 0 sec after valid
+                  p_error("        FAILED! not yet valid! valid at ".date("d/m/Y H:i:s", $thisUpdateTime));
+                } elseif(($nextUpdateTime-$nowz) < 1) { // not accept if crl 1 sec remain to expired
+                  p_error("        FAILED! Expired crl at ".date("d/m/Y H:i:s", $nextUpdateTime)." and now ".date("d/m/Y H:i:s", $nowz)."!");
+                } else {
+                  p_debug("        OK CRL still valid until ".date("d/m/Y H:i:s", $nextUpdateTime));
+                  $crlCertValid=true;
+                  p_debug("      check if cert not revoked...");
+                  if(array_key_exists('revokedCertificates', $crl_parse['TBSCertList'])) {
+                    $certSigner_serialNumber = $certSigner_parse['tbsCertificate']['serialNumber'];
+                    if(array_key_exists($certSigner_serialNumber, $crl_parse['TBSCertList']['revokedCertificates']['lists'])) {
+                      $crlCertValid=false;
+                      p_error("        FAILED! Certificate Revoked!");
+                    }
                   }
-                }
-                if($crlCertValid == true) {
-                  p_debug("        OK. VALID");
-                  $crlHex = current(unpack('H*', $crlread['der']));
-                  $appendCrl = asn1::expl(0,
-                                            asn1::seq(
-                                                      $crlHex
-                                                      )
-                                            );
-                  $ltvResult['crl'] = $appendCrl;
+                  if($crlCertValid == true) {
+                    p_debug("        OK. VALID");
+                    $crlHex = current(unpack('H*', $crlread['der']));
+                    $appendCrl = asn1::expl(0,
+                                              asn1::seq(
+                                                        $crlHex
+                                                        )
+                                              );
+                    $ltvResult['crl'] = $appendCrl;
+                  }
                 }
               } else {
                 p_error("        FAILED! Wrong CRL.");
               }
             } else {
-              p_error("        FAILED! cant read crl");
+              p_error("        FAILED! can't read crl");
             }
           } else {
-            p_error("        FAILED! cant get crl");
+            p_error("        FAILED! can't get crl");
           }
         }
       }
@@ -361,23 +379,18 @@ class CMS {
       return false;
     }
     p_debug("hash algorithm is \"$hashAlgorithm\"");
-    $pkey = $this->signature_data['privkey'];
     $x509 = new x509;
-    $extCertsAr = $this->signature_data['extracerts'];
-    $hexExtracerts = false;
-    foreach($extCertsAr as $cert) {
-      $hexExtracerts .= bin2hex($x509->x509_pem2der($cert));
-    }
     if(!$certParse = $x509->readcert($this->signature_data['signcert'])) {
       p_error("certificate error! check certificate");
     }
+    $hexEmbedCerts[] = bin2hex($x509->get_cert($this->signature_data['signcert']));
     $appendLTV = '';
     if(!empty($this->signature_data_ltv)) {
       p_debug("  LTV Validation start...");
       $LTVvalidation = self::LTVvalidation($certParse, $this->signature_data_ltv['ocspURI'], $this->signature_data_ltv['crlURIorFILE'], $this->signature_data_ltv['issuerURIorFILE']);
       if($LTVvalidation) {
         p_debug("  LTV Validation SUCCESS");
-        $hexExtracerts .= bin2hex($LTVvalidation['issuer']);
+        $hexEmbedCerts[] = bin2hex($LTVvalidation['issuer']);
         $appendLTV = asn1::seq("06092A864886F72F010108". // adbe-revocationInfoArchival (1.2.840.113583.1.1.8)
                                   asn1::set(
                                             asn1::seq(
@@ -388,6 +401,12 @@ class CMS {
                                 );
       } else {
         p_warning("  LTV Validation FAILED!");
+      }
+    }
+    foreach($this->signature_data['extracerts'] as $extracert) {
+      $hex_extracert = bin2hex($x509->x509_pem2der($extracert));
+      if(!in_array($hex_extracert, $hexEmbedCerts)) {
+        $hexEmbedCerts[] = $hex_extracert;
       }
     }
     $messageDigest = hash($hashAlgorithm, $binaryData);
@@ -414,6 +433,7 @@ class CMS {
                             asn1::seq($hexOidHashAlgos[$hashAlgorithm]."0500").  // OBJ $messageDigest & OBJ_null
                             asn1::oct($hash)
                             );
+    $pkey = $this->signature_data['privkey'];
     if(!openssl_private_encrypt(hex2bin($toencrypt), $encryptedDigest, $pkey, OPENSSL_PKCS1_PADDING)) {
       p_error("openssl_private_encrypt error! can't encrypt");
       return false;
@@ -456,8 +476,8 @@ class CMS {
                         '00' // crls (not yet used)
                         );
     $crl = '';
-    $certs = asn1::expl(0,bin2hex($x509->get_cert($this->signature_data['signcert'])).$hexExtracerts);
-    $pkcs7contentSignedData=asn1::seq(
+    $certs = asn1::expl(0,implode('', $hexEmbedCerts));
+    $pkcs7contentSignedData = asn1::seq(
                                         asn1::int('1').
                                         asn1::set(
                                                   asn1::seq($hexOidHashAlgos[$hashAlgorithm].'0500')
@@ -466,13 +486,12 @@ class CMS {
                                         $certs.
                                         $crl.
                                         asn1::set($signerinfos)
-                                      );
+                                        );
     $pkcs7ContentInfo = asn1::seq(
-                                    "06092A864886F70D010702". // Hexadecimal form of pkcs7-signedData
-                                    asn1::expl(0,$pkcs7contentSignedData)
+                                   "06092A864886F70D010702". // Hexadecimal form of pkcs7-signedData
+                                   asn1::expl(0,$pkcs7contentSignedData)
                                   );
     $pkcs7ContentInfo = str_pad($pkcs7ContentInfo, __SIGNATURE_MAX_LENGTH, '0');
     return $pkcs7ContentInfo;
   }
 }
-?>
