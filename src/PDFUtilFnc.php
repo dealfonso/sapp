@@ -454,7 +454,7 @@ class PDFUtilFnc {
      * @param tmpfolder the folder in which to store a temporary file needed
      * @return signature the signature, in hexadecimal string, padded to the maximum length (i.e. for PDF) or false in case of error
      */
-    public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tmpfolder = "/tmp") {    
+    public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tmpfolder = "/tmp", $extracerts = null) {
         $filesize_original = filesize($filenametosign);
         if ($filesize_original === false)
             return p_error("could not open file $filenametosign");
@@ -464,7 +464,25 @@ class PDFUtilFnc {
         if ($temp_filename === false)
             return p_error("could not create a temporary filename");
 
-        if (openssl_pkcs7_sign($filenametosign, $temp_filename, $certificate, $key, array(), PKCS7_BINARY | PKCS7_DETACHED) !== true) {
+        $untrusted_certificates_filename = null;
+        if ($extracerts !== null) {
+            if (is_string($extracerts)) {
+                $extracerts = [$extracerts];
+            }
+            $extracerts = array_map(
+                static function($cert) {
+                    if (substr($cert, 0, 7) === 'file://') {
+                        return file_get_contents($cert);
+                    }
+                    return $cert;
+                },
+                $extracerts
+            );
+            $untrusted_certificates_filename = tempnam($tmpfolder,"pdfsign_extracerts");
+            file_put_contents($untrusted_certificates_filename, implode(PHP_EOL, $extracerts));
+        }
+
+        if (openssl_pkcs7_sign($filenametosign, $temp_filename, $certificate, $key, array(), PKCS7_BINARY | PKCS7_DETACHED, $untrusted_certificates_filename) !== true) {
             unlink($temp_filename);
             return p_error("failed to sign file $filenametosign");
         }
