@@ -126,7 +126,7 @@ class x509 {
       $responseStatus['03']='tryLater';
       $responseStatus['05']='sigRequired';
       $responseStatus['06']='unauthorized';
-      $status = $responseStatus[$ocsp['responseStatus']];
+      $status = @$responseStatus[$ocsp['responseStatus']];
       return false;
     }
     if(!@$curr = $ocsp['responseBytes']) {
@@ -985,4 +985,3 @@ class x509 {
     return rtrim($result, ".");
   }
 }
-?>
