@@ -24,14 +24,14 @@ use ddn\sapp\PDFDoc;
 require_once('vendor/autoload.php');
 
 if ($argc < 3) {
-    fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <optional-tsaUrl> <optional-LTVenabled=true> <optional-LtvOcsp> <optional-LtvCrl> <optional-LtvIssuer>\n
-filename pdf              - pdf document to sign
-certfile pkcs12           - certificate file to sign pdf
-optional-tsaUrl           - TSA server url to timestamp pdf document. set \"notsa\" to skip for add next argument
-optional-LTVenabled       - optional set \"true\" to enable.
-optional-LtvOcsp          - optional custom OCSP Url to validate cert file.\n                            set \"noocsp\" to disable, set \"ocspaia\" to lookup in cetificate attributes.
-optional-crlUrlorFile     - optional custom Crl filename/url to validate cert.\n                            set \"crlcdp\" to use default crl cdp address lookup in cert attributes.
-optional-IssuerUrlorFile  - optional custom issuer filename/url.\n                            will lookup in certificate attributes if not set.
+    fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <tsaUrl> <LTVenabled=true> <LtvOcsp> <LtvCrl> <LtvIssuer>\n
+filename         - pdf document to sign
+certfile         - pkcs12 certificate file to sign pdf
+tsaUrl           - optional TSA server url to timestamp pdf document. set \"notsa\" to skip for add next argument
+LTVenabled       - optional set \"true\" to enable LTV.
+LtvOcsp          - optional custom OCSP Url to validate cert file.\n                            set \"noocsp\" to disable, set \"ocspaia\" to lookup in cetificate attributes.
+crlUrlorFile     - optional custom Crl filename/url to validate cert.\n                            set \"crlcdp\" to use default crl cdp address lookup in cert attributes.
+IssuerUrlorFile  - optional custom issuer filename/url.\n                            will lookup in certificate attributes if not set.
 \n", $argv[0]));
 } else {
     if (!file_exists($argv[1])) {
@@ -58,6 +58,8 @@ optional-IssuerUrlorFile  - optional custom issuer filename/url.\n              
                 }
                 if ($argc > 4) {
                     if ($argv[4] === 'true') {
+                        $ocspUrl = null;
+                        $crl = null;
                         if ($argc > 5) {
                           if ($argv[5] === 'noocsp') {
                               $ocspUrl = false;
