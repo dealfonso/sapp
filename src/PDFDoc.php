@@ -288,14 +288,19 @@ class PDFDoc extends Buffer {
      * Function that stores the certificate to use, when signing the document
      * @param certfile a file that contains a user certificate in pkcs12 format, or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem> ]
      *                 that would be the output of openssl_pkcs12_read
-     * @param password the password to read the private key
+     * @param certpass the password to read the private key
      * @return valid true if the certificate can be used to sign the document, false otherwise
      */
     public function set_signature_certificate($certfile, $certpass = null) {
         // First we read the certificate
         if (is_array($certfile)) {
             $certificate = $certfile;
-            $certificate["pkey"] = [$certificate["pkey"], $certpass];
+            try {
+                $certificate["cert"] = @file_get_contents($certificate["cert"]) ?: $certificate["cert"];
+                $certificate["pkey"] = [@file_get_contents($certificate["pkey"]) ?: $certificate["pkey"], $certpass];
+            } catch (\Throwable $e) {
+                return p_error("invalid certs array");
+            }
 
             // If a password is provided, we'll try to decode the private key
             if (openssl_pkey_get_private($certificate["pkey"]) === false)
