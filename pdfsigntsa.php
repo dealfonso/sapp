@@ -1,3 +1,4 @@
+#!/usr/bin/env php
 <?php
 /*
     This file is part of SAPP
@@ -23,8 +24,10 @@ use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
 
-if ($argc !== 3)
-    fwrite(STDERR, sprintf("usage: %s <filename> <certfile>", $argv[0]));
+if ($argc < 3)
+    fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <tsaUrl>\n
+tsaUrl           - optional TSA server url to timestamp pdf document.
+", $argv[0]));
 else {
     if (!file_exists($argv[1]))
         fwrite(STDERR, "failed to open file " . $argv[1]);
@@ -36,15 +39,26 @@ else {
         system('stty echo');
         fwrite(STDERR, "\n");
 
+        $tsa = $argv[3] ?? null;
+        if (empty($tsa)) {
+            // Silently prompt for the timestamp autority
+            fwrite(STDERR, "TSA(\"http://timestamp.digicert.com\"): ");
+            system('stty -echo');
+            $tsa = trim(fgets(STDIN)) ?: "http://timestamp.digicert.com";
+            system('stty echo');
+            fwrite(STDERR, "\n");
+        }   
+
         $file_content = file_get_contents($argv[1]);
         $obj = PDFDoc::from_string($file_content);
-        
+
         if ($obj === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
         else {
-            if (!$obj->set_signature_certificate($argv[2], $password)) {
+            if (!$obj->set_signature_certificate($argv[2], $password))
                 fwrite(STDERR, "the certificate is not valid");
-            } else {
+            else {
+                $obj->set_tsa($tsa);
                 $docsigned = $obj->to_pdf_file_s();
                 if ($docsigned === false)
                     fwrite(STDERR, "could not sign the document");

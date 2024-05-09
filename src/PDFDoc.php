@@ -70,7 +70,7 @@ class PDFDoc extends Buffer {
     protected $_buffer = "";
     protected $_backup_state = [];
     protected $_certificate = null;
-    protected $_signature_ltv = null;
+    protected $_signature_ltv_data = null;
     protected $_signature_tsa = null;
     protected $_appearance = null;
     protected $_xref_table_version;
@@ -324,7 +324,6 @@ class PDFDoc extends Buffer {
       $this->_signature_ltv_data['ocspURI'] = $ocspURI;
       $this->_signature_ltv_data['crlURIorFILE'] = $crlURIorFILE;
       $this->_signature_ltv_data['issuerURIorFILE'] = $issuerURIorFILE;
-      $this->_signature_ltv = true;
     }
     public function set_tsa($tsa) {
       $this->_signature_tsa['host'] = $tsa;
@@ -436,7 +435,7 @@ class PDFDoc extends Buffer {
             if($this->_signature_tsa !== null) {
               $signature->set_signature_tsa($this->_signature_tsa);
             }
-            if($this->_signature_ltv !== null) {
+            if($this->_signature_ltv_data !== null) {
               $signature->set_signature_ltv($this->_signature_ltv_data);
             }
 

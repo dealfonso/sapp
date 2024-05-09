@@ -181,7 +181,7 @@ class CMS {
     if($ocspURI===false) {
       p_debug("       OCSP is skipped by request.");
     } else {
-      if(empty(trim($ocspURI))) {
+      if(empty(trim((string) $ocspURI))) {
         p_debug("      OCSP address \"$ocspURI\" is empty/not set. try getting from certificate AIA OCSP attribute...");
         $ocspURI = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.1'][0];
         if(empty(trim($ocspURI))) {
@@ -193,9 +193,9 @@ class CMS {
         p_debug("      OCSP address is set manually to \"".trim($ocspURI)."\"");
       }
     }
-    $ocspURI = trim($ocspURI);
+    $ocspURI = trim((string) $ocspURI);
     p_debug("    getting CRL address...");
-    if(empty(trim($crlURIorFILE))) {
+    if(empty(trim((string) $crlURIorFILE))) {
       p_debug("      CRL address \"$crlURIorFILE\" is empty/not set. try getting location from certificate CDP attribute...");
       $crlURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['2.5.29.31']['value'][0];
       if(empty(trim($crlURIorFILE))) {
@@ -403,7 +403,7 @@ class CMS {
         p_warning("  LTV Validation FAILED!");
       }
     }
-    foreach($this->signature_data['extracerts'] as $extracert) {
+    foreach($this->signature_data['extracerts'] ?? [] as $extracert) {
       $hex_extracert = bin2hex($x509->x509_pem2der($extracert));
       if(!in_array($hex_extracert, $hexEmbedCerts)) {
         $hexEmbedCerts[] = $hex_extracert;
