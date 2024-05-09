@@ -22,31 +22,31 @@ class x509 {
   public static function tsa_query($binaryData, $hashAlg='sha256') {
     $hashAlg = strtolower($hashAlg);
     $hexOidHashAlgos = array(
-                            'md2'=>'06082A864886F70D0202',
-                            'md4'=>'06082A864886F70D0204',
-                            'md5'=>'06082A864886F70D0205',
-                            'sha1'=>'06052B0E03021A',
-                            'sha224'=>'0609608648016503040204',
-                            'sha256'=>'0609608648016503040201',
-                            'sha384'=>'0609608648016503040202',
-                            'sha512'=>'0609608648016503040203'
-                            );
+        'md2'=>'06082A864886F70D0202',
+        'md4'=>'06082A864886F70D0204',
+        'md5'=>'06082A864886F70D0205',
+        'sha1'=>'06052B0E03021A',
+        'sha224'=>'0609608648016503040204',
+        'sha256'=>'0609608648016503040201',
+        'sha384'=>'0609608648016503040202',
+        'sha512'=>'0609608648016503040203'
+    );
     if(!array_key_exists($hashAlg, $hexOidHashAlgos)) {
       return false;
     }
     $hash = hash($hashAlg, $binaryData);
     $tsReqData = asn1::seq(
-                            asn1::int(1).
-                            asn1::seq(
-                                      asn1::seq($hexOidHashAlgos[$hashAlg]."0500"). // object OBJ $hexOidHashAlgos[$hashAlg] & OBJ_null
-                                      asn1::oct($hash)
-                                      ).
-                            asn1::int(hash('crc32', rand()).'001'). // tsa nonce
-                            '0101ff' // req return cert
-                          );
+        asn1::int(1).
+        asn1::seq(
+            asn1::seq($hexOidHashAlgos[$hashAlg]."0500"). // object OBJ $hexOidHashAlgos[$hashAlg] & OBJ_null
+            asn1::oct($hash)
+        ).
+        asn1::int(hash('crc32', rand()).'001'). // tsa nonce
+        '0101ff' // req return cert
+    );
     return hex2bin($tsReqData);
   }
-  
+
   /**
    * Calculate 32bit (8 hex) openssl subject hash old and new
    * @param string $hex_subjSequence hex subject name sequence
@@ -56,14 +56,14 @@ class x509 {
     $parse = asn1::parse($hex_subjSequence,3);
     $hex_subjSequence_new='';
     foreach($parse[0] as $k=>$v) {
-      if(is_numeric($k)) {
-        $hex_subjSequence_new .= asn1::set(
-                                          asn1::seq(
-                                                    $v[0][0]['hexdump'].
-                                                    asn1::utf8(strtolower(hex2bin($v[0][1]['value_hex'])))
-                                                    )
-                                          );
-      }
+        if(is_numeric($k)) {
+            $hex_subjSequence_new .= asn1::set(
+                asn1::seq(
+                    $v[0][0]['hexdump'].
+                    asn1::utf8(strtolower(hex2bin($v[0][1]['value_hex'])))
+                )
+            );
+        }
     }
     $tohash = pack("H*", $hex_subjSequence_new);
     $openssl_subjHash_new = hash('sha1', $tohash);
@@ -77,11 +77,11 @@ class x509 {
     $openssl_subjHash_old = array_reverse($openssl_subjHash_old);
     $openssl_subjHash_old = implode("", $openssl_subjHash_old);
     return array(
-                  "old"=>$openssl_subjHash_old,
-                  "new"=>$openssl_subjHash_new
-                  );
+        "old"=>$openssl_subjHash_old,
+        "new"=>$openssl_subjHash_new
+    );
   }
-  
+
   /**
    * Parsing ocsp response data
    * @param string $binaryOcspResp binary ocsp response
@@ -315,12 +315,12 @@ class x509 {
     }
     $ocsp['responseBytes']['response']['BasicOCSPResponse']['tbsResponseData']['responses'] = $curr;
     $arrModel = array(
-                      'responseStatus'=>'',
-                      'responseBytes'=>array(
-                                              'response'=>'',
-                                              'responseType'=>''
-                                              )
-                      );
+        'responseStatus'=>'',
+        'responseBytes'=>array(
+            'response'=>'',
+            'responseType'=>''
+        )
+    );
     $differ=array_diff_key($arrModel,$ocsp);
     if(count($differ) == 0) {
       $differ=array_diff_key($arrModel['responseBytes'],$ocsp['responseBytes']);
@@ -336,7 +336,7 @@ class x509 {
     }
     return $ocsp;
   }
-  
+
   /**
    * Create ocsp request
    * @param string $serialNumber serial number to check
@@ -350,9 +350,9 @@ class x509 {
   public static function ocsp_request($serialNumber, $issuerNameHash, $issuerKeyHash, $signer_cert = false, $signer_key = false, $subjectName=false) {
     $Request = false;
     $hashAlgorithm = asn1::seq(
-                              "06052B0E03021A". // OBJ_sha1
-                              "0500"
-                              );
+        "06052B0E03021A". // OBJ_sha1
+        "0500"
+    );
     $issuerNameHash = asn1::oct($issuerNameHash);
     $issuerKeyHash = asn1::oct($issuerKeyHash);
     $serialNumber = asn1::int($serialNumber);
@@ -367,13 +367,10 @@ class x509 {
     $rand = microtime (true)*rand();
     $nonce = md5(base64_encode($rand).$rand);
     $ReqExts = asn1::seq(
-                          '06092B0601050507300102'. // OBJ_id_pkix_OCSP_Nonce
-                          asn1::oct("0410".$nonce)
-                          );
-    $requestExtensions = asn1::expl( "2", asn1::seq(
-                                                    $ReqExts
-                                                    )
-                                    );
+        '06092B0601050507300102'. // OBJ_id_pkix_OCSP_Nonce
+        asn1::oct("0410".$nonce)
+    );
+    $requestExtensions = asn1::expl( "2", asn1::seq($ReqExts));
     $TBSRequest = asn1::seq($requestorName.$requestList.$requestExtensions);
     $optionalSignature = '';
     if($signer_cert) {
@@ -381,9 +378,9 @@ class x509 {
         return false;
       }
       $signatureAlgorithm = asn1::seq(
-                                      '06092A864886F70D010105'. // OBJ_sha1WithRSAEncryption.
-                                      "0500"
-                                      );
+          '06092A864886F70D010105'. // OBJ_sha1WithRSAEncryption.
+          "0500"
+      );
       $signature = asn1::bit("00".bin2hex($signature_value));
       $signer_cert = x509::x509_pem2der($signer_cert);
       $certs = asn1::expl("0", asn1::seq(bin2hex($signer_cert)));
@@ -392,7 +389,7 @@ class x509 {
     $OCSPRequest = asn1::seq($TBSRequest.$optionalSignature);
     return $OCSPRequest;
   }
-  
+
   /**
    * Convert crl from pem to der (binary)
    * @param string $crl pem crl to convert
@@ -416,7 +413,7 @@ class x509 {
     $dercrl = base64_decode($crl);
     return $dercrl;
   }
-  
+
   /**
    * Read crl from pem or der (binary)
    * @param string $crl pem or der crl
@@ -433,7 +430,7 @@ class x509 {
     $res['parse'] = $crlparse;
     return $res;
   }
-  
+
   /**
    * parsing crl from pem or der (binary)
    * @param string $crl pem or der crl
@@ -590,7 +587,7 @@ class x509 {
           }
           $curr[$subjOID][]=hex2bin($curr[$key][0][1]['value_hex']);
           unset($curr[$key]);
-          
+
         }
       } else {
           unset($curr['depth']);
@@ -625,7 +622,7 @@ class x509 {
     }
     return $ar['crl'];
   }
-  
+
   /**
    * Convert x509 pem certificate to x509 der
    * @param string $pem pem form cert
@@ -649,7 +646,7 @@ class x509 {
     }
     return $x509_der;
   }
-  
+
   /**
    * Convert x509 der certificate to x509 pem form
    * @param string $der_cert der form cert
@@ -661,7 +658,7 @@ class x509 {
     $x509_pem .= "-----END CERTIFICATE-----\r\n";
     return $x509_pem;
   }
-  
+
   /**
    * get x.509 DER/PEM Certificate and return DER encoded x.509 Certificate
    * @param string $certin pem/der form cert
@@ -681,7 +678,7 @@ class x509 {
       }
     }
   }
-  
+
   /**
    * parse x.509 DER/PEM Certificate structure
    * @param string $certin pem/der form cert
@@ -902,12 +899,12 @@ class x509 {
               $extvalue = $OBJ_ext_key_usage;
             }
             $extsVal=array(
-                            'name_hex'=>$value[0]['value_hex'],
-                            'name_oid'=>self::oidfromhex($value[0]['value_hex']),
-                            'name'=>self::oidfromhex($value[0]['value_hex']),
-                            'critical'=>$critical,
-                            'value'=>$extvalue
-                            );
+                'name_hex'=>$value[0]['value_hex'],
+                'name_oid'=>self::oidfromhex($value[0]['value_hex']),
+                'name'=>self::oidfromhex($value[0]['value_hex']),
+                'critical'=>$critical,
+                'value'=>$extvalue
+            );
             $extNameOID = $value[0]['value_hex'];
             if($oidprint == 'oid') {
               $extNameOID = self::oidfromhex($extNameOID);
@@ -927,7 +924,7 @@ class x509 {
     }
     return $ar['cert'];
   }
-  
+
   /**
    * read oid number of given hex (convert hex to oid)
    * @param string $hex hex form oid number

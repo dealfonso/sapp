@@ -320,13 +320,31 @@ class PDFDoc extends Buffer {
 
         return true;
     }
+
+    /**
+     * Function that stores the ltv configuration to use, when signing the document
+     * @param $ocspURI  OCSP Url to validate cert file
+     * @param $crlURIorFILE Crl filename/url to validate cert
+     * @param $issuerURIorFILE issuer filename/url
+     */
     public function set_ltv($ocspURI=null, $crlURIorFILE=null, $issuerURIorFILE=null) {
-      $this->_signature_ltv_data['ocspURI'] = $ocspURI;
-      $this->_signature_ltv_data['crlURIorFILE'] = $crlURIorFILE;
-      $this->_signature_ltv_data['issuerURIorFILE'] = $issuerURIorFILE;
+        $this->_signature_ltv_data['ocspURI'] = $ocspURI;
+        $this->_signature_ltv_data['crlURIorFILE'] = $crlURIorFILE;
+        $this->_signature_ltv_data['issuerURIorFILE'] = $issuerURIorFILE;
     }
-    public function set_tsa($tsa) {
-      $this->_signature_tsa['host'] = $tsa;
+
+    /**
+     * Function that stores the tsa configuration to use, when signing the document
+     * @param $tsaurl  Link to tsa service
+     * @param $tsauser the user for tsa service
+     * @param $tsapass the password for tsa service
+     */
+    public function set_tsa($tsa, $tsauser = null, $tsapass = null) {
+        $this->_signature_tsa['host'] = $tsa;
+        if ($tsauser && $tsapass) {
+            $this->_signature_tsa['user'] = $tsauser;
+            $this->_signature_tsa['password'] = $tsapass;
+        }
     }
 
     /**
@@ -841,20 +859,18 @@ class PDFDoc extends Buffer {
 
             // Calculate the signature and remove the temporary file
             $certificate = $_signature->get_certificate();
-            $tsa = $_signature->get_tsa();
-            $ltv = $_signature->get_ltv();
             $extracerts = (array_key_exists('extracerts', $certificate)) ? $certificate['extracerts'] : null;
             // $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER, $extracerts);
             // $signature_contents_length = strlen($signature_contents);
             // $signature_contents_bin = rtrim(hex2bin($signature_contents));
             // $signature_contents_hex = bin2hex($signature_contents_bin);
-            $cms = new cms;
+            $cms = new CMS;
             $cms->signature_data['hashAlgorithm'] = 'sha256';
             $cms->signature_data['privkey'] = $certificate['pkey'];
             $cms->signature_data['extracerts'] = $extracerts;
             $cms->signature_data['signcert'] =  $certificate['cert'];
-            $cms->signature_data_ltv = ($ltv !==null)?$ltv:array();
-            $cms->signature_data_tsa = ($tsa !==null)?$tsa:array();
+            $cms->signature_data['ltv'] = $_signature->get_ltv();
+            $cms->signature_data['tsa'] = $_signature->get_tsa();
             $signature_contents = $cms->pkcs7_sign($_signable_document->get_raw());
             // unlink($temp_filename);
 
