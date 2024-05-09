@@ -24,21 +24,12 @@ use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
 
-if ($argc < 4) {
-    fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile> <tsaUrl> <LTVenabled=true> <LtvOcsp> <LtvCrl> <LtvIssuer>\n
-filename         - pdf document to sign.
-image            - image to displayed in signature appearance.
-certfile         - pkcs12 certificate file to sign pdf.
-tsaUrl           - optional TSA server url to timestamp pdf document. set \"notsa\" to skip for add next argument.
-LTVenabled       - optional set \"true\" to enable LTV.
-LtvOcsp          - optional custom OCSP Url to validate cert file.\n                            set \"noocsp\" to disable, set \"ocspaia\" to lookup in certificate attributes.
-crlUrlorFile     - optional custom Crl filename/url to validate cert.\n                            set \"crlcdp\" to use default crl cdp address lookup in certificate attributes.
-IssuerUrlorFile  - optional custom issuer filename/url.\n                            will lookup in certificate attributes if not set.\n
-", $argv[0]));
-} else {
-    if (!file_exists($argv[1])) {
+if ($argc !== 4)
+    fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));
+else {
+    if (!file_exists($argv[1]))
         fwrite(STDERR, "failed to open file " . $argv[1]);
-    } else {
+    else {
         // Silently prompt for the password
         fwrite(STDERR, "Password: ");
         system('stty -echo');
@@ -49,52 +40,19 @@ IssuerUrlorFile  - optional custom issuer filename/url.\n                       
         $file_content = file_get_contents($argv[1]);
         $obj = PDFDoc::from_string($file_content);
         
-        if ($obj === false) {
+        if ($obj === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
-        } else {
-                if ($argc > 4) {
-                    $obj->set_tsa($argv[4]);
-                }
-                if ($argc > 5) {
-                    if ($argv[5] === 'true') {
-                        $ocspUrl = null;
-                        $crl = null;
-                        if ($argc > 6) {
-                          if ($argv[6] === 'noocsp') {
-                              $ocspUrl = false;
-                          } elseif ($argv[6] === 'ocspaia') {
-                              $ocspUrl = null;
-                          } else {
-                              $ocspUrl = $argv[6];
-                          }
-                        }
-                        if ($argc > 7) {
-                          if ($argv[7] === 'crlcdp') {
-                              $crl = null;
-                          } else {
-                              $crl = $argv[7];
-                          }
-                        }
-                        
-                        $issuer = false;
-                        if ($argc > 8) {
-                            $issuer = $argv[8];
-                        }
-                        $obj->set_ltv($ocspUrl, $crl ,$issuer);
-                    }
-                }
+        else {
             $signedDoc = $obj->sign_document($argv[3], $password, 0, $argv[2]);
             if ($signedDoc === false) {
                 fwrite(STDERR, "failed to sign the document");
             } else {
                 $docsigned = $signedDoc->to_pdf_file_s();
-                if ($docsigned === false) {
+                if ($docsigned === false)
                     fwrite(STDERR, "could not sign the document");
-                } else {
+                else
                     echo $docsigned;
-                }
             }
         }
     }
 }
-?>

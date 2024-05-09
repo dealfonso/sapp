@@ -1,3 +1,4 @@
+#!/usr/bin/env php
 <?php
 /*
     This file is part of SAPP
@@ -23,8 +24,12 @@ use ddn\sapp\PDFDoc;
 
 require_once('vendor/autoload.php');
 
-if ($argc !== 3)
-    fwrite(STDERR, sprintf("usage: %s <filename> <certfile>", $argv[0]));
+if ($argc < 3)
+    fwrite(STDERR, sprintf("usage: %s <filename> <certfile> <LtvOcsp> <LtvCrl> <LtvIssuer>\n
+LtvOcsp          - optional custom OCSP Url to validate cert file.\n                            set \"noocsp\" to disable, set \"ocspaia\" to lookup in certificate attributes.
+crlUrlorFile     - optional custom Crl filename/url to validate cert.\n                            set \"crlcdp\" to use default crl cdp address lookup in certificate attributes.
+IssuerUrlorFile  - optional custom issuer filename/url.\n                            will lookup in certificate attributes if not set.\n
+", $argv[0]));
 else {
     if (!file_exists($argv[1]))
         fwrite(STDERR, "failed to open file " . $argv[1]);
@@ -38,13 +43,26 @@ else {
 
         $file_content = file_get_contents($argv[1]);
         $obj = PDFDoc::from_string($file_content);
-        
+
         if ($obj === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
         else {
-            if (!$obj->set_signature_certificate($argv[2], $password)) {
+            $ocspUrl = $argv[3] ?? null;
+            if ($ocspUrl === 'noocsp')
+                $ocspUrl = false;
+            elseif ($ocspUrl === 'ocspaia')
+                $ocspUrl = null;
+
+            $crl = $argv[4] ?? null;
+            if ($crl === 'crlcdp')
+                $crl = null;
+
+            $issuer = $argv[5] ?? false;
+
+            if (!$obj->set_signature_certificate($argv[2], $password))
                 fwrite(STDERR, "the certificate is not valid");
-            } else {
+            else {
+                $obj->set_ltv($ocspUrl, $crl ,$issuer);
                 $docsigned = $obj->to_pdf_file_s();
                 if ($docsigned === false)
                     fwrite(STDERR, "could not sign the document");
