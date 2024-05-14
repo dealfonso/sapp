@@ -203,7 +203,7 @@ class asn1 {
         $num = $asn1Tag; //valu of array
         $hex = $params[0];
         $val = $hex;
-        if(in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61']) { // ($string)
+        if(in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61'])) { // ($string)
           $val = bin2hex($hex);
         }
         if($func == 'int') {
