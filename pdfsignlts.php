@@ -42,9 +42,9 @@ else {
         $tsa = $argv[3] ?? null;
         if (empty($tsa)) {
             // Silently prompt for the timestamp autority
-            fwrite(STDERR, "TSA(\"http://timestamp.digicert.com\"): ");
+            fwrite(STDERR, "TSA(\"http://timestamp.digicert.com\") type \"no\" to bypass tsa: ");
             system('stty -echo');
-            $tsa = trim(fgets(STDIN));
+            $tsa = trim(fgets(STDIN)) ?: "http://timestamp.digicert.com";
             system('stty echo');
             fwrite(STDERR, "\n");
         }   
@@ -58,7 +58,7 @@ else {
             if (!$obj->set_signature_certificate($argv[2], $password))
                 fwrite(STDERR, "the certificate is not valid");
             else {
-                if (!empty($tsa)) {
+                if ($tsa != 'no') {
                     $obj->set_tsa($tsa);
                 }
                 $obj->set_ltv();
