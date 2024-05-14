@@ -446,6 +446,21 @@ class PDFDoc extends Buffer {
         // Prepare the signature object (we need references to it)
         $signature = null;
         if ($this->_certificate !== null) {
+            // Perform signature test to get signature size to define __SIGNATURE_MAX_LENGTH
+            p_debug("     ########## PERFORM SIGNATURE LENGTH CHECK ##########\n");
+            $CMS = new helpers\CMS;
+            $CMS->signature_data['signcert'] = $this->_certificate['cert'];
+            $CMS->signature_data['extracerts'] = $this->_certificate['extracerts'];
+            $CMS->signature_data['hashAlgorithm'] = 'sha256';
+            $CMS->signature_data['privkey'] = $this->_certificate['pkey'];
+            $CMS->signature_data['tsa'] = $this->_signature_tsa;
+            $CMS->signature_data['ltv'] = $this->_signature_ltv_data;
+            $res = $CMS->pkcs7_sign('0');
+            $len = strlen($res);
+            p_debug("     Signature Length is \"$len\" Bytes");
+            p_debug("     ########## FINISHED SIGNATURE LENGTH CHECK #########\n\n");
+            define('__SIGNATURE_MAX_LENGTH', $len);
+
             $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject", false);
             //$signature = new PDFSignatureObject([]);
             $signature->set_metadata($this->_metadata_name, $this->_metadata_reason, $this->_metadata_location, $this->_metadata_contact_info);
@@ -848,22 +863,8 @@ class PDFDoc extends Buffer {
             $_signature->set_sizes($_doc_to_xref->size(), $_doc_from_xref->size());
             $_signature["Contents"] = new PDFValueSimple("");
             $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
-
-            // We need to write the content to a temporary folder to use the pkcs7 signature mechanism
-            // $temp_filename = tempnam(__TMP_FOLDER, 'pdfsign');
-            // $temp_file = fopen($temp_filename, 'wb');
-            // fwrite($temp_file, $_signable_document->get_raw());
-            // fclose($temp_file);
-
-
-
-            // Calculate the signature and remove the temporary file
             $certificate = $_signature->get_certificate();
             $extracerts = (array_key_exists('extracerts', $certificate)) ? $certificate['extracerts'] : null;
-            // $signature_contents = PDFUtilFnc::calculate_pkcs7_signature($temp_filename, $certificate['cert'], $certificate['pkey'], __TMP_FOLDER, $extracerts);
-            // $signature_contents_length = strlen($signature_contents);
-            // $signature_contents_bin = rtrim(hex2bin($signature_contents));
-            // $signature_contents_hex = bin2hex($signature_contents_bin);
             $cms = new CMS;
             $cms->signature_data['hashAlgorithm'] = 'sha256';
             $cms->signature_data['privkey'] = $certificate['pkey'];
@@ -872,9 +873,7 @@ class PDFDoc extends Buffer {
             $cms->signature_data['ltv'] = $_signature->get_ltv();
             $cms->signature_data['tsa'] = $_signature->get_tsa();
             $signature_contents = $cms->pkcs7_sign($_signable_document->get_raw());
-            // unlink($temp_filename);
-
-
+            $signature_contents = str_pad($signature_contents, __SIGNATURE_MAX_LENGTH, '0');
 
             // Then restore the contents field
             $_signature["Contents"] = new PDFValueHexString($signature_contents);
