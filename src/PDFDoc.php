@@ -291,7 +291,8 @@ class PDFDoc extends Buffer {
 
     /**
      * Function that stores the certificate to use, when signing the document
-     * @param certfile a file that contains a user certificate in pkcs12 format, or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem> ]
+     * @param certfile a file that contains a user certificate in pkcs12 format,
+     *                 or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem>, 'extracerts' => <extracerts.pem|null> ]
      *                 that would be the output of openssl_pkcs12_read
      * @param password the password to read the private key
      * @return valid true if the certificate can be used to sign the document, false otherwise
@@ -307,6 +308,12 @@ class PDFDoc extends Buffer {
                 return p_error("invalid private key");
             if (! openssl_x509_check_private_key($certificate["cert"], $certificate["pkey"]))
                 return p_error("private key doesn't corresponds to certificate");
+
+            if (is_string($certificate['extracerts'] ?? null)) {
+                $certificate['extracerts'] = array_filter(explode("-----END CERTIFICATE-----\n", $certificate['extracerts']));
+                foreach ($certificate['extracerts'] as &$extracerts)
+                    $extracerts = $extracerts . "-----END CERTIFICATE-----\n";
+            }
         } else {
             $certfilecontent = file_get_contents($certfile);
             if ($certfilecontent === false)

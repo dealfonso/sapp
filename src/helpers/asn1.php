@@ -124,9 +124,9 @@ class asn1 {
         if(($currentDepth <= $maxDepth)) {
           if($k == '06') {
 
-          } else if($k == '13' || $k == '18') {
+          } else if(in_array($k, ['13', '18'])) {
             $info['value'] = hex2bin($info['value_hex']);
-          } else if($k == '03' || $k == '02' || $k == 'a04') {
+          } else if(in_array($k, ['03', '02', 'a04'])) {
             $info['value'] = $v;
           } else {
             $currentDepth++;
@@ -203,7 +203,7 @@ class asn1 {
         $num = $asn1Tag; //valu of array
         $hex = $params[0];
         $val = $hex;
-        if($func == 'printable' || $func == 'utf8' || $func == 'ia5' || $func == 'visible' || $func == 't61') { // ($string)
+        if(in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61']) { // ($string)
           $val = bin2hex($hex);
         }
         if($func == 'int') {
