@@ -20,36 +20,36 @@ class asn1 {
    */
   protected static function type($id) {
     $asn1_Types = array(
-    "00" => "ASN1_EOC",
-    "01" => "ASN1_BOOLEAN",
-    "02" => "ASN1_INTEGER",
-    "03" => "ASN1_BIT_STRING",
-    "04" => "ASN1_OCTET_STRING",
-    "05" => "ASN1_NULL",
-    "06" => "ASN1_OBJECT",
-    "07" => "ASN1_OBJECT_DESCRIPTOR",
-    "08" => "ASN1_EXTERNAL",
-    "09" => "ASN1_REAL",
-    "0a" => "ASN1_ENUMERATED",
-    "0c" => "ASN1_UTF8STRING",
-    "30" => "ASN1_SEQUENCE",
-    "31" => "ASN1_SET",
-    "12" => "ASN1_NUMERICSTRING",
-    "13" => "ASN1_PRINTABLESTRING",
-    "14" => "ASN1_T61STRING",
-    "15" => "ASN1_VIDEOTEXSTRING",
-    "16" => "ASN1_IA5STRING",
-    "17" => "ASN1_UTCTIME",
-    "18" => "ASN1_GENERALIZEDTIME",
-    "19" => "ASN1_GRAPHICSTRING",
-    "1a" => "ASN1_VISIBLESTRING",
-    "1b" => "ASN1_GENERALSTRING",
-    "1c" => "ASN1_UNIVERSALSTRING",
-    "1d" => "ASN1_BMPSTRING"
+      "00" => "ASN1_EOC",
+      "01" => "ASN1_BOOLEAN",
+      "02" => "ASN1_INTEGER",
+      "03" => "ASN1_BIT_STRING",
+      "04" => "ASN1_OCTET_STRING",
+      "05" => "ASN1_NULL",
+      "06" => "ASN1_OBJECT",
+      "07" => "ASN1_OBJECT_DESCRIPTOR",
+      "08" => "ASN1_EXTERNAL",
+      "09" => "ASN1_REAL",
+      "0a" => "ASN1_ENUMERATED",
+      "0c" => "ASN1_UTF8STRING",
+      "30" => "ASN1_SEQUENCE",
+      "31" => "ASN1_SET",
+      "12" => "ASN1_NUMERICSTRING",
+      "13" => "ASN1_PRINTABLESTRING",
+      "14" => "ASN1_T61STRING",
+      "15" => "ASN1_VIDEOTEXSTRING",
+      "16" => "ASN1_IA5STRING",
+      "17" => "ASN1_UTCTIME",
+      "18" => "ASN1_GENERALIZEDTIME",
+      "19" => "ASN1_GRAPHICSTRING",
+      "1a" => "ASN1_VISIBLESTRING",
+      "1b" => "ASN1_GENERALSTRING",
+      "1c" => "ASN1_UNIVERSALSTRING",
+      "1d" => "ASN1_BMPSTRING"
     );
     return array_key_exists($id,$asn1_Types)?$asn1_Types[$id]:$id;
   }
-  
+
   /**
    * parse asn.1 to array
    * to be called from parse() function
@@ -85,13 +85,13 @@ class asn1 {
       $remain = substr($hex, $totalTlLength+($tlv_valueLength*2));
       $newhexdump = substr($hex, 0, $totalTlLength+($tlv_valueLength*2));
       $result[] = array(
-              'tlv_tagLength'=>strlen(dechex($tlv_tagLength))%2==0?dechex($tlv_tagLength):'0'.dechex($tlv_tagLength),
-              'tlv_lengthLength'=>$tlv_lengthLength,
-              'tlv_valueLength'=>$tlv_valueLength,
-              'newhexdump'=>$newhexdump,
-              'typ'=>$asn1_type,
-              'tlv_value'=>$tlv_value
-              );
+        'tlv_tagLength'=>strlen(dechex($tlv_tagLength))%2==0?dechex($tlv_tagLength):'0'.dechex($tlv_tagLength),
+        'tlv_lengthLength'=>$tlv_lengthLength,
+        'tlv_valueLength'=>$tlv_valueLength,
+        'newhexdump'=>$newhexdump,
+        'typ'=>$asn1_type,
+        'tlv_value'=>$tlv_value
+      );
       if($remain == '') { // if remains string was empty & contents also empty, function return FALSE
         $stop = true;
       } else {
@@ -100,7 +100,7 @@ class asn1 {
     }
     return $result;
   }
-  
+
   /**
    * parse asn.1 to array recursively
    * @param string $hex asn.1 hex form
@@ -118,12 +118,12 @@ class asn1 {
         $v = $ff['tlv_value'];
         $info['depth']=$currentDepth;
         $info['hexdump']=$ff['newhexdump'];
-        $info['type'] = $k;  
-        $info['typeName'] = self::type($k);  
-        $info['value_hex'] = $v;  
+        $info['type'] = $k;
+        $info['typeName'] = self::type($k);
+        $info['value_hex'] = $v;
         if(($currentDepth <= $maxDepth)) {
           if($k == '06') {
-            
+
           } else if($k == '13' || $k == '18') {
             $info['value'] = hex2bin($info['value_hex']);
           } else if($k == '03' || $k == '02' || $k == 'a04') {
@@ -144,8 +144,8 @@ class asn1 {
     return $result;
   }
   // =====End ASN.1 Parser section=====
-  
-  
+
+
   // =====Begin ASN.1 Builder section=====
   /**
    * create asn.1 TLV tag length, length length and value length
@@ -165,29 +165,29 @@ class asn1 {
     }
     return $ret;
   }
-  
+
   /**
    * create various dynamic function for asn1
    */
   private static function asn1Tag($name) {
     $functionList = array(
-                          'seq'=>'30',
-                          'oct'=>'04',
-                          'obj'=>'06',
-                          'bit'=>'03',
-                          'printable'=>'13',
-                          'int'=>'02',
-                          'set'=>'31',
-                          'expl'=>'a',
-                          'utime'=>'17',
-                          'gtime'=>'18',
-                          'utf8'=>'0c',
-                          'ia5'=>'16',
-                          'visible'=>'1a',
-                          't61'=>'14',
-                          'impl'=>'80',
-                          'other'=>''
-                          );
+      'seq'=>'30',
+      'oct'=>'04',
+      'obj'=>'06',
+      'bit'=>'03',
+      'printable'=>'13',
+      'int'=>'02',
+      'set'=>'31',
+      'expl'=>'a',
+      'utime'=>'17',
+      'gtime'=>'18',
+      'utf8'=>'0c',
+      'ia5'=>'16',
+      'visible'=>'1a',
+      't61'=>'14',
+      'impl'=>'80',
+      'other'=>''
+    );
     if(array_key_exists($name, $functionList)) {
       return $functionList[$name];
     } else {
@@ -195,7 +195,7 @@ class asn1 {
       return false;
     }
   }
-  
+
   public static function __callStatic($func, $params) {
     $func = strtolower($func);
       $asn1Tag = self::asn1Tag($func);
@@ -214,7 +214,7 @@ class asn1 {
           $val = $params[1];
         }
         if($func == 'impl') { //impl($num="0")
-          $val = (!$val)?"00":$val;  
+          $val = (!$val)?"00":$val;
           $val = (strlen($val)%2 != 0)?"0$val":$val;
           return $num.$val;
         }

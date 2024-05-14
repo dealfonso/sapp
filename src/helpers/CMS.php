@@ -13,9 +13,7 @@ namespace ddn\sapp\helpers;
  */
 class CMS {
     public $signature_data;
-    public $signature_data_ltv = array();
-    public $signature_data_tsa = array();
-    
+
   /**
    * send tsa/ocsp query with curl
    * @param array $reqData
@@ -33,7 +31,11 @@ class CMS {
     curl_setopt($ch, CURLOPT_HEADER, 1);
     curl_setopt($ch, CURLOPT_HTTPHEADER, array("Content-Type: {$reqData['req_contentType']}",'User-Agent: SAPP PDF'));
     curl_setopt($ch, CURLOPT_POSTFIELDS, $reqData['data']);
+    if (($reqData['user'] ?? null) && ($reqData['password'] ?? null)) {
+        curl_setopt($ch, CURLOPT_USERPWD, $reqData['user'] . ':' . $reqData['password']);
+    }
     $tsResponse = curl_exec($ch);
+
     if($tsResponse) {
       $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
       curl_close($ch);
@@ -70,7 +72,7 @@ class CMS {
       return $body; // binary response
     }
   }
-  
+
   /**
    * parse tsa response to array
    * @param string $binaryTsaRespData binary tsa response to parse
@@ -129,10 +131,10 @@ class CMS {
     if(@$ar['TimeStampResp']['timeStampToken']['content']['hexdump'] != '') {
       return $ar;
     } else {
-       return false; 
+       return false;
     }
   }
-  
+
   /**
    * Create timestamp query
    * @param string $data binary data to hashed/digested
@@ -142,13 +144,15 @@ class CMS {
   protected function createTimestamp($data, $hashAlg='sha1') {
     $TSTInfo=false;
     $tsaQuery = x509::tsa_query($data, $hashAlg);
+    $tsaData = $this->signature_data['tsa'];
     $reqData = array(
-                    'data'=>$tsaQuery,
-                    'uri'=>$this->signature_data_tsa['host'],
-                    'req_contentType'=>'application/timestamp-query',
-                    'resp_contentType'=>'application/timestamp-reply'
-                    );
-    p_debug("    sending TSA query to \"".$this->signature_data_tsa['host']."\"...");
+        'data'=>$tsaQuery,
+        'uri'=>$tsaData['host'],
+        'req_contentType'=>'application/timestamp-query',
+        'resp_contentType'=>'application/timestamp-reply'
+    ) + $tsaData;
+
+    p_debug("    sending TSA query to \"".$tsaData['host']."\"...");
     if(!$binaryTsaResp = self::sendReq($reqData)) {
       p_error("      TSA query send FAILED!");
     } else {
@@ -162,7 +166,7 @@ class CMS {
     }
     return $TSTInfo;
   }
-  
+
   /**
    * Perform OCSP/CRL Validation
    * @param array $parsedCert parsed certificate
@@ -243,7 +247,7 @@ class CMS {
         }
       }
     }
-    
+
     if($ltvResult['issuer']) {
       if(!empty($ocspURI)) {
         p_debug("    OCSP start.");
@@ -291,7 +295,7 @@ class CMS {
           p_error("      create request FAILED!");
         }
       }
-      
+
       if(!$ltvResult['ocsp']) {// CRL not processed if OCSP validation already success
         if(!empty($crlURIorFILE)) {
           p_debug("    processing CRL validation since OCSP not done/failed...");
@@ -355,7 +359,7 @@ class CMS {
     }
     return $ltvResult;
   }
-  
+
   /**
    * Perform PKCS7 Signing
    * @param string $binaryData
@@ -364,15 +368,15 @@ class CMS {
    */
   public function pkcs7_sign($binaryData) {
     $hexOidHashAlgos = array(
-                            'md2'=>'06082A864886F70D0202',
-                            'md4'=>'06082A864886F70D0204',
-                            'md5'=>'06082A864886F70D0205',
-                            'sha1'=>'06052B0E03021A',
-                            'sha224'=>'0609608648016503040204',
-                            'sha256'=>'0609608648016503040201',
-                            'sha384'=>'0609608648016503040202',
-                            'sha512'=>'0609608648016503040203'
-                            );
+        'md2'=>'06082A864886F70D0202',
+        'md4'=>'06082A864886F70D0204',
+        'md5'=>'06082A864886F70D0205',
+        'sha1'=>'06052B0E03021A',
+        'sha224'=>'0609608648016503040204',
+        'sha256'=>'0609608648016503040201',
+        'sha384'=>'0609608648016503040202',
+        'sha512'=>'0609608648016503040203'
+    );
     $hashAlgorithm = $this->signature_data['hashAlgorithm'];
     if(!array_key_exists($hashAlgorithm, $hexOidHashAlgos)) {
       p_error("not support hash algorithm!");
@@ -385,20 +389,19 @@ class CMS {
     }
     $hexEmbedCerts[] = bin2hex($x509->get_cert($this->signature_data['signcert']));
     $appendLTV = '';
-    if(!empty($this->signature_data_ltv)) {
+    $ltvData = $this->signature_data['ltv'];
+    if(!empty($ltvData)) {
       p_debug("  LTV Validation start...");
-      $LTVvalidation = self::LTVvalidation($certParse, $this->signature_data_ltv['ocspURI'], $this->signature_data_ltv['crlURIorFILE'], $this->signature_data_ltv['issuerURIorFILE']);
+      $LTVvalidation = self::LTVvalidation($certParse, $ltvData['ocspURI'], $ltvData['crlURIorFILE'], $ltvData['issuerURIorFILE']);
       if($LTVvalidation) {
         p_debug("  LTV Validation SUCCESS");
         $hexEmbedCerts[] = bin2hex($LTVvalidation['issuer']);
-        $appendLTV = asn1::seq("06092A864886F72F010108". // adbe-revocationInfoArchival (1.2.840.113583.1.1.8)
-                                  asn1::set(
-                                            asn1::seq(
-                                                      $LTVvalidation['ocsp'].
-                                                      $LTVvalidation['crl']
-                                                      )
-                                            )
-                                );
+        $appendLTV = asn1::seq(
+            "06092A864886F72F010108". // adbe-revocationInfoArchival (1.2.840.113583.1.1.8)
+            asn1::set(
+                asn1::seq($LTVvalidation['ocsp'] . $LTVvalidation['crl'])
+            )
+        );
       } else {
         p_warning("  LTV Validation FAILED!");
       }
@@ -411,28 +414,26 @@ class CMS {
     }
     $messageDigest = hash($hashAlgorithm, $binaryData);
     $authenticatedAttributes= asn1::seq(
-                                        '06092A864886F70D010903'. //OBJ_pkcs9_contentType 1.2.840.113549.1.9.3
-                                        asn1::set('06092A864886F70D010701')  //OBJ_pkcs7_data 1.2.840.113549.1.7.1
-                                        ).
-                              asn1::seq( // signing time
-                                        '06092A864886F70D010905'. //OBJ_pkcs9_signingTime 1.2.840.113549.1.9.5
-                                        asn1::set(
-                                                  asn1::utime(date("ymdHis")) //UTTC Time
-                                                  )
-                                        ).
-                              asn1::seq( // messageDigest 
-                                        '06092A864886F70D010904'. //OBJ_pkcs9_messageDigest 1.2.840.113549.1.9.4
-                                        asn1::set(
-                                                  asn1::oct($messageDigest)
-                                                  )
-                                        ).
-                              $appendLTV;
+            '06092A864886F70D010903'. //OBJ_pkcs9_contentType 1.2.840.113549.1.9.3
+            asn1::set('06092A864886F70D010701')  //OBJ_pkcs7_data 1.2.840.113549.1.7.1
+        ).
+        asn1::seq( // signing time
+            '06092A864886F70D010905'. //OBJ_pkcs9_signingTime 1.2.840.113549.1.9.5
+            asn1::set(
+                asn1::utime(date("ymdHis")) //UTTC Time
+            )
+        ).
+        asn1::seq( // messageDigest
+            '06092A864886F70D010904'. //OBJ_pkcs9_messageDigest 1.2.840.113549.1.9.4
+            asn1::set(asn1::oct($messageDigest))
+        ).
+        $appendLTV;
     $tohash = asn1::set($authenticatedAttributes);
     $hash = hash($hashAlgorithm, hex2bin($tohash));
     $toencrypt =  asn1::seq(
-                            asn1::seq($hexOidHashAlgos[$hashAlgorithm]."0500").  // OBJ $messageDigest & OBJ_null
-                            asn1::oct($hash)
-                            );
+        asn1::seq($hexOidHashAlgos[$hashAlgorithm]."0500").  // OBJ $messageDigest & OBJ_null
+        asn1::oct($hash)
+    );
     $pkey = $this->signature_data['privkey'];
     if(!openssl_private_encrypt(hex2bin($toencrypt), $encryptedDigest, $pkey, OPENSSL_PKCS1_PADDING)) {
       p_error("openssl_private_encrypt error! can't encrypt");
@@ -440,16 +441,14 @@ class CMS {
     }
     $hexencryptedDigest = bin2hex($encryptedDigest);
     $timeStamp = '';
-    if(!empty($this->signature_data_tsa)) {
+    if(!empty($this->signature_data['tsa'])) {
       p_debug("  Timestamping process start...");
       if($TSTInfo = self::createTimestamp($encryptedDigest, $hashAlgorithm)) {
         p_debug("  Timestamping SUCCESS.");
         $TimeStampToken = asn1::seq(
-                                    "060B2A864886F70D010910020E". // OBJ_id_smime_aa_timeStampToken 1.2.840.113549.1.9.16.2.14
-                                    asn1::set(
-                                            $TSTInfo
-                                            )
-                                    );
+            "060B2A864886F70D010910020E". // OBJ_id_smime_aa_timeStampToken 1.2.840.113549.1.9.16.2.14
+            asn1::set($TSTInfo)
+        );
         $timeStamp = asn1::expl(1,$TimeStampToken);
       } else {
         p_warning("  Timestamping FAILED!");
@@ -458,39 +457,34 @@ class CMS {
     $issuerName = $certParse['tbsCertificate']['issuer']['hexdump'];
     $serialNumber = $certParse['tbsCertificate']['serialNumber'];
     $signerinfos = asn1::seq(
-                              asn1::int('1').
-                              asn1::seq(
-                                        $issuerName.
-                                        asn1::int($serialNumber)
-                                        ).
-                              asn1::seq($hexOidHashAlgos[$hashAlgorithm].'0500').
-                              asn1::expl(0, $authenticatedAttributes).
-                              asn1::seq(
-                                        '06092A864886F70D010101'. //OBJ_rsaEncryption
-                                        '0500'
-                                        ).
-                              asn1::oct($hexencryptedDigest).
-                              $timeStamp
-                            );
+        asn1::int('1').
+        asn1::seq($issuerName . asn1::int($serialNumber)).
+        asn1::seq($hexOidHashAlgos[$hashAlgorithm].'0500').
+        asn1::expl(0, $authenticatedAttributes).
+        asn1::seq(
+            '06092A864886F70D010101'. //OBJ_rsaEncryption
+            '0500'
+        ).
+        asn1::oct($hexencryptedDigest).
+        $timeStamp
+    );
     $crl = asn1::expl(1,
-                        '00' // crls (not yet used)
-                        );
+        '00' // crls (not yet used)
+    );
     $crl = '';
     $certs = asn1::expl(0,implode('', $hexEmbedCerts));
     $pkcs7contentSignedData = asn1::seq(
-                                        asn1::int('1').
-                                        asn1::set(
-                                                  asn1::seq($hexOidHashAlgos[$hashAlgorithm].'0500')
-                                                  ).
-                                        asn1::seq('06092A864886F70D010701'). //OBJ_pkcs7_data
-                                        $certs.
-                                        $crl.
-                                        asn1::set($signerinfos)
-                                        );
+        asn1::int('1').
+        asn1::set(asn1::seq($hexOidHashAlgos[$hashAlgorithm].'0500')).
+        asn1::seq('06092A864886F70D010701'). //OBJ_pkcs7_data
+        $certs.
+        $crl.
+        asn1::set($signerinfos)
+    );
     $pkcs7ContentInfo = asn1::seq(
-                                   "06092A864886F70D010702". // Hexadecimal form of pkcs7-signedData
-                                   asn1::expl(0,$pkcs7contentSignedData)
-                                  );
+        "06092A864886F70D010702". // Hexadecimal form of pkcs7-signedData
+        asn1::expl(0,$pkcs7contentSignedData)
+    );
     $pkcs7ContentInfo = str_pad($pkcs7ContentInfo, __SIGNATURE_MAX_LENGTH, '0');
     return $pkcs7ContentInfo;
   }
