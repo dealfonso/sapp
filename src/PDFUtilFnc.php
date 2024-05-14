@@ -24,7 +24,6 @@ namespace ddn\sapp;
 use ddn\sapp\PDFObjectParser;
 use ddn\sapp\helpers\StreamReader;
 use ddn\sapp\helpers\Buffer;
-
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
 use function ddn\sapp\helpers\p_error;
@@ -446,46 +445,6 @@ class PDFUtilFnc {
         ];
     }
 
-    /**
-     * Signs a file using the certificate and key and obtains the signature content padded to the max signature length
-     * @param filename the name of the file to sign
-     * @param certificate the public key to sign
-     * @param key the private key to sign
-     * @param tmpfolder the folder in which to store a temporary file needed
-     * @return signature the signature, in hexadecimal string, padded to the maximum length (i.e. for PDF) or false in case of error
-     */
-    public static function calculate_pkcs7_signature($filenametosign, $certificate, $key, $tmpfolder = "/tmp") {    
-        $filesize_original = filesize($filenametosign);
-        if ($filesize_original === false)
-            return p_error("could not open file $filenametosign");
-
-        $temp_filename = tempnam($tmpfolder, "pdfsign");
-
-        if ($temp_filename === false)
-            return p_error("could not create a temporary filename");
-
-        if (openssl_pkcs7_sign($filenametosign, $temp_filename, $certificate, $key, array(), PKCS7_BINARY | PKCS7_DETACHED) !== true) {
-            unlink($temp_filename);
-            return p_error("failed to sign file $filenametosign");
-        }
-
-        $signature = file_get_contents($temp_filename);
-        // extract signature
-        $signature = substr($signature, $filesize_original);
-        $signature = substr($signature, (strpos($signature, "%%EOF\n\n------") + 13));
-
-        $tmparr = explode("\n\n", $signature);
-        $signature = $tmparr[1];
-        // decode signature
-        $signature = base64_decode(trim($signature));
-
-        // convert signature to hex
-        $signature = current(unpack('H*', $signature));
-        $signature = str_pad($signature, __SIGNATURE_MAX_LENGTH, '0');       
-
-        return $signature;
-    }   
-    
     /**
      * Function that finds a the object at the specific position in the buffer
      * @param buffer the buffer from which to read the document
