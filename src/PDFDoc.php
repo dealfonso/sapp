@@ -457,7 +457,7 @@ class PDFDoc extends Buffer {
             p_debug("     ########## PERFORM SIGNATURE LENGTH CHECK ##########\n");
             $CMS = new helpers\CMS;
             $CMS->signature_data['signcert'] = $this->_certificate['cert'];
-            $CMS->signature_data['extracerts'] = $this->_certificate['extracerts'];
+            $CMS->signature_data['extracerts'] = $this->_certificate['extracerts']??null;
             $CMS->signature_data['hashAlgorithm'] = 'sha256';
             $CMS->signature_data['privkey'] = $this->_certificate['pkey'];
             $CMS->signature_data['tsa'] = $this->_signature_tsa;
