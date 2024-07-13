@@ -50,7 +50,7 @@ class CMS {
         }
       }
       if($code != '200') {
-        p_error("      response error! Code=\"$code\", Status=\"".trim($status)."\"");
+        p_error("      response error! Code=\"$code\", Status=\"".trim($status??"")."\"");
         return false;
       }
       $contentTypeHeader = '';
@@ -191,7 +191,7 @@ class CMS {
     $ocspURI = trim($ocspURI);
       p_debug("      reading CRL CDP attribute...");
       $crlURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['2.5.29.31']['value'][0];
-      if(empty(trim($crlURIorFILE))) {
+      if(empty(trim($crlURIorFILE??""))) {
         p_warning("        FAILED!");
       } else {
         p_debug("        OK got address:\"$crlURIorFILE\"");
@@ -202,7 +202,7 @@ class CMS {
       p_debug("    getting Issuer...");
       p_debug("      looking for issuer address from AIA attribute...");
       $issuerURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.2'][0];
-      $issuerURIorFILE = trim($issuerURIorFILE);
+      $issuerURIorFILE = trim($issuerURIorFILE??"");
       if(empty($issuerURIorFILE)) {
         p_debug("        Failed!");
       } else {
@@ -232,7 +232,7 @@ class CMS {
       
       if(!$ltvResult['issuer']) {
         p_debug("      search for issuer in extracerts.....");
-        if(array_key_exists('extracerts', $this->signature_data) && (count($this->signature_data['extracerts']) > 0)) {
+        if(array_key_exists('extracerts', $this->signature_data) && ($this->signature_data['extracerts'] !== null) && (count($this->signature_data['extracerts']) > 0)) {
           $i=0;
           foreach($this->signature_data['extracerts'] as $extracert) {
             p_debug("        extracerts[$i] ...");
