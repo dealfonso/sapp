@@ -43,7 +43,7 @@ else {
             $tsa = trim(fgets(STDIN)) ?: "http://timestamp.digicert.com";
             system('stty echo');
             fwrite(STDERR, "\n");
-        }   
+        }
 
         $file_content = file_get_contents($argv[1]);
         $obj = PDFDoc::from_string($file_content);
