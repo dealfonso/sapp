@@ -23,6 +23,7 @@ namespace ddn\sapp;
 
 use ddn\sapp\PDFBaseDoc;
 use ddn\sapp\PDFBaseObject;
+use ddn\sapp\PDFSignatureObject;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueList;
 use ddn\sapp\pdfvalue\PDFValueReference;
@@ -466,9 +467,9 @@ class PDFDoc extends Buffer {
             $len = strlen($res);
             p_debug("     Signature Length is \"$len\" Bytes");
             p_debug("     ########## FINISHED SIGNATURE LENGTH CHECK #########\n\n");
-            define('__SIGNATURE_MAX_LENGTH', $len);
+            PDFSignatureObject::$__SIGNATURE_MAX_LENGTH = $len;
 
-            $signature = $this->create_object([], "ddn\sapp\PDFSignatureObject", false);
+            $signature = $this->create_object([], PDFSignatureObject::class, false);
             //$signature = new PDFSignatureObject([]);
             $signature->set_metadata($this->_metadata_name, $this->_metadata_reason, $this->_metadata_location, $this->_metadata_contact_info);
             $signature->set_certificate($this->_certificate);
@@ -880,7 +881,7 @@ class PDFDoc extends Buffer {
             $cms->signature_data['ltv'] = $_signature->get_ltv();
             $cms->signature_data['tsa'] = $_signature->get_tsa();
             $signature_contents = $cms->pkcs7_sign($_signable_document->get_raw());
-            $signature_contents = str_pad($signature_contents, __SIGNATURE_MAX_LENGTH, '0');
+            //$signature_contents = str_pad($signature_contents, strlen($signature_contents), '0');
 
             // Then restore the contents field
             $_signature["Contents"] = new PDFValueHexString($signature_contents);

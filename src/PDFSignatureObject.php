@@ -20,7 +20,7 @@
 */
 
 namespace ddn\sapp;
-    
+
 use ddn\sapp\PDFObject;
 use ddn\sapp\pdfvalue\PDFValue;
 use ddn\sapp\pdfvalue\PDFValueHexString;
@@ -32,19 +32,16 @@ use ddn\sapp\pdfvalue\PDFValueString;
 use ddn\sapp\pdfvalue\PDFValueType;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
-// The maximum signature length, needed to create a placeholder to calculate the range of bytes
-// that will cover the signature.
-if (!defined('__SIGNATURE_MAX_LENGTH'))
-    //define('__SIGNATURE_MAX_LENGTH', 11742);
-    define('__SIGNATURE_MAX_LENGTH', 27742);
-
-// The maximum expected length of the byte range, used to create a placeholder while the size
-// is not known. 68 digits enable 20 digits for the size of the document
-if (!defined('__BYTERANGE_SIZE'))
-    define('__BYTERANGE_SIZE', 68);
-
 // This is an special object that has a set of fields
 class PDFSignatureObject extends PDFObject {
+    // The maximum signature length, needed to create a placeholder to calculate the range of bytes
+    // that will cover the signature.
+    public static $__SIGNATURE_MAX_LENGTH = 27742;
+
+    // The maximum expected length of the byte range, used to create a placeholder while the size
+    // is not known. 68 digits enable 20 digits for the size of the document
+    public static $__BYTERANGE_SIZE = 68;
+
     protected $_prev_content_size = 0;
     protected $_post_content_size = null;
 
@@ -90,8 +87,8 @@ class PDFSignatureObject extends PDFObject {
             'Filter' => "/Adobe.PPKLite",
             'Type' => "/Sig",
             'SubFilter' => "/adbe.pkcs7.detached",
-            'ByteRange' => new PDFValueSimple(str_repeat(" ", __BYTERANGE_SIZE)),
-            'Contents' => "<" . str_repeat("0", __SIGNATURE_MAX_LENGTH) . ">",
+            'ByteRange' => new PDFValueSimple(str_repeat(" ", self::$__BYTERANGE_SIZE)),
+            'Contents' => "<" . str_repeat("0", self::$__SIGNATURE_MAX_LENGTH) . ">",
             'M' => new PDFValueString(timestamp_to_pdfdatestring()),
         ]);
     }
@@ -144,7 +141,7 @@ class PDFSignatureObject extends PDFObject {
     public function to_pdf_entry() {
         $signature_size = strlen(parent::to_pdf_entry());
         $offset = $this->get_signature_marker_offset();
-        $starting_second_part = $this->_prev_content_size + $offset + __SIGNATURE_MAX_LENGTH + 2;
+        $starting_second_part = $this->_prev_content_size + $offset + self::$__SIGNATURE_MAX_LENGTH + 2;
 
         $contents_size = strlen("" . $this->_value['Contents']);
 
@@ -154,7 +151,7 @@ class PDFSignatureObject extends PDFObject {
             ($this->_post_content_size!==null?$this->_post_content_size + ($signature_size - $contents_size - $offset):0) . " ]";
 
         $this->_value['ByteRange'] =
-            new PDFValueSimple($byterange_str . str_repeat(" ", __BYTERANGE_SIZE - strlen($byterange_str) + 1)
+            new PDFValueSimple($byterange_str . str_repeat(" ", self::$__BYTERANGE_SIZE - strlen($byterange_str) + 1)
         );
 
         return parent::to_pdf_entry();

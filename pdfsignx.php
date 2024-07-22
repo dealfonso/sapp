@@ -39,7 +39,7 @@ else {
 
         $file_content = file_get_contents($argv[1]);
         $obj = PDFDoc::from_string($file_content);
-        
+
         if ($obj === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);
         else {
