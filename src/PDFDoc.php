@@ -363,12 +363,27 @@ class PDFDoc extends Buffer {
      * @param $contact
      * @return void
      */
-    public function set_metadata_props($name = null, $reason = null, $location = null, $contact = null)
+    public function set_metadata_props($name = null, $reason = null, $location = null, $contact = null, $encoding = 'ISO-8859-1')
     {
-        $this->_metadata_name = $name;
-        $this->_metadata_reason = $reason;
-        $this->_metadata_location = $location;
-        $this->_metadata_contact_info = $contact;
+        $this->_metadata_name = $this->charset_encode($name, $encoding);
+        $this->_metadata_reason = $this->charset_encode($reason, $encoding);
+        $this->_metadata_location = $this->charset_encode($location, $encoding);
+        $this->_metadata_contact_info = $this->charset_encode($contact, $encoding);
+    }
+
+    private function charset_encode($string, $to)
+    {
+        if (!is_string($string) || !function_exists('mb_detect_encoding')) {
+            return $string;
+        }
+
+        $encoding = mb_detect_encoding($string, mb_list_encodings(), true);
+
+        if ($encoding !== $to) {
+            $string = mb_convert_encoding($string, $to, $encoding);
+        }
+
+        return $string;
     }
 
     /**
