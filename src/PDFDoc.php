@@ -638,7 +638,7 @@ class PDFDoc extends Buffer {
             return p_error("invalid info object");
 
         $info_obj["ModDate"] = new PDFValueString(timestamp_to_pdfdatestring($date));
-        $info_obj["Producer"] = "Modificado con SAPP";
+        $info_obj["Producer"] = new PDFValueString("Modificado con SAPP");
         $this->add_object($info_obj);
         return true;
     }
