@@ -365,12 +365,19 @@ class PDFDoc extends Buffer {
      */
     public function set_metadata_props($name = null, $reason = null, $location = null, $contact = null)
     {
-        $this->_metadata_name = $name;
-        $this->_metadata_reason = $reason;
-        $this->_metadata_location = $location;
-        $this->_metadata_contact_info = $contact;
+        $this->_metadata_name = self::toUTF16Hex($name);
+        $this->_metadata_reason = self::toUTF16Hex($reason);
+        $this->_metadata_location = self::toUTF16Hex($location);
+        $this->_metadata_contact_info = self::toUTF16Hex($contact);
     }
 
+    // Convert string to UTF-16 Hexadecimal 
+    private static function toUTF16Hex($string) {
+        $string = bin2hex(mb_convert_encoding($string, 'UTF-16BE'));
+
+        // Add BOM
+        return 'FEFF' .$string;
+    }
     /**
      * Function that creates and updates the PDF objects needed to sign the document. The workflow for a signature is:
      * - create a signature object
