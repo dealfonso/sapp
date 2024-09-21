@@ -101,16 +101,16 @@ class PDFSignatureObject extends PDFObject {
      */
     public function set_metadata($name = null, $reason = null, $location = null, $contact = null) {
         if ($name !== null) {
-            $this->_value["Name"] = new PDFValueString($name);
+            $this->_value["Name"] = new PDFValueHexString($name);
         }
         if ($reason !== null) {
-            $this->_value["Reason"] = new PDFValueString($reason);
+            $this->_value["Reason"] = new PDFValueHexString($reason);
         }
         if ($location !== null) {
-            $this->_value["Location"] = new PDFValueString($location);
+            $this->_value["Location"] = new PDFValueHexString($location);
         }
         if ($contact !== null) {
-            $this->_value["ContactInfo"] = new PDFValueString($contact);
+            $this->_value["ContactInfo"] = new PDFValueHexString($contact);
         }
     }
     /**
