@@ -21,63 +21,78 @@
 
 namespace ddn\sapp\pdfvalue;
 use \ArrayAccess;
-use function ddn\sapp\helpers\p_debug_var;
+use ReturnTypeWillChange;
+use Stringable;
 
-class PDFValue implements ArrayAccess {
-    protected $value = null;
-    public function __construct($v) {
-        $this->value = $v;
+class PDFValue implements ArrayAccess, Stringable
+{
+    public function __construct(
+        protected $value
+    )
+    {
     }
+
     public function val() {
         return $this->value;
     }
-    public function __toString() {
+
+    public function __toString(): string {
         return "" . $this->value;
     }
-    public function offsetExists ( $offset ) : bool {
-        if (!is_array($this->value)) return false;
+
+    public function offsetExists ( $offset ): bool {
+        if (! is_array($this->value)) return false;
         return isset($this->value[$offset]);
     }
-    #[\ReturnTypeWillChange]
+
+    #[ReturnTypeWillChange]
     public function offsetGet ( $offset ) {
-        if (!is_array($this->value)) return false;
-        if (!isset($this->value[$offset])) return false;
+        if (! is_array($this->value)) return false;
+        if (! isset($this->value[$offset])) return false;
         return $this->value[$offset];
     }
-    public function offsetSet($offset , $value ) : void {
-        if (!is_array($this->value)) return;
+
+    public function offsetSet($offset, $value ): void {
+        if (! is_array($this->value)) return;
         $this->value[$offset] = $value;
     }
-    public function offsetUnset($offset ) : void {
-        if ((!is_array($this->value)) || (!isset($this->value[$offset]))) 
+
+    public function offsetUnset($offset ): void {
+        if ((! is_array($this->value)) || (! isset($this->value[$offset])))
             throw new Exception('invalid offset');
         unset($this->value[$offset]);
-    }    
-    public function push($v) {
+    }
+
+    public function push($v): bool {
         /*if (get_class($v) !== get_class($this))
             throw new Exception('invalid object to concat to this one');*/
         return false;
     }
-    public function get_int() {
+
+    public function get_int(): false|int {
         return false;
     }
-    public function get_object_referenced() {
-        return false;
-    }  
-    public function get_keys() {
+
+    public function get_object_referenced(): false|array|int {
         return false;
     }
+
+    public function get_keys(): false|array {
+        return false;
+    }
+
     /**
      * Returns the difference between this and other object (false means "cannot compare", null means "equal" and any value means "different": things in this object that are different from the other)
      */
     public function diff($other) {
-        if (!is_a($other, get_class($this)))
+        if (! is_a($other, static::class))
             return false;
         if ($this->value === $other->value) {
             return null;
         }
         return $this->value;
     }
+
     /**
      * Function that converts standard types into PDFValue* types
      *  - integer, double are translated into PDFValueSimple
@@ -86,7 +101,7 @@ class PDFValue implements ArrayAccess {
      *  - other strings are translated into PDFValueString
      *  - array is translated into PDFValueList, and its inner elements are also converted.
      * @param value a standard php object (e.g. string, integer, double, array, etc.)
-     * @return pdfvalue an object of type PDFValue*, depending on the 
+     * @return pdfvalue an object of type PDFValue*, depending on the
      */
     protected static function _convert($value) {
         switch (gettype($value)) {
@@ -99,18 +114,18 @@ class PDFValue implements ArrayAccess {
                     $value = new PDFValueType(substr($value, 1));
                 else
                     if (preg_match("/\s/ms", $value) === 1)
-                        $value = new PDFValueString($value); 
+                        $value = new PDFValueString($value);
                     else
-                        $value = new PDFValueSimple($value); 
+                        $value = new PDFValueSimple($value);
                 break;
-            case 'array': 
+            case 'array':
                 if (count($value) === 0) {
                     // An empty list is assumed to be a list
                     $value = new PDFValueList();
                 } else {
 
                     // Try to parse it as an object (i.e. [ 'Field' => 'Value', ...])
-                    $obj = PDFValueObject::fromarray($value);            
+                    $obj = PDFValueObject::fromarray($value);
                     if ($obj !== false)
                         $value = $obj;
                     else {
@@ -126,5 +141,5 @@ class PDFValue implements ArrayAccess {
                 break;
         }
         return $value;
-    }     
+    }
 }

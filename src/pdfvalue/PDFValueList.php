@@ -20,19 +20,16 @@
 */
 
 namespace ddn\sapp\pdfvalue;
-use function ddn\sapp\helpers\p_debug_var;
-use function ddn\sapp\helpers\p_debug;
-use ddn\sapp\pdfvalue\PDFValueSimple;
-
 class PDFValueList extends PDFValue {
     public function __construct($value = []) {
         parent::__construct($value);
     }
-    public function __toString() {
+
+    public function __toString(): string {
         return '[' . implode(' ', $this->value) . ']';
     }
 
-    public function diff($other) {
+    public function diff($other): false|null|self {
         $different = parent::diff($other);
         if (($different === false) || ($different === null)) return $different;
 
@@ -51,9 +48,9 @@ class PDFValueList extends PDFValue {
             $result = [];
             foreach ($this->value as $v) {
                 if (is_a($v, "ddn\\sapp\\pdfvalue\\PDFValueSimple")) {
-                    $v = explode(" ", $v->val());
+                    $v = explode(" ", (string) $v->val());
                 } else {
-                    $v = [ $v->val() ];
+                    $v = [$v->val()];
                 }
                 array_push($result, ...$v);
             }
@@ -65,7 +62,7 @@ class PDFValueList extends PDFValue {
     /**
      * This function returns a list of objects that are referenced in the list, only if all of them are references to objects
      */
-    public function get_object_referenced() {
+    public function get_object_referenced(): false|array {
         $ids = [];
         $plain_text_val = implode(' ', $this->value);
         if (trim($plain_text_val) !== "") {
@@ -90,12 +87,12 @@ class PDFValueList extends PDFValue {
      *  - if it is a list object, the lists are merged; 
      *  - otherwise the object is converted to a PDFValue* object and it is appended to the list
      */
-    public function push($v) {
-        if (is_object($v) && (get_class($v) === get_class($this))) {
+    public function push($v): bool {
+        if (is_object($v) && ($v::class === static::class)) {
             // If a list is pushed to another list, the elements are merged
             $v = $v->val();
         }
-        if (!is_array($v)) $v = [ $v ];
+        if (! is_array($v)) $v = [$v];
         foreach ($v as $e) {
             $e = self::_convert($e);
             array_push($this->value, $e);

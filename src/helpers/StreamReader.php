@@ -34,7 +34,9 @@ namespace ddn\sapp\helpers;
  */
 class StreamReader {
     protected $_buffer = "";
-    protected $_bufferlen = 0;
+
+    protected int $_bufferlen;
+
     protected $_pos = 0;
 
     public function __construct($string = null, $offset = 0) {
@@ -42,7 +44,7 @@ class StreamReader {
             $string = "";
 
         $this->_buffer = $string;
-        $this->_bufferlen = strlen($string);
+        $this->_bufferlen = strlen((string) $string);
         $this->goto($offset);
     }
 
@@ -61,9 +63,9 @@ class StreamReader {
      * @param n the number of chars to read
      * @return str the substring obtained (with at most, n chars)
      */
-    public function nextchars($n) {
+    public function nextchars($n): string {
         $n = min($n, $this->_bufferlen - $this->_pos);
-        $retval = substr($this->_buffer, $this->_pos, $n);
+        $retval = substr((string) $this->_buffer, $this->_pos, $n);
         $this->_pos += $n;
         return $retval;
     }
@@ -83,7 +85,7 @@ class StreamReader {
      * Returns whether the stream has finished or not
      * @return finished true if there are no more chars to read from the stream; false otherwise
      */
-    public function eos() {
+    public function eos(): bool {
         return $this->_pos >= $this->_bufferlen;
     }
 
@@ -91,7 +93,7 @@ class StreamReader {
      * Sets the position of the buffer to the position in the parameter
      * @param pos the position to which the buffer must be set
      */
-    public function goto($pos = 0) {
+    public function goto($pos = 0): void {
         $this->_pos = min(max(0, $pos), $this->_bufferlen);
     }
 
@@ -100,11 +102,11 @@ class StreamReader {
      * @param length length of the substring to obtain (0 or <0 will obtain the whole buffer from the current position)
      * @return substr the substring
      */
-    public function substratpos($length = 0) {
+    public function substratpos($length = 0): string {
         if ($length > 0)
-            return substr($this->_buffer, $this->_pos, $length);
+            return substr((string) $this->_buffer, $this->_pos, $length);
         else
-            return substr($this->_buffer, $this->_pos);
+            return substr((string) $this->_buffer, $this->_pos);
     }
 
     /**
@@ -119,7 +121,7 @@ class StreamReader {
      * Obtains the size of the buffer
      * @return size the size of the buffer
      */
-    public function size() {
+    public function size(): int {
         return $this->_bufferlen;
     }
 }

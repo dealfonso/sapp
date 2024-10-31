@@ -17,7 +17,7 @@
 
     You should have received a copy of the GNU Lesser General Public License
 	along with this program.  If not, see <https://www.gnu.org/licenses/>.
-	
+
 	---------
 
 	The code in this file is an adaptation of a part of the code included in
@@ -34,25 +34,31 @@
 */
 
 namespace ddn\sapp\helpers;
-use function ddn\sapp\helpers\p_error;
 
 function _parsejpg($filecontent)
 {
 	// Extract info from a JPEG file
 	$a = getimagesizefromstring($filecontent);
-	if(!$a)
+	if(! $a)
 		return p_error('Missing or incorrect image');
-	if($a[2]!=2)
-		return perror('Not a JPEG image');
-	if(!isset($a['channels']) || $a['channels']==3)
+	if($a[2] != 2)
+		return p_error('Not a JPEG image');
+	if(! isset($a['channels']) || $a['channels'] == 3)
 		$colspace = 'DeviceRGB';
-	elseif($a['channels']==4)
+	elseif($a['channels'] == 4)
 		$colspace = 'DeviceCMYK';
 	else
 		$colspace = 'DeviceGray';
-	$bpc = isset($a['bits']) ? $a['bits'] : 8;
+	$bpc = $a['bits'] ?? 8;
 	$data = $filecontent;
-	return array('w'=>$a[0], 'h'=>$a[1], 'cs'=>$colspace, 'bpc'=>$bpc, 'f'=>'DCTDecode', 'data'=>$data);
+	return [
+    'w' => $a[0],
+	    'h' => $a[1],
+	    'cs' => $colspace,
+	    'bpc' => $bpc,
+	    'f' => 'DCTDecode',
+	    'data' => $data,
+];
 }
 
 function _parsepng($filecontent)
@@ -66,35 +72,35 @@ function _parsepng($filecontent)
 function _parsepngstream(&$f)
 {
 	// Check signature
-	if(($res=_readstream($f,8))!=chr(137).'PNG'.chr(13).chr(10).chr(26).chr(10))
+	if(($res = _readstream($f, 8)) != chr(137) . 'PNG' . chr(13) . chr(10) . chr(26) . chr(10))
 		return p_error("Not a PNG image $res");
 
 	// Read header chunk
-	_readstream($f,4);
-	if(_readstream($f,4)!='IHDR')
+	_readstream($f, 4);
+	if(_readstream($f, 4) != 'IHDR')
 		return p_error('Incorrect PNG image');
 	$w = _readint($f);
 	$h = _readint($f);
-	$bpc = ord(_readstream($f,1));
-	if($bpc>8)
+	$bpc = ord(_readstream($f, 1));
+	if($bpc > 8)
 		return p_error('16-bit depth not supported');
-	$ct = ord(_readstream($f,1));
-	if($ct==0 || $ct==4)
+	$ct = ord(_readstream($f, 1));
+	if($ct == 0 || $ct == 4)
 		$colspace = 'DeviceGray';
-	elseif($ct==2 || $ct==6)
+	elseif($ct == 2 || $ct == 6)
 		$colspace = 'DeviceRGB';
-	elseif($ct==3)
+	elseif($ct == 3)
 		$colspace = 'Indexed';
 	else
 		return p_error('Unknown color type');
-	if(ord(_readstream($f,1))!=0)
+	if(ord(_readstream($f, 1)) != 0)
 		return p_error('Unknown compression method');
-	if(ord(_readstream($f,1))!=0)
+	if(ord(_readstream($f, 1)) != 0)
 		return p_error('Unknown filter method');
-	if(ord(_readstream($f,1))!=0)
+	if(ord(_readstream($f, 1)) != 0)
 		return p_error('Interlacing not supported');
-	_readstream($f,4);
-	$dp = '/Predictor 15 /Colors '.($colspace=='DeviceRGB' ? 3 : 1).' /BitsPerComponent '.$bpc.' /Columns '.$w;
+	_readstream($f, 4);
+	$dp = '/Predictor 15 /Colors ' . ($colspace == 'DeviceRGB' ? 3 : 1) . ' /BitsPerComponent ' . $bpc . ' /Columns ' . $w;
 
 	// Scan chunks looking for palette, transparency and image data
 	$pal = '';
@@ -103,81 +109,90 @@ function _parsepngstream(&$f)
 	do
 	{
 		$n = _readint($f);
-		$type = _readstream($f,4);
-		if($type=='PLTE')
+		$type = _readstream($f, 4);
+		if($type == 'PLTE')
 		{
 			// Read palette
-			$pal = _readstream($f,$n);
-			_readstream($f,4);
+			$pal = _readstream($f, $n);
+			_readstream($f, 4);
 		}
-		elseif($type=='tRNS')
+		elseif($type == 'tRNS')
 		{
 			// Read transparency info
-			$t = _readstream($f,$n);
-			if($ct==0)
-				$trns = array(ord(substr($t,1,1)));
-			elseif($ct==2)
-				$trns = array(ord(substr($t,1,1)), ord(substr($t,3,1)), ord(substr($t,5,1)));
+			$t = _readstream($f, $n);
+			if($ct == 0)
+				$trns = [ord(substr((string) $t, 1, 1))];
+			elseif($ct == 2)
+				$trns = [ord(substr((string) $t, 1, 1)), ord(substr((string) $t, 3, 1)), ord(substr((string) $t, 5, 1))];
 			else
 			{
-				$pos = strpos($t,chr(0));
-				if($pos!==false)
-					$trns = array($pos);
+				$pos = strpos((string) $t, chr(0));
+				if($pos !== false)
+					$trns = [$pos];
 			}
-			_readstream($f,4);
+			_readstream($f, 4);
 		}
-		elseif($type=='IDAT')
+		elseif($type == 'IDAT')
 		{
 			// Read image data block
-			$data .= _readstream($f,$n);
-			_readstream($f,4);
+			$data .= _readstream($f, $n);
+			_readstream($f, 4);
 		}
-		elseif($type=='IEND')
+		elseif($type == 'IEND')
 			break;
 		else
-			_readstream($f,$n+4);
+			_readstream($f, $n + 4);
 	}
 	while($n);
 
-	if($colspace=='Indexed' && empty($pal))
+	if($colspace == 'Indexed' && empty($pal))
 		return p_error('Missing palette in image');
-	$info = array('w'=>$w, 'h'=>$h, 'cs'=>$colspace, 'bpc'=>$bpc, 'f'=>'FlateDecode', 'dp'=>$dp, 'pal'=>$pal, 'trns'=>$trns);
-	if($ct>=4)
+	$info = [
+	    'w' => $w,
+	    'h' => $h,
+	    'cs' => $colspace,
+	    'bpc' => $bpc,
+	    'f' => 'FlateDecode',
+	    'dp' => $dp,
+	    'pal' => $pal,
+	    'trns' => $trns,
+	];
+	if($ct >= 4)
 	{
 		// Extract alpha channel
-		if(!function_exists('gzuncompress'))
+		if(! function_exists('gzuncompress'))
 			return p_error('Zlib not available, can\'t handle alpha channel');
 		$data = gzuncompress($data);
 		if ($data === false)
 			return p_error('failed to uncompress the image');
 		$color = '';
 		$alpha = '';
-		if($ct==4)
+		if($ct == 4)
 		{
 			// Gray image
-			$len = 2*$w;
-			for($i=0;$i<$h;$i++)
+			$len = 2 * $w;
+			for($i = 0; $i < $h; $i++)
 			{
-				$pos = (1+$len)*$i;
+				$pos = (1 + $len) * $i;
 				$color .= $data[$pos];
 				$alpha .= $data[$pos];
-				$line = substr($data,$pos+1,$len);
-				$color .= preg_replace('/(.)./s','$1',$line);
-				$alpha .= preg_replace('/.(.)/s','$1',$line);
+				$line = substr($data, $pos + 1, $len);
+				$color .= preg_replace('/(.)./s', '$1', $line);
+				$alpha .= preg_replace('/.(.)/s', '$1', $line);
 			}
 		}
 		else
 		{
 			// RGB image
-			$len = 4*$w;
-			for($i=0;$i<$h;$i++)
+			$len = 4 * $w;
+			for($i = 0; $i < $h; $i++)
 			{
-				$pos = (1+$len)*$i;
+				$pos = (1 + $len) * $i;
 				$color .= $data[$pos];
 				$alpha .= $data[$pos];
-				$line = substr($data,$pos+1,$len);
-				$color .= preg_replace('/(.{3})./s','$1',$line);
-				$alpha .= preg_replace('/.{3}(.)/s','$1',$line);
+				$line = substr($data, $pos + 1, $len);
+				$color .= preg_replace('/(.{3})./s', '$1', $line);
+				$alpha .= preg_replace('/.{3}(.)/s', '$1', $line);
 			}
 		}
 		unset($data);
@@ -196,15 +211,15 @@ function _parsepngstream(&$f)
 function _readstream(&$f, $n) {
 	$res = "";
 
-	while ($n>0 && !$f->eos()) {
+	while ($n > 0 && ! $f->eos()) {
 		$s = $f->nextchars($n);
 		if ($s === false)
 			return p_error("Error while reading the stream");
-		$n -= strlen($s);
+		$n -= strlen((string) $s);
 		$res .= $s;
 	}
 
-	if ($n>0)
+	if ($n > 0)
 		return p_error('Unexpected end of stream');
 	return $res;
 }
@@ -212,10 +227,9 @@ function _readstream(&$f, $n) {
 function _readint(&$f)
 {
 	// Read a 4-byte integer from stream
-	$a = unpack('Ni',_readstream($f,4));
+	$a = unpack('Ni', (string) _readstream($f, 4));
 	return $a['i'];
 }
-
 
 /*
 function _readstream($f, $n)

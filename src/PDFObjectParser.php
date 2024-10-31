@@ -19,26 +19,18 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-    namespace ddn\sapp;
-    
+namespace ddn\sapp;
+
+    use \Exception;
+    use ddn\sapp\helpers\StreamReader;
     use ddn\sapp\pdfvalue\PDFValue;
     use ddn\sapp\pdfvalue\PDFValueHexString;
     use ddn\sapp\pdfvalue\PDFValueList;
     use ddn\sapp\pdfvalue\PDFValueObject;
-    use ddn\sapp\pdfvalue\PDFValueReference;
     use ddn\sapp\pdfvalue\PDFValueSimple;
     use ddn\sapp\pdfvalue\PDFValueString;
     use ddn\sapp\pdfvalue\PDFValueType;
-    use ddn\sapp\helpers\StreamReader;
-    use \Exception;
-
-    use ddn\sapp\helpers\Buffer;
-
-    use function ddn\sapp\helpers\p_debug;
-    use function ddn\sapp\helpers\p_debug_var;
-    use function ddn\sapp\helpers\p_error;
-    use function ddn\sapp\helpers\p_warning;
-    
+    use Stringable;
 
     /**
      * Class devoted to parse a single PDF object
@@ -56,22 +48,34 @@
      * 
      * - At the end, it is a simple syntax checker
      */
-    class PDFObjectParser {
-
+    class PDFObjectParser implements Stringable {
         // Possible tokens in a PDF document
         const T_NOTOKEN = 0;
+
         const T_LIST_START = 1;
+
         const T_LIST_END = 2;
+
         const T_FIELD = 3;
+
         const T_STRING = 4;
+
         const T_HEX_STRING = 12;
+
         const T_SIMPLE = 5;
+
         const T_DICT_START = 6;
+
         const T_DICT_END = 7;
+
         const T_OBJECT_BEGIN = 8;
+
         const T_OBJECT_END = 9;
+
         const T_STREAM_BEGIN = 10;
+
         const T_STREAM_END = 11;
+
         const T_COMMENT = 13;
 
         const T_NAMES = [
@@ -88,7 +92,7 @@
             self::T_OBJECT_END => 'object end',
             self::T_STREAM_BEGIN => 'stream begin',
             self::T_STREAM_END => 'stream end',
-            self::T_COMMENT => 'comment'
+            self::T_COMMENT => 'comment',
         ];
 
         const T_SIMPLE_OBJECTS = [
@@ -97,13 +101,17 @@
             self::T_OBJECT_END,
             self::T_STREAM_BEGIN,
             self::T_STREAM_END,
-            self::T_COMMENT
+            self::T_COMMENT,
         ];
 
         protected $_buffer = null;
+
         protected $_c = false;
+
         protected $_n = false;
+
         protected $_t = false;
+
         protected $_tt = self::T_NOTOKEN;
 
         /**
@@ -144,14 +152,14 @@
         /**
          * Parses the document
          */
-        public function parse(&$stream) { // $str, $offset = 0) {
+        public function parse(&$stream): PDFValueObject|PDFValueList|PDFValueString|PDFValueType|PDFValueSimple|false|null { // $str, $offset = 0) {
             $this->start($stream); //$str, $offset);
             $this->nexttoken();
             $result = $this->_parse_value();
             return $result;
         }
 
-        public function parsestr($str, $offset = 0) {
+        public function parsestr($str, $offset = 0): PDFValueObject|PDFValueList|PDFValueString|PDFValueType|PDFValueSimple|false|null {
             $stream = new StreamReader($str);
             $stream->goto($offset);
             return $this->parse($stream);
@@ -161,7 +169,7 @@
          * Simple output of the object
          * @return output the output of the object
          */
-        public function __toString() {
+        public function __toString(): string {
             return "pos: " . $this->_buffer->getpos() . ", c: $this->_c, n: $this->_n, t: $this->_t, tt: " .
             self::T_NAMES[$this->_tt] . ', b: ' . $this->_buffer->substratpos(50) .
             "\n";
@@ -171,17 +179,17 @@
          * Obtains the next token and returns it
          */
         public function nexttoken() {
-            [ $this->_t, $this->_tt ] = $this->token();
+            [$this->_t, $this->_tt] = $this->token();
             return $this->_t;
         }
 
         /**
          * Function that returns wether the current char is a separator or not
          */
-        protected function _c_is_separator() {
-            $DSEPS =[ "<<", ">>" ];
+        protected function _c_is_separator(): bool {
+            $DSEPS = ["<<", ">>"];
 
-            return (($this->_c === false) || (strpos("%<>()[]{}/ \n\r\t", $this->_c) !== false) || ((array_search($this->_c . $this->_n, $DSEPS)) !== false));
+            return (($this->_c === false) || (str_contains("%<>()[]{}/ \n\r\t", (string) $this->_c)) || ((array_search($this->_c . $this->_n, $DSEPS)) !== false));
         }
 
         /**
@@ -194,13 +202,13 @@
             if ($this->_c !== "<") throw new Exception("Invalid hex string");
 
             $this->nextchar();  // This char is "<"
-            while (($this->_c !== '>')&&(strpos("0123456789abcdefABCDEF \t\r\n\f", $this->_c) !== false)) {
+            while (($this->_c !== '>') && (str_contains("0123456789abcdefABCDEF \t\r\n\f", $this->_c))) {
                 $token .= $this->_c;
                 if ($this->nextchar() === false) {
                     break;
                 }
             }
-            if (($this->_c !== false) && (strpos(">0123456789abcdefABCDEF \t\r\n\f", $this->_c) === false))
+            if (($this->_c !== false) && (! str_contains(">0123456789abcdefABCDEF \t\r\n\f", $this->_c)))
                 throw new Exception("invalid hex string");
 
             // The only way to get to here is that char is ">"
@@ -217,12 +225,12 @@
             $n_parenthesis = 1;
             while ($this->_c !== false) {
                 $this->nextchar();
-                if (($this->_c === ')') && (!strlen($token) || ($token[strlen($token) - 1] !== '\\'))) {
+                if (($this->_c === ')') && (! strlen($token) || ($token[strlen($token) - 1] !== '\\'))) {
                     $n_parenthesis--;
                     if ($n_parenthesis == 0)
                         break;
                 } else {
-                    if (($this->_c === '(') && (!strlen($token) || ($token[strlen($token) - 1] !== '\\'))) {
+                    if (($this->_c === '(') && (! strlen($token) || ($token[strlen($token) - 1] !== '\\'))) {
                         $n_parenthesis++;
                     }
                     $token .= $this->_c;
@@ -238,13 +246,13 @@
         }
 
         protected function token() {
-            if ($this->_c === false) return [ false, false ];
-            
+            if ($this->_c === false) return [false, false];
+
             $token = false;
 
             while ($this->_c !== false) {
                 // Skip the spaces
-                while ((strpos("\t\n\r ", $this->_c) !== false) && ($this->nextchar() !== false)) ;
+                while ((str_contains("\t\n\r ", (string) $this->_c)) && ($this->nextchar() !== false));
 
                 $token_type = self::T_NOTOKEN;
 
@@ -253,7 +261,7 @@
                     case '%':
                         $this->nextchar();
                         $token = "";
-                        while (strpos("\n\r", $this->_c) === false) {
+                        while (! str_contains("\n\r", (string) $this->_c)) {
                             $token .= $this->_c;
                             $this->nextchar();
                         }
@@ -297,7 +305,7 @@
                         $this->nextchar();
 
                         // We are assuming any char (i.e. /MY+difficult_id is valid)
-                        while (!$this->_c_is_separator()) {
+                        while (! $this->_c_is_separator()) {
                             $token .= $this->_c;
                             if ($this->nextchar() === false) break;
                         }
@@ -307,30 +315,25 @@
                 if ($token === false) {
                     $token = "";
 
-                    while (!$this->_c_is_separator()) {
+                    while (! $this->_c_is_separator()) {
                         $token .= $this->_c;
                         if ($this->nextchar() === false) break;
                     }
 
-                    switch ($token) {
-                        case 'obj':
-                            $token_type = self::T_OBJECT_BEGIN; break;
-                        case 'endobj':
-                            $token_type = self::T_OBJECT_END; break;
-                        case 'stream':
-                            $token_type = self::T_STREAM_BEGIN; break;
-                        case 'endstream':
-                            $token_type = self::T_STREAM_END; break;
-                        default:
-                            $token_type = self::T_SIMPLE; break;
-                    }
-                    
+                    $token_type = match ($token) {
+                        'obj' => self::T_OBJECT_BEGIN,
+                        'endobj' => self::T_OBJECT_END,
+                        'stream' => self::T_STREAM_BEGIN,
+                        'endstream' => self::T_STREAM_END,
+                        default => self::T_SIMPLE,
+                    };
+
                 }
-                return [ $token, $token_type ];                             
+                return [$token, $token_type];                             
             }
         }
 
-        protected function _parse_obj() {
+        protected function _parse_obj(): PDFValueObject|false {
             if ($this->_tt !== self::T_DICT_START) {
                 throw new Exception("Invalid object definition");
             }
@@ -355,7 +358,7 @@
             return false;
         }
 
-        protected function _parse_list() {
+        protected function _parse_list(): PDFValueList {
             if ($this->_tt !== self::T_LIST_START) {
                 throw new Exception("Invalid list definition");
             }
@@ -385,7 +388,7 @@
             return new PDFValueList($list);
         }
 
-        protected function _parse_value() {
+        protected function _parse_value(): PDFValueObject|false|PDFValueList|PDFValueString|PDFValueHexString|PDFValueType|null|PDFValueSimple {
             while ($this->_t !== false) {
                 switch ($this->_tt) {
                     case self::T_DICT_START:
@@ -411,7 +414,6 @@
                     case self::T_OBJECT_BEGIN:
                     case self::T_STREAM_END:
                         throw new Exception("invalid keyword");
-
                     case self::T_OBJECT_END:
                     case self::T_STREAM_BEGIN:
                         return null;
@@ -433,7 +435,7 @@
                         */
                         return new PDFValueSimple($simple_value);
                         break;
-            
+
                     default:
                         throw new Exception("Invalid token: $this");
                 }
@@ -441,7 +443,7 @@
             return false;
         }
 
-        function tokenize() {
+        function tokenize(): void {
             $this->start();
             while ($this->nexttoken() !== false) {
                 echo "$this->_t\n";

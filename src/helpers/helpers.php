@@ -21,6 +21,8 @@
 
 namespace ddn\sapp\helpers;
 
+use DateTime;
+
 if (! defined("_DEBUG_LEVEL")) {
     define('_DEBUG_LEVEL', 3);
 }
@@ -34,7 +36,7 @@ if (! defined('STDERR')) {
  * @param var the variable to output
  * @return output the result of the var_dump of the variable
 */
-function var_dump_to_string($var) {
+function var_dump_to_string($var): string|false {
     ob_start();
     var_dump($var);
     $result = ob_get_clean();
@@ -59,10 +61,10 @@ function debug_var(...$vars) {
  * Function that writes the representation of some vars to 
  * @param vars comma separated list of variables to output
  */
-function p_debug_var(...$vars) {
+function p_debug_var(...$vars): void {
     // If the debug level is less than 3, suppress debug messages
     if (_DEBUG_LEVEL < 3) return;
-    
+
     foreach ($vars as $var) {
         $e = var_dump_to_string($var);
         p_stderr($e, "Debug");
@@ -94,7 +96,7 @@ function varval($e) {
  * @param level the depth level to output (0 will refer to the function that called p_stderr 
  *              call itself, 1 to the function that called to the function that called p_stderr)
  */
-function p_stderr(&$e, $tag = "Error", $level = 1) {
+function p_stderr(&$e, $tag = "Error", $level = 1): void {
     $dinfo = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT); 
     $dinfo = $dinfo[$level];
     $e = sprintf("$tag info at %s:%d: %s", $dinfo['file'], $dinfo['line'], varval($e));
@@ -150,11 +152,11 @@ function p_error($e, $retval = false) {
  *      need more than one key to be written)
  * @return random_string a random string considering the alphabet
  */
-function get_random_string($length = 8, $extended = false, $hard = false){
+function get_random_string($length = 8, $extended = false, $hard = false): string{
     $token = "";
     $codeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    $codeAlphabet.= "abcdefghijklmnopqrstuvwxyz";
-    $codeAlphabet.= "0123456789";
+    $codeAlphabet .= "abcdefghijklmnopqrstuvwxyz";
+    $codeAlphabet .= "0123456789";
     if ($extended === true) {
         $codeAlphabet .= "!\"#$%&'()*+,-./:;<=>?@[\\]_{}";
     }
@@ -162,13 +164,13 @@ function get_random_string($length = 8, $extended = false, $hard = false){
         $codeAlphabet .= "^`|~";
     }
     $max = strlen($codeAlphabet);
-    for ($i=0; $i < $length; $i++) {
-        $token .= $codeAlphabet[random_int(0, $max-1)];
+    for ($i = 0; $i < $length; $i++) {
+        $token .= $codeAlphabet[random_int(0, $max - 1)];
     }
    return $token;
 }   
 
-function get_memory_limit() {
+function get_memory_limit(): int {
     $memory_limit = ini_get('memory_limit');
     if (preg_match('/^(\d+)(.)$/', $memory_limit, $matches) === 1) {
         $memory_limit = intval($matches[1]);
@@ -189,12 +191,12 @@ function get_memory_limit() {
     return $memory_limit;
 }
 
-function show_bytes($str, $columns = null) {
+function show_bytes($str, $columns = null): string {
     $result = "";
     if ($columns === null)
-        $columns = strlen($str);
+        $columns = strlen((string) $str);
     $c = $columns;
-    for ($i = 0; $i < strlen($str); $i++) {
+    for ($i = 0; $i < strlen((string) $str); $i++) {
         $result .= sprintf("%02x ", ord($str[$i]));
         $c--;
         if ($c === 0) {
@@ -211,9 +213,9 @@ function show_bytes($str, $columns = null) {
  * @param timestamp the timestamp to conver (or 0 if get "now")
  * @return date_string the date string in PDF format
  */
-function timestamp_to_pdfdatestring($date = null) {
+function timestamp_to_pdfdatestring($date = null): string {
     if ($date === null)
-        $date = new \DateTime();
+        $date = new DateTime();
 
     $timestamp = $date->getTimestamp();
     return 'D:' . get_pdf_formatted_date($timestamp);
@@ -225,5 +227,5 @@ function timestamp_to_pdfdatestring($date = null) {
  * @since 5.9.152 (2012-03-23)
  */
 function get_pdf_formatted_date($time) {
-    return substr_replace(date('YmdHisO', intval($time)), '\'', (0 - 2), 0).'\'';
+    return substr_replace(date('YmdHisO', intval($time)), '\'', (0 - 2), 0) . '\'';
 }

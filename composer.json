@@ -4,6 +4,8 @@
     "keywords": ["php", "pdf", "signature", "sign", "electronic signature"],
     "type": "library",
     "license": "LGPL-3.0-or-later",
+    "minimum-stability": "stable",
+    "prefer-stable": true,
     "authors": [
         {
             "name": "Carlos A.",
@@ -11,11 +13,31 @@
         }
     ],
     "require": {
-        "php": ">=7.4"
+        "php": ">=8.1",
+        "ext-curl": "*",
+        "ext-openssl": "*",
+        "ext-zlib": "*",
+        "psr/log": "^1|^2|^3"
+    },
+    "require-dev": {
+        "lendable/composer-license-checker": "^1.0",
+        "phpstan/extension-installer": "^1.1",
+        "phpstan/phpstan": "^1.0",
+        "phpstan/phpstan-strict-rules": "^1.1",
+        "rector/rector": "*",
+        "roave/security-advisories": "dev-latest",
+        "slevomat/coding-standard": "^8.0",
+        "symplify/easy-coding-standard": "^12.1",
+        "symplify/phpstan-rules": "^12"
     },
     "autoload": {
         "psr-4": {
             "ddn\\sapp\\": "src/"}
     },
-    "minimum-stability": "dev"
+    "config": {
+        "allow-plugins": {
+            "phpstan/extension-installer": true,
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
+    }
 }

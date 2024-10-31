@@ -1,0 +1,20 @@
+parameters:
+    level: 0
+    paths:
+        - src/
+    parallel:
+        jobSize: 2
+
+    reportUnmatchedIgnoredErrors: true
+    inferPrivatePropertyTypeFromConstructor: true
+    checkMissingCallableSignature: false
+    treatPhpDocTypesAsCertain: false
+
+    ignoreErrors:
+        - "#Implicit array creation is not allowed#"
+        - "#Call to an undefined static method .*asn1::#"
+        - "#Construct empty\\(\\) is not allowed. Use more strict comparison.#"
+#        -
+ #           identifier: missingType.iterableValue
+  #      -
+   #         identifier: missingType.generics

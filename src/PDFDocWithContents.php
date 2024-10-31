@@ -20,27 +20,14 @@
 */
 
 namespace ddn\sapp;
-
-use ddn\sapp\PDFDoc;
-use ddn\sapp\PDFBaseObject;
-use ddn\sapp\pdfvalue\PDFValueObject;
-use ddn\sapp\pdfvalue\PDFValueList;
-use ddn\sapp\pdfvalue\PDFValueReference;
-use ddn\sapp\pdfvalue\PDFValueType;
-use ddn\sapp\pdfvalue\PDFValueSimple;
-use ddn\sapp\pdfvalue\PDFValueHexString;
-use ddn\sapp\pdfvalue\PDFValueString;
-use ddn\sapp\helpers\Buffer;
-
 use function ddn\sapp\helpers\get_random_string;
-use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\p_warning;
-use function ddn\sapp\helpers\p_debug_var;
-use function ddn\sapp\helpers\_add_image;
+use ddn\sapp\pdfvalue\PDFValueList;
+use ddn\sapp\pdfvalue\PDFValueObject;
+use ddn\sapp\pdfvalue\PDFValueReference;
 
 class PDFDocWithContents extends PDFDoc {
-
     const T_STANDARD_FONTS = [
         "Times-Roman", 
         "Times-Bold", 
@@ -55,7 +42,7 @@ class PDFDocWithContents extends PDFDoc {
         "Helvetica-Oblique", 
         "Helvetica-BoldOblique", 
         "Symbol", 
-        "ZapfDingbats"
+        "ZapfDingbats",
     ];
 
     /**
@@ -78,7 +65,7 @@ class PDFDocWithContents extends PDFDoc {
             "font" => "Helvetica",
             "size" => 24,
             "color" => "#000000",
-            "angle" => 0
+            "angle" => 0,
         ];
 
         $params = array_merge($default, $params);
@@ -111,7 +98,7 @@ class PDFDocWithContents extends PDFDoc {
         $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
 
         $angle = $params["angle"];
-        $angle *= M_PI/180;
+        $angle *= M_PI / 180;
         $c = cos($angle);
         $s = sin($angle);
         $cx = $x;
@@ -121,7 +108,7 @@ class PDFDocWithContents extends PDFDoc {
             $rotate_command = sprintf("%.5F %.5F %.5F %.5F %.2F %.2F cm 1 0 0 1 %.2F %.2F cm", $c, $s, -$s, $c, $cx, $cy, -$cx, -$cy);
 
         $text_command = "BT ";
-        $text_command .= "/$font_id "  . $params['size'] . " Tf ";
+        $text_command .= "/$font_id " . $params['size'] . " Tf ";
         $text_command .= sprintf("%.2f %.2f Td ", $x, $pagesize_h - $y); // Ubicar en x, y
         $text_command .= sprintf("(%s) Tj ", $text);
         $text_command .= "ET ";
@@ -130,11 +117,11 @@ class PDFDocWithContents extends PDFDoc {
         if ($color[0] === '#') {
             $colorvalid = true;
             $r = null;
-            switch (strlen($color)) {
+            switch (strlen((string) $color)) {
                 case 4:
                     $color = "#" . $color[1] . $color[1] . $color[2] . $color[2] . $color[3] . $color[3];
                 case 7:
-                    list($r, $g, $b) = sscanf($color, "#%02x%02x%02x");                    
+                    [$r, $g, $b] = sscanf($color, "#%02x%02x%02x");                    
                     break;
                 default:
                     p_error("please use html-like colors (e.g. #ffbbaa)");
@@ -146,7 +133,7 @@ class PDFDocWithContents extends PDFDoc {
 
         if ($angle !== 0)
             $text_command = " q $rotate_command $text_command Q";    
-            
+
         $data .= $text_command;
 
         $contents_obj->set_stream($data, false);
@@ -168,7 +155,7 @@ class PDFDocWithContents extends PDFDoc {
      * @param w the width of the image
      * @param w the height of the image
      */
-    public function add_image($page_obj, $filename, $x=0, $y=0, $w=0, $h=0) {
+    public function add_image($page_obj, $filename, $x = 0, $y = 0, $w = 0, $h = 0) {
 
         // TODO: maybe we can create a function that "adds content to a page", and that
         //       function will search for the content field and merge the resources, if
@@ -181,7 +168,7 @@ class PDFDocWithContents extends PDFDoc {
 
         if ($page_obj === false)
             return p_error("invalid page");
-            
+
         // Get the page height, to change the coordinates system (up to down)
         $pagesize = $this->get_page_size($page_obj);
         $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
@@ -192,10 +179,10 @@ class PDFDocWithContents extends PDFDoc {
 
         // Get the resources for the page
         $resources_obj = $this->get_indirect_object($page_obj['Resources']);
-        if (!isset($resources_obj['ProcSet']))
+        if (! isset($resources_obj['ProcSet']))
             $resources_obj['ProcSet'] = new PDFValueList(['/PDF']);
         $resources_obj['ProcSet']->push(['/ImageB', '/ImageC', '/ImageI']);
-        if (!isset($resources_obj['XObject']))
+        if (! isset($resources_obj['XObject']))
             $resources_obj['XObject'] = new PDFValueObject();
         $resources_obj['XObject'][$info['i']] = new PDFValueReference($images_objects[0]->get_oid());
 
@@ -219,7 +206,7 @@ class PDFDocWithContents extends PDFDoc {
             $page_obj['Group'] = new PDFValueObject([
                 'Type' => '/Group',
                 'S' => '/Transparency',
-                'CS' => '/DeviceRGB'
+                'CS' => '/DeviceRGB',
             ]);
             $this->add_object($page_obj);
         }

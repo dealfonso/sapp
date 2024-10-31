@@ -23,6 +23,7 @@ use ddn\sapp\PDFDoc;
 use function ddn\sapp\helpers\p_debug_var;
 use function ddn\sapp\helpers\p_debug;
 use ddn\sapp\pdfvalue\PDFValueObject;
+use function ddn\sapp\helpers\p_error;
 
 require_once('vendor/autoload.php');
 
@@ -48,6 +49,7 @@ else {
 
     $differences = $doc1->compare($doc2);
     foreach ($differences as $oid => $obj) {
+        p_error(get_debug_type($oid));
         print($obj->to_pdf_entry());
     }
 }
