@@ -130,11 +130,11 @@ function _parsepngstream(&$f): array
             // Read transparency info
             $t = _readstream($f, $n);
             if ($ct == 0) {
-                $trns = [ord(substr((string) $t, 1, 1))];
+                $trns = [ord($t[1])];
             } elseif ($ct == 2) {
-                $trns = [ord(substr((string) $t, 1, 1)), ord(substr((string) $t, 3, 1)), ord(substr((string) $t, 5, 1))];
+                $trns = [ord($t[1]), ord($t[3]), ord($t[5])];
             } else {
-                $pos = strpos((string) $t, chr(0));
+                $pos = strpos($t, chr(0));
                 if ($pos !== false) {
                     $trns = [$pos];
                 }
@@ -232,10 +232,10 @@ function _readstream($f, $n): string
     return $res;
 }
 
-function _readint(&$f)
+function _readint($f)
 {
     // Read a 4-byte integer from stream
-    $a = unpack('Ni', (string) _readstream($f, 4));
+    $a = unpack('Ni', _readstream($f, 4));
 
     return $a['i'];
 }

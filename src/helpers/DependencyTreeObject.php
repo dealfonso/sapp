@@ -58,7 +58,7 @@ class DependencyTreeObject implements Stringable
             p_warning("object {$o->oid} is already a child of other object");
         }
 
-        $o->is_child = $o->is_child + 1;
+        ++$o->is_child;
     }
 
     /**

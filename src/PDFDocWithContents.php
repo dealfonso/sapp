@@ -188,7 +188,7 @@ class PDFDocWithContents extends PDFDoc
         $pagesize = $this->get_page_size($page_obj);
         $pagesize_h = (float) ('' . $pagesize[3]) - (float) ('' . $pagesize[1]);
 
-        $result = _add_image($filename, $x, $pagesize_h - $y, $w, $h);
+        _add_image($filename, $x, $pagesize_h - $y, $w, $h);
 
         throw new PDFException('this function still needs work');
         // Get the resources for the page

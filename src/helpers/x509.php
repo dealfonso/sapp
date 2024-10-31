@@ -60,7 +60,7 @@ class x509
      *
      * @return array ocsp response structure
      */
-    public static function ocsp_response_parse($binaryOcspResp, &$status = '')
+    public static function ocsp_response_parse(string $binaryOcspResp, &$status = '')
     {
         $hex = current(unpack('H*', $binaryOcspResp));
         $parse = asn1::parse($hex, 10);
@@ -300,15 +300,9 @@ class x509
         if (count($differ) == 0) {
             $differ = array_diff_key($arrModel['responseBytes'], $ocsp['responseBytes']);
             if (count($differ) > 0) {
-                foreach ($differ as $key => $val) {
-                }
-
                 return false;
             }
         } else {
-            foreach ($differ as $key => $val) {
-            }
-
             return false;
         }
 
@@ -321,15 +315,14 @@ class x509
      * @param string $serialNumber serial number to check
      * @param string $issuerNameHash sha1 hex form of issuer subject hash
      * @param string $issuerKeyHash sha1 hex form of issuer subject public info hash
-     * @param string $signer_cert cert to sign ocsp request
-     * @param string $signer_key privkey to sign ocsp request
-     * @param string $subjectName hex form of asn1 subject
+     * @param bool|string $signer_cert cert to sign ocsp request
+     * @param bool|string $signer_key privkey to sign ocsp request
+     * @param bool|string $subjectName hex form of asn1 subject
      *
      * @return string hex form ocsp request
      */
-    public static function ocsp_request($serialNumber, $issuerNameHash, $issuerKeyHash, $signer_cert = false, $signer_key = false, $subjectName = false)
+    public static function ocsp_request(string $serialNumber, string $issuerNameHash, string $issuerKeyHash, bool|string $signer_cert = false, bool|string $signer_key = false, bool|string $subjectName = false)
     {
-        $Request = false;
         $hashAlgorithm = asn1::seq(
             '06052B0E03021A' . // OBJ_sha1
             '0500'
@@ -378,7 +371,7 @@ class x509
      *
      * @return string der crl form
      */
-    public static function crl_pem2der($crl): false|string
+    public static function crl_pem2der(string $crl): false|string
     {
         $begin = '-----BEGIN X509 CRL-----';
         $end = '-----END X509 CRL-----';
@@ -404,7 +397,7 @@ class x509
      *
      * @return array der crl and parsed crl
      */
-    public static function crl_read($crl): false|array
+    public static function crl_read(string $crl): false|array
     {
         if (! $crlparse = self::parsecrl($crl)) { // if cant read, thats not crl
             return false;
@@ -425,7 +418,7 @@ class x509
      *
      * @return string der form cert
      */
-    public static function x509_pem2der($pem): string|false
+    public static function x509_pem2der(string $pem): string|false
     {
         $x509_der = false;
         if ($x509_res = @openssl_x509_read($pem)) {
@@ -453,7 +446,7 @@ class x509
      *
      * @return string pem form cert
      */
-    public static function x509_der2pem($der_cert): string
+    public static function x509_der2pem(string $der_cert): string
     {
         $x509_pem = "-----BEGIN CERTIFICATE-----\r\n";
         $x509_pem .= chunk_split(base64_encode($der_cert), 64);
@@ -469,7 +462,7 @@ class x509
      *
      * @return string der form cert
      */
-    public static function get_cert($certin): string|false
+    public static function get_cert(string $certin): string|false
     {
         if ($rsccert = @openssl_x509_read($certin)) {
             openssl_x509_export($rsccert, $cert);
@@ -490,11 +483,11 @@ class x509
      * parse x.509 DER/PEM Certificate structure
      *
      * @param string $certin pem/der form cert
-     * @param string $oidprint show oid as oid number or hex
+     * @param bool|string $oidprint show oid as oid number or hex
      *
      * @return array cert structure
      */
-    public static function readcert($cert_in, $oidprint = false)
+    public static function readcert($cert_in, bool|string $oidprint = false)
     {
         if (! $der = self::get_cert($cert_in)) {
             return false;
@@ -530,7 +523,6 @@ class x509
         $ar['cert'] = $curr;
         $ar['cert']['sha1Fingerprint'] = hash('sha1', $der);
         $curr = $ar['cert']['tbsCertificate'];
-        $i = 0;
         foreach ($curr as $key => $value) {
             if (is_numeric($key)) {
                 if ($value['type'] === 'a0') {
@@ -574,7 +566,6 @@ class x509
                     continue;
                 }
                 if ($value['type'] == '30' && ! array_key_exists('subject', $curr)) {
-                    $asn1SubjectToHash = '';
                     foreach ($value as $subjectK => $subjectV) {
                         if (is_numeric($subjectK)) {
                             $subjectOID = $subjectV[0][0]['value_hex'];
@@ -620,7 +611,6 @@ class x509
                     $curr['attributes'] = $value[0];
                     unset($curr[$key]);
                 }
-                $i++;
             } else {
                 $tbsCertificateTag[$key] = $value;
             }
@@ -634,7 +624,6 @@ class x509
                         $critical = 0;
                         $extvalue = $value[1];
                         $name_hex = $value[0]['value_hex'];
-                        $value_hex = $value[1]['hexdump'];
                         if ($value[1]['type'] == '01' && $value[1]['value_hex'] === 'ff') {
                             $critical = 1;
                             $extvalue = $value[2];
@@ -743,7 +732,7 @@ class x509
      *
      * @return array subject hash old and new
      */
-    private static function opensslSubjHash($hex_subjSequence): array
+    private static function opensslSubjHash(string $hex_subjSequence): array
     {
         $parse = asn1::parse($hex_subjSequence, 3);
         $hex_subjSequence_new = '';
@@ -760,14 +749,14 @@ class x509
         $tohash = pack('H*', $hex_subjSequence_new);
         $openssl_subjHash_new = hash('sha1', $tohash);
         $openssl_subjHash_new = substr($openssl_subjHash_new, 0, 8);
-        $openssl_subjHash_new = str_split($openssl_subjHash_new, 2);
-        $openssl_subjHash_new = array_reverse($openssl_subjHash_new);
-        $openssl_subjHash_new = implode('', $openssl_subjHash_new);
+        $openssl_subjHash_new2 = str_split($openssl_subjHash_new, 2);
+        $openssl_subjHash_new2 = array_reverse($openssl_subjHash_new2);
+        $openssl_subjHash_new = implode('', $openssl_subjHash_new2);
         $openssl_subjHash_old = hash('md5', hex2bin($hex_subjSequence));
         $openssl_subjHash_old = substr($openssl_subjHash_old, 0, 8);
-        $openssl_subjHash_old = str_split($openssl_subjHash_old, 2);
-        $openssl_subjHash_old = array_reverse($openssl_subjHash_old);
-        $openssl_subjHash_old = implode('', $openssl_subjHash_old);
+        $openssl_subjHash_old2 = str_split($openssl_subjHash_old, 2);
+        $openssl_subjHash_old2 = array_reverse($openssl_subjHash_old2);
+        $openssl_subjHash_old = implode('', $openssl_subjHash_old2);
 
         return [
             'old' => $openssl_subjHash_old,
@@ -960,7 +949,7 @@ class x509
                 return false;
             }
         } else {
-            foreach ($differ as $key => $val) {
+            foreach ($differ as $val) {
             }
 
             return false;
@@ -976,7 +965,7 @@ class x509
      *
      * @return string oid number
      */
-    private static function oidfromhex($hex): string
+    private static function oidfromhex(string $hex): string
     {
         $split = str_split($hex, 2);
         $i = 0;

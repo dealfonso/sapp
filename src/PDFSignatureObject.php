@@ -80,7 +80,6 @@ class PDFSignatureObject extends PDFObject
     public function set_signature_ltv($signature_ltv_data): void
     {
         throw new PDFException(get_debug_type($signature_ltv_data));
-        $this->_signature_ltv_data = $signature_ltv_data;
     }
 
     public function set_signature_tsa($signature_tsa): void

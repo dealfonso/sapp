@@ -23,16 +23,11 @@ namespace ddn\sapp\pdfvalue;
 
 class PDFValueSimple extends PDFValue
 {
-    public function __construct($v)
-    {
-        parent::__construct($v);
-    }
-
     public function push($v): bool
     {
         if ($v::class === static::class) {
             // Can push
-            $this->value = $this->value . ' ' . $v->val();
+            $this->value .= ' ' . $v->val();
 
             return true;
         }

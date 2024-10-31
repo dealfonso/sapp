@@ -174,7 +174,7 @@ function is_base64($string): bool
  *                  "alpha": true if the image has alpha
  *                  "command": pdf command to draw the image
  */
-function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, $angle = 0, $keep_proportions = true): array
+function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, $angle = 0, bool $keep_proportions = true): array
 {
     if (empty($filename)) {
         throw new PDFException('invalid image name or stream');

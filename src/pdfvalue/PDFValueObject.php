@@ -116,7 +116,6 @@ class PDFValueObject extends PDFValue
     {
         $result = [];
         $field = null;
-        $value = null;
         $parts = explode(' ', (string) $str);
         for ($i = 0, $iMax = count($parts); $i < $iMax; $i++) {
             if ($field === null) {

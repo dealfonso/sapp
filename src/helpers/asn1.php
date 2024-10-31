@@ -21,7 +21,7 @@ class asn1
         $func = strtolower((string) $func);
         $asn1Tag = self::asn1Tag($func);
         if ($asn1Tag !== false) {
-            $num = $asn1Tag; //valu of array
+            $num = $asn1Tag; //value of array
             $hex = $params[0];
             $val = $hex;
             if (in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61'])) { // ($string)
@@ -31,7 +31,7 @@ class asn1
                 $val = (strlen((string) $val) % 2 !== 0) ? "0{$val}" : (string) ($val);
             }
             if ($func === 'expl') { //expl($num, $hex)
-                $num = $num . $params[0];
+                $num .= $params[0];
                 $val = $params[1];
             }
             if ($func === 'impl') { //impl($num="0")
@@ -86,7 +86,7 @@ class asn1
      *
      * @return array asn.1 structure recursively to specific depth
      */
-    public static function parse($hex, $maxDepth = 5): array
+    public static function parse(string $hex, int $maxDepth = 5): array
     {
         $result = [];
         static $currentDepth = 0;
@@ -135,7 +135,7 @@ class asn1
      *
      * @return string asn.1 tag name
      */
-    protected static function type($id)
+    protected static function type(string $id): string
     {
         $asn1_Types = [
             '00' => 'ASN1_EOC',
@@ -177,7 +177,7 @@ class asn1
      *
      * @return array asn.1 structure
      */
-    protected static function oneParse($hex): array|false
+    protected static function oneParse(string $hex): array|false
     {
         if ($hex === '') {
             return false;
@@ -234,7 +234,7 @@ class asn1
      *
      * @return string hex of asn.1 TLV tag length
      */
-    protected static function asn1_header($str): string
+    protected static function asn1_header(string $str): string
     {
         $len = strlen($str) / 2;
         $ret = dechex($len);

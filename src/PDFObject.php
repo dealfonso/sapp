@@ -294,14 +294,11 @@ class PDFObject implements ArrayAccess, Stringable
         $decoded = new Buffer();
         $columns = $params['Columns']->get_int();
 
-        $row_len = $columns + 1;
         $stream_len = strlen((string) $_stream);
 
         // The previous row is zero
         $data_prev = str_pad('', $columns, chr(0));
-        $row_i = 0;
         $pos_i = 0;
-        $data = str_pad('', $columns, chr(0));
         while ($pos_i < $stream_len) {
             $filter_byte = ord($_stream[$pos_i++]);
 

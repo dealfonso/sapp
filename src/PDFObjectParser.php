@@ -136,7 +136,7 @@ class PDFObjectParser implements Stringable
     /**
      * Parses the document
      */
-    public function parse(StreamReader &$stream): PDFValue|false|null
+    public function parse(StreamReader $stream): PDFValue|false|null
     { // $str, $offset = 0) {
         $this->start($stream); //$str, $offset);
         $this->nexttoken();
@@ -144,7 +144,7 @@ class PDFObjectParser implements Stringable
         return $this->_parse_value();
     }
 
-    public function parsestr($str, int $offset = 0): PDFValue|false|null
+    public function parsestr(string $str, int $offset = 0): PDFValue|false|null
     {
         $stream = new StreamReader($str);
         $stream->goto($offset);
@@ -204,7 +204,7 @@ class PDFObjectParser implements Stringable
     {
         $DSEPS = ['<<', '>>'];
 
-        return (($this->_c === false) || (str_contains("%<>()[]{}/ \n\r\t", (string) $this->_c)) || ((array_search($this->_c . $this->_n, $DSEPS)) !== false));
+        return (($this->_c === false) || (str_contains("%<>()[]{}/ \n\r\t", (string) $this->_c)) || (in_array($this->_c . $this->_n, $DSEPS) !== false));
     }
 
     /**

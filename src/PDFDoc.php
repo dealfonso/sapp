@@ -360,7 +360,7 @@ class PDFDoc extends Buffer
             if (is_string($certificate['extracerts'] ?? null)) {
                 $certificate['extracerts'] = array_filter(explode("-----END CERTIFICATE-----\n", $certificate['extracerts']));
                 foreach ($certificate['extracerts'] as &$extracerts) {
-                    $extracerts = $extracerts . "-----END CERTIFICATE-----\n";
+                    $extracerts .= "-----END CERTIFICATE-----\n";
                 }
             }
         } else {
@@ -382,11 +382,11 @@ class PDFDoc extends Buffer
     /**
      * Function that stores the ltv configuration to use, when signing the document
      *
-     * @param $ocspURI  OCSP Url to validate cert file
-     * @param $crlURIorFILE Crl filename/url to validate cert
-     * @param $issuerURIorFILE issuer filename/url
+     * @param $ocspURI  OCSP|null Url to validate cert file
+     * @param $crlURIorFILE Crl|null filename/url to validate cert
+     * @param $issuerURIorFILE issuer|null filename/url
      */
-    public function set_ltv($ocspURI = null, $crlURIorFILE = null, $issuerURIorFILE = null): void
+    public function set_ltv(OCSP $ocspURI = null, Crl $crlURIorFILE = null, issuer $issuerURIorFILE = null): void
     {
         $this->_signature_ltv_data['ocspURI'] = $ocspURI;
         $this->_signature_ltv_data['crlURIorFILE'] = $crlURIorFILE;
@@ -397,10 +397,10 @@ class PDFDoc extends Buffer
      * Function that stores the tsa configuration to use, when signing the document
      *
      * @param $tsaurl  Link to tsa service
-     * @param $tsauser the user for tsa service
-     * @param $tsapass the password for tsa service
+     * @param $tsauser the|null user for tsa service
+     * @param $tsapass the|null password for tsa service
      */
-    public function set_tsa($tsa, $tsauser = null, $tsapass = null): void
+    public function set_tsa($tsa, the $tsauser = null, the $tsapass = null): void
     {
         $this->_signature_tsa['host'] = $tsa;
         if ($tsauser && $tsapass) {
@@ -970,8 +970,8 @@ class PDFDoc extends Buffer
             $p_y = (int) $pagesize[1];
 
             // Add the position for the image
-            $p_x = $p_x + $px;
-            $p_y = $p_y + $py;
+            $p_x += $px;
+            $p_y += $py;
 
             $i_w = $imagesize[0];
             $i_h = $imagesize[1];
@@ -1266,7 +1266,7 @@ class PDFDoc extends Buffer
      *
      * @return ok true if the date could be set; false otherwise
      */
-    protected function update_mod_date(DateTime $date = null): bool
+    protected function update_mod_date(?DateTime $date = null): bool
     {
         // First of all, we are searching for the root object (which should be in the trailer)
         $root = $this->_pdf_trailer_object['Root'];

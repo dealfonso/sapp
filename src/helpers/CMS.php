@@ -28,7 +28,7 @@ class CMS
      * @return string response body
      * @public
      */
-    public function sendReq(array $reqData)
+    public function sendReq(array $reqData): string
     {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $reqData['uri']);
@@ -42,40 +42,41 @@ class CMS
         }
         $tsResponse = curl_exec($ch);
 
-        if ($tsResponse) {
-            $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-            curl_close($ch);
-            $header = substr($tsResponse, 0, $header_size);
-            $body = substr($tsResponse, $header_size);
-            // Get the HTTP response code
-            $headers = explode("\n", $header);
-            foreach ($headers as $r) {
-                if (stripos($r, 'HTTP/') === 0) {
-                    [, $code, $status] = explode(' ', $r, 3);
-                    break;
-                }
-            }
-            if ($code != '200') {
-                throw new PDFException(sprintf('response error! Code="{$code}", Status="%s"', trim($status ?? '')));
-            }
-            $contentTypeHeader = '';
-            $headers = explode("\n", $header);
-            foreach ($headers as $r) {
-                // Match the header name up to ':', compare lower case
-                if (stripos($r, 'Content-Type' . ':') === 0) {
-                    [, $headervalue] = explode(':', $r, 2);
-                    $contentTypeHeader = trim($headervalue);
-                }
-            }
-            if ($contentTypeHeader != $reqData['resp_contentType']) {
-                throw new PDFException("response content type not {$reqData['resp_contentType']}, but: \"{$contentTypeHeader}\"");
-            }
-            if (empty($body)) {
-                throw new PDFException('error empty response!');
-            }
-
-            return $body; // binary response
+        if (! $tsResponse) {
+            throw new PDFException('empty curl response');
         }
+        $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        curl_close($ch);
+        $header = substr($tsResponse, 0, $header_size);
+        $body = substr($tsResponse, $header_size);
+        // Get the HTTP response code
+        $headers = explode("\n", $header);
+        foreach ($headers as $r) {
+            if (stripos($r, 'HTTP/') === 0) {
+                [, $code, $status] = explode(' ', $r, 3);
+                break;
+            }
+        }
+        if ($code != '200') {
+            throw new PDFException(sprintf('response error! Code="{$code}", Status="%s"', trim($status ?? '')));
+        }
+        $contentTypeHeader = '';
+        $headers = explode("\n", $header);
+        foreach ($headers as $r) {
+            // Match the header name up to ':', compare lower case
+            if (stripos($r, 'Content-Type' . ':') === 0) {
+                [, $headervalue] = explode(':', $r, 2);
+                $contentTypeHeader = trim($headervalue);
+            }
+        }
+        if ($contentTypeHeader != $reqData['resp_contentType']) {
+            throw new PDFException("response content type not {$reqData['resp_contentType']}, but: \"{$contentTypeHeader}\"");
+        }
+        if (empty($body)) {
+            throw new PDFException('error empty response!');
+        }
+
+        return $body; // binary response
     }
 
     /**
@@ -86,7 +87,7 @@ class CMS
      * @return string hex + padding 0
      * @public
      */
-    public function pkcs7_sign($binaryData)
+    public function pkcs7_sign(string $binaryData): string
     {
         $hexOidHashAlgos = [
             'md2' => '06082A864886F70D0202',
@@ -268,9 +269,8 @@ class CMS
      *
      * @return string hex TSTinfo.
      */
-    protected function createTimestamp($data, string $hashAlg = 'sha1')
+    protected function createTimestamp(string $data, string $hashAlg = 'sha1')
     {
-        $TSTInfo = false;
         $tsaQuery = x509::tsa_query($data, $hashAlg);
         $tsaData = $this->signature_data['tsa'];
         $reqData = [
@@ -306,7 +306,7 @@ class CMS
      *
      * @return array
      */
-    protected function LTVvalidation($parsedCert): false|array
+    protected function LTVvalidation(array $parsedCert): false|array
     {
         $ltvResult['issuer'] = false;
         $ltvResult['ocsp'] = false;
@@ -496,7 +496,7 @@ class CMS
      *
      * @return array asn.1 hex structure of tsa response
      */
-    private function tsa_parseResp($binaryTsaRespData)
+    private function tsa_parseResp(string $binaryTsaRespData)
     {
         if (! @$ar = asn1::parse(bin2hex($binaryTsaRespData), 3)) {
             throw new PDFException("      can't parse invalid tsa Response.");
