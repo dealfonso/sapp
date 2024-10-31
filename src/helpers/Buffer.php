@@ -39,7 +39,7 @@ class Buffer implements Stringable
 
     protected int $_bufferlen;
 
-    public function __construct($string = null)
+    public function __construct(?string $string = null)
     {
         if ($string === null) {
             $string = '';

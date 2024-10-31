@@ -115,9 +115,6 @@ const BLACKLIST = [
     'Annot' => ['P'],
 ];
 
-/**
- * @return array
- */
 function references_in_object(PDFObject $object): array
 {
     $type = $object['Type'];

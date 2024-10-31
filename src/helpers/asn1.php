@@ -203,7 +203,7 @@ class asn1
                 $tlv_valueLength = substr($hex, 4, $tlv_lengthLength * 2);
             } else {
                 $tlv_lengthLength = 0;
-                $tlv_valueLength = substr($hex, 2, 2 + $tlv_lengthLength * 2);
+                $tlv_valueLength = substr($hex, 2, 2);
             }
 
             if ($tlv_lengthLength > 4) { // limit tlv_lengthLength to FFFF

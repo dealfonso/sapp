@@ -111,7 +111,8 @@ class PDFDocWithContents extends PDFDoc
         $cx = $x;
         $cy = $pagesize_h - $y;
 
-        if ($angle !== 0) {
+        $rotate_command = '';
+        if ($angle != 0) {
             $rotate_command = sprintf('%.5F %.5F %.5F %.5F %.2F %.2F cm 1 0 0 1 %.2F %.2F cm', $c, $s, -$s, $c, $cx, $cy, -$cx, -$cy);
         }
 
@@ -143,7 +144,7 @@ class PDFDocWithContents extends PDFDoc
             throw new PDFException('please use html-like colors (e.g. #ffbbaa)');
         }
 
-        if ($angle !== 0) {
+        if ($angle != 0) {
             $text_command = sprintf(' q %s %s Q', $rotate_command, $text_command);
         }
 

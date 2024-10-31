@@ -271,5 +271,5 @@ function timestamp_to_pdfdatestring(?DateTimeInterface $date = null): string
  */
 function get_pdf_formatted_date(int $time)
 {
-    return substr_replace(date('YmdHisO', $time), "'", 0 - 2, 0) . "'";
+    return substr_replace(date('YmdHisO', $time), "'", -2, 0) . "'";
 }

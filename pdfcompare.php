@@ -19,37 +19,32 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+use ddn\sapp\AlmostOriginalLogger;
 use ddn\sapp\PDFDoc;
-use function ddn\sapp\helpers\p_debug_var;
-use function ddn\sapp\helpers\p_debug;
-use ddn\sapp\pdfvalue\PDFValueObject;
-use function ddn\sapp\helpers\p_error;
 
 require_once 'vendor/autoload.php';
 
-if ($argc !== 3)
+if ($argc !== 3) {
     fwrite(STDERR, sprintf("usage: %s <filename> <rev>", $argv[0]));
-else {
-    if (!file_exists($argv[1])) {
-        fwrite(STDERR, "failed to open file " . $argv[1]);
-        die();
-    }
-    if (!file_exists($argv[2])) {
-        fwrite(STDERR, "failed to open file " . $argv[2]);
-        die();
-    }
+    exit(1);
+}
 
-    $doc1 = PDFDoc::from_string(file_get_contents($argv[1]));
-    if ($doc1 === false)
-        fwrite(STDERR, "failed to parse file " . $argv[1]);
+if (!file_exists($argv[1])) {
+    fwrite(STDERR, "failed to open file " . $argv[1]);
+    exit(1);
+}
+if (!file_exists($argv[2])) {
+    fwrite(STDERR, "failed to open file " . $argv[2]);
+    exit(1);
+}
 
-    $doc2 = PDFDoc::from_string(file_get_contents($argv[2]));
-    if ($doc2 === false)
-        fwrite(STDERR, "failed to parse file " . $argv[2]);
+$doc1 = PDFDoc::from_string(file_get_contents($argv[1]));
+$doc1->setLogger(new AlmostOriginalLogger());
 
-    $differences = $doc1->compare($doc2);
-    foreach ($differences as $oid => $obj) {
-        p_error(get_debug_type($oid));
-        print($obj->to_pdf_entry());
-    }
+$doc2 = PDFDoc::from_string(file_get_contents($argv[2]));
+$doc2->setLogger(new AlmostOriginalLogger());
+
+$differences = $doc1->compare($doc2);
+foreach ($differences as $oid => $obj) {
+    print($obj->to_pdf_entry());
 }

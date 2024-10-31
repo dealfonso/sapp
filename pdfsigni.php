@@ -20,9 +20,9 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+use ddn\sapp\AlmostOriginalLogger;
 use ddn\sapp\PDFDoc;
-
-use function ddn\sapp\helpers\p_error;
+use ddn\sapp\PDFException;
 
 require_once 'vendor/autoload.php';
 
@@ -46,6 +46,7 @@ $password='';
 
 $file_content = file_get_contents($argv[1]);
 $obj = PDFDoc::from_string($file_content);
+$obj->setLogger(new AlmostOriginalLogger());
 
 if ($obj === false) {
     fwrite(STDERR, "failed to parse file " . $argv[1]);
@@ -65,7 +66,7 @@ if ($imagesize === false) {
 
 $pagesize = $obj->get_page_size(0);
 if ($pagesize === false) {
-    return p_error("failed to get page size");
+    return throw new PDFException("failed to get page size");
 }
 
 $pagesize = explode(" ", $pagesize[0]->val());

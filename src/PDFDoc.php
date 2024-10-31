@@ -33,17 +33,18 @@ use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueReference;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueString;
+use Psr\Log\LoggerInterface;
 use Throwable;
+
 use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\get_random_string;
-use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_warning;
 use function ddn\sapp\helpers\references_in_object;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
 // Loading the functions
 
-if (! defined(LoadHelpers::class)) {
+if (!defined(LoadHelpers::class)) {
     new LoadHelpers();
 }
 
@@ -55,9 +56,9 @@ class PDFDoc extends Buffer
     // The PDF version of the parsed file
     protected $_pdf_objects = [];
 
-    protected $_pdf_version_string = null;
+    protected $_pdf_version_string;
 
-    protected $_pdf_trailer_object = null;
+    protected $_pdf_trailer_object;
 
     protected $_xref_position = 0;
 
@@ -69,25 +70,25 @@ class PDFDoc extends Buffer
 
     protected $_backup_state = [];
 
-    protected $_certificate = null;
+    protected $_certificate;
 
-    protected $_signature_ltv_data = null;
+    protected $_signature_ltv_data;
 
-    protected $_signature_tsa = null;
+    protected $_signature_tsa;
 
-    protected $_appearance = null;
+    protected $_appearance;
 
     protected $_xref_table_version;
 
     protected $_revisions;
 
-    protected $_metadata_name = null;
+    protected $_metadata_name;
 
-    protected $_metadata_reason = null;
+    protected $_metadata_reason;
 
-    protected $_metadata_location = null;
+    protected $_metadata_location;
 
-    protected $_metadata_contact_info = null;
+    protected $_metadata_contact_info;
 
     // Array of pages ordered by appearance in the final doc (i.e. index 0 is the first page rendered; index 1 is the second page rendered, etc.)
     // Each entry is an array with the following fields:
@@ -95,6 +96,13 @@ class PDFDoc extends Buffer
     //  - info: an array with information about the page
     //      - size: the size of the page
     protected $_pages_info = [];
+
+    protected ?LoggerInterface $logger = null;
+
+    public function setLogger(?LoggerInterface $logger = null): void
+    {
+        $this->logger = $logger;
+    }
 
     /**
      * Retrieve the number of pages in the document (not considered those pages that could be added by the user using this object or derived ones)
@@ -151,11 +159,11 @@ class PDFDoc extends Buffer
      *              otherwise only the object ids from the latest $depth versions will be considered
      *              (if it is an incremental updated document)
      */
-    public static function from_string(string $buffer, ?int $depth = null): false|self
+    public static function from_string(string $buffer, ?int $depth = null): self
     {
         $structure = PDFUtilFnc::acquire_structure($buffer, $depth);
         if ($structure === false) {
-            return false;
+            throw new PDFException('acquire_structure failed');
         }
 
         $trailer = $structure['trailer'];
@@ -191,7 +199,7 @@ class PDFDoc extends Buffer
         return $pdfdoc;
     }
 
-    public function get_revision($rev_i): string
+    public function get_revision(?int $rev_i): string
     {
         if ($rev_i === null) {
             $rev_i = count($this->_revisions) - 1;
@@ -201,7 +209,7 @@ class PDFDoc extends Buffer
             $rev_i = count($this->_revisions) + $rev_i - 1;
         }
 
-        return substr((string) $this->_buffer, 0, $this->_revisions[$rev_i]);
+        return substr((string)$this->_buffer, 0, $this->_revisions[$rev_i]);
     }
 
     /**
@@ -355,7 +363,7 @@ class PDFDoc extends Buffer
                 throw new PDFException('invalid private key');
             }
 
-            if (! openssl_x509_check_private_key($certificate['cert'], $certificate['pkey'])) {
+            if (!openssl_x509_check_private_key($certificate['cert'], $certificate['pkey'])) {
                 throw new PDFException("private key doesn't corresponds to certificate");
             }
 
@@ -419,8 +427,6 @@ class PDFDoc extends Buffer
      * @param $reason
      * @param $location
      * @param $contact
-     *
-     * @return void
      */
     public function set_metadata_props($name = null, $reason = null, $location = null, $contact = null): void
     {
@@ -460,7 +466,7 @@ class PDFDoc extends Buffer
      */
     public function set_version($version): bool
     {
-        if (preg_match("/PDF-1.\[0-9\]/", (string) $version) !== 1) {
+        if (preg_match("/PDF-1.\[0-9\]/", (string)$version) !== 1) {
             return false;
         }
 
@@ -568,7 +574,7 @@ class PDFDoc extends Buffer
         }
 
         if ($target_version >= '1.5') {
-            p_debug('generating xref using cross-reference streams');
+            $this->logger?->debug('generating xref using cross-reference streams');
 
             // Create a new object for the trailer
             $trailer = $this->create_object(
@@ -582,7 +588,7 @@ class PDFDoc extends Buffer
             $xref = PDFUtilFnc::build_xref_1_5($_obj_offsets);
 
             // Set the parameters for the trailer
-            $trailer['Index'] = explode(' ', (string) $xref['Index']);
+            $trailer['Index'] = explode(' ', (string)$xref['Index']);
             $trailer['W'] = $xref['W'];
             $trailer['Size'] = $this->_max_oid + 1;
             $trailer['Type'] = '/XRef';
@@ -617,7 +623,7 @@ class PDFDoc extends Buffer
             $_doc_from_xref = new Buffer($trailer->to_pdf_entry());
             $_doc_from_xref->data('startxref' . __EOL . $xref_offset . __EOL . '%%EOF' . __EOL);
         } else {
-            p_debug('generating xref using classic xref...trailer');
+            $this->logger?->debug('generating xref using classic xref...trailer');
             $xref_content = PDFUtilFnc::build_xref($_obj_offsets);
 
             // Update the trailer
@@ -636,10 +642,7 @@ class PDFDoc extends Buffer
 
             // Generate the part of the document related to the xref
             $_doc_from_xref = new Buffer($xref_content);
-            $_doc_from_xref->data(
-                'trailer
-' . $this->_pdf_trailer_object
-            );
+            $_doc_from_xref->data("trailer\n" . $this->_pdf_trailer_object);
             $_doc_from_xref->data("\nstartxref\n{$xref_offset}\n%%EOF\n");
         }
 
@@ -651,7 +654,7 @@ class PDFDoc extends Buffer
             $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
             $certificate = $_signature->get_certificate();
             $extracerts = $certificate['extracerts'] ?? null;
-            $cms = new CMS();
+            $cms = new CMS($this->logger);
             $cms->signature_data['hashAlgorithm'] = 'sha256';
             $cms->signature_data['privkey'] = $certificate['pkey'];
             $cms->signature_data['extracerts'] = $extracerts;
@@ -762,7 +765,7 @@ class PDFDoc extends Buffer
         }
 
         // The page has not been found
-        if ($pageinfo === false || ! isset($pageinfo['size'])) {
+        if ($pageinfo === false || !isset($pageinfo['size'])) {
             return false;
         }
 
@@ -823,7 +826,7 @@ class PDFDoc extends Buffer
             // foreach ($this->get_object_iterator() as $oid => $o) {
 
             // Create the object in the dependency tree and add it to the list of objects
-            if (! array_key_exists($oid, $objects)) {
+            if (!array_key_exists($oid, $objects)) {
                 $objects[$oid] = new DependencyTreeObject($oid, $o['Type']);
             }
 
@@ -840,14 +843,14 @@ class PDFDoc extends Buffer
                     continue;
                 }
 
-                if (! is_array($references)) {
+                if (!is_array($references)) {
                     $references = [$references];
                 }
             }
 
-            // p_debug("$oid references " . implode(", ", $references));
+            // $this->logger?->debug("$oid references " . implode(", ", $references));
             foreach ($references as $r_object) {
-                if (! array_key_exists($r_object, $objects)) {
+                if (!array_key_exists($r_object, $objects)) {
                     $r_object_o = $this->get_object($r_object);
                     $objects[$r_object] = new DependencyTreeObject($r_object, $r_object_o['Type']);
                 }
@@ -868,7 +871,7 @@ class PDFDoc extends Buffer
 
         // Remove those objects that are child of other objects from the top of the tree
         foreach ($objects as $oid => $t_object) {
-            if (($t_object->is_child > 0 || in_array($t_object->info, ['/XRef', '/ObjStm'], true)) && ! in_array($oid, $xref_children, true)) {
+            if (($t_object->is_child > 0 || in_array($t_object->info, ['/XRef', '/ObjStm'], true)) && !in_array($oid, $xref_children, true)) {
                 unset($objects[$oid]);
             }
         }
@@ -897,7 +900,7 @@ class PDFDoc extends Buffer
             }
 
             $o_value = $o->get_value()->val();
-            if (! is_array($o_value) || ! isset($o_value['Type'])) {
+            if (!is_array($o_value) || !isset($o_value['Type'])) {
                 continue;
             }
 
@@ -914,7 +917,7 @@ class PDFDoc extends Buffer
 
                 openssl_pkcs7_read(
                     "-----BEGIN CERTIFICATE-----\n"
-                    . chunk_split(base64_encode(hex2bin((string) $signature['content'])), 64, "\n")
+                    . chunk_split(base64_encode(hex2bin((string)$signature['content'])), 64, "\n")
                     . "-----END CERTIFICATE-----\n",
                     $cert
                 );
@@ -974,11 +977,11 @@ class PDFDoc extends Buffer
                 throw new PDFException('failed to get page size');
             }
 
-            $pagesize = explode(' ', (string) $pagesize[0]->val());
+            $pagesize = explode(' ', (string)$pagesize[0]->val());
 
             // Get the bounding box for the image
-            $p_x = (int) $pagesize[0];
-            $p_y = (int) $pagesize[1];
+            $p_x = (int)$pagesize[0];
+            $p_y = (int)$pagesize[1];
 
             // Add the position for the image
             $p_x += $px;
@@ -1011,7 +1014,7 @@ class PDFDoc extends Buffer
             $this->set_signature_appearance($page_to_appear, [$p_x, $p_y, $p_x + $i_w, $p_y + $i_h], $imagefilename);
         }
 
-        if (! $this->set_signature_certificate($certfile, $password)) {
+        if (!$this->set_signature_certificate($certfile, $password)) {
             throw new PDFException('the certificate or the signature is not valid');
         }
 
@@ -1082,14 +1085,14 @@ class PDFDoc extends Buffer
         $updated_objects = [];
 
         // Add the annotation to the page
-        if (! isset($page_obj['Annots'])) {
+        if (!isset($page_obj['Annots'])) {
             $page_obj['Annots'] = new PDFValueList();
         }
 
         $annots = &$page_obj['Annots'];
         $page_rotation = $page_obj['Rotate'] ?? new PDFValueSimple(0);
 
-        if (($referenced = $annots->get_object_referenced()) !== false && ! is_array($referenced)) {
+        if (($referenced = $annots->get_object_referenced()) !== false && !is_array($referenced)) {
             // It is an indirect object, so we need to update that object
             $newannots = $this->create_object(
                 $this->get_object($referenced)->get_value()
@@ -1119,8 +1122,8 @@ class PDFDoc extends Buffer
         $signature = null;
         if ($this->_certificate !== null) {
             // Perform signature test to get signature size to define __SIGNATURE_MAX_LENGTH
-            p_debug("     ########## PERFORM SIGNATURE LENGTH CHECK ##########\n");
-            $CMS = new CMS();
+            $this->logger?->debug("     ########## PERFORM SIGNATURE LENGTH CHECK ##########\n");
+            $CMS = new CMS($this->logger);
             $CMS->signature_data['signcert'] = $this->_certificate['cert'];
             $CMS->signature_data['extracerts'] = $this->_certificate['extracerts'] ?? null;
             $CMS->signature_data['hashAlgorithm'] = 'sha256';
@@ -1129,8 +1132,8 @@ class PDFDoc extends Buffer
             $CMS->signature_data['ltv'] = $this->_signature_ltv_data;
             $res = $CMS->pkcs7_sign('0');
             $len = strlen($res);
-            p_debug(sprintf('     Signature Length is "%d" Bytes', $len));
-            p_debug("     ########## FINISHED SIGNATURE LENGTH CHECK #########\n\n");
+            $this->logger?->debug(sprintf('     Signature Length is "%d" Bytes', $len));
+            $this->logger?->debug("     ########## FINISHED SIGNATURE LENGTH CHECK #########\n\n");
             PDFSignatureObject::$__SIGNATURE_MAX_LENGTH = $len;
 
             $signature = $this->create_object([], PDFSignatureObject::class, false);
@@ -1158,8 +1161,8 @@ class PDFDoc extends Buffer
 
             // Get the page height, to change the coordinates system (up to down)
             $pagesize = $this->get_page_size($pagetoappear);
-            $pagesize = explode(' ', (string) $pagesize[0]->val());
-            $pagesize_h = (float) ('' . $pagesize[3]) - (float) ('' . $pagesize[1]);
+            $pagesize = explode(' ', (string)$pagesize[0]->val());
+            $pagesize_h = (float)('' . $pagesize[3]) - (float)('' . $pagesize[1]);
 
             $bbox = [0, 0, $recttoappear[2] - $recttoappear[0], $recttoappear[3] - $recttoappear[1]];
             $form_object = $this->create_object([
@@ -1228,7 +1231,7 @@ class PDFDoc extends Buffer
             $annotation_object['Rect'] = [$recttoappear[0], $pagesize_h - $recttoappear[1], $recttoappear[2], $pagesize_h - $recttoappear[3]];
         }
 
-        if (! $newannots->push(new PDFValueReference($annotation_object->get_oid()))) {
+        if (!$newannots->push(new PDFValueReference($annotation_object->get_oid()))) {
             throw new PDFException('Could not update the page where the signature has to appear');
         }
 
@@ -1236,12 +1239,12 @@ class PDFDoc extends Buffer
         $updated_objects[] = $page_obj;
 
         // AcroForm may be an indirect object
-        if (! isset($root_obj['AcroForm'])) {
+        if (!isset($root_obj['AcroForm'])) {
             $root_obj['AcroForm'] = new PDFValueObject();
         }
 
         $acroform = &$root_obj['AcroForm'];
-        if (($referenced = $acroform->get_object_referenced()) !== false && ! is_array($referenced)) {
+        if (($referenced = $acroform->get_object_referenced()) !== false && !is_array($referenced)) {
             $acroform = $this->get_object($referenced);
             $updated_objects[] = $acroform;
         } else {
@@ -1250,12 +1253,12 @@ class PDFDoc extends Buffer
 
         // Add the annotation to the interactive form
         $acroform['SigFlags'] = 3;
-        if (! isset($acroform['Fields'])) {
+        if (!isset($acroform['Fields'])) {
             $acroform['Fields'] = new PDFValueList();
         }
 
         // Add the annotation object to the interactive form
-        if (! $acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
+        if (!$acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
             throw new PDFException('could not create the signature field');
         }
 
@@ -1289,19 +1292,19 @@ class PDFDoc extends Buffer
             throw new PDFException('invalid root object');
         }
 
-        if (! $date instanceof DateTime) {
+        if (!$date instanceof DateTime) {
             $date = new DateTime();
         }
 
         // Update the xmp metadata if exists
         if (isset($root_obj['Metadata'])) {
             $metadata = $root_obj['Metadata'];
-            if (($referenced = $metadata->get_object_referenced()) !== false && ! is_array($referenced)) {
+            if (($referenced = $metadata->get_object_referenced()) !== false && !is_array($referenced)) {
                 $metadata = $this->get_object($referenced);
                 $metastream = $metadata->get_stream();
-                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . $date->format('c') . '</xmp:ModifyDate>', (string) $metastream);
-                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . $date->format('c') . '</xmp:MetadataDate>', (string) $metastream);
-                $metastream = preg_replace('/<xmpMM:InstanceID>([^<]*)<\/xmpMM:InstanceID>/', '<xmpMM:InstanceID>uuid:' . UUID::v4() . '</xmpMM:InstanceID>', (string) $metastream);
+                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . $date->format('c') . '</xmp:ModifyDate>', (string)$metastream);
+                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . $date->format('c') . '</xmp:MetadataDate>', (string)$metastream);
+                $metastream = preg_replace('/<xmpMM:InstanceID>([^<]*)<\/xmpMM:InstanceID>/', '<xmpMM:InstanceID>uuid:' . UUID::v4() . '</xmpMM:InstanceID>', (string)$metastream);
                 $metadata->set_stream($metastream, false);
                 $this->add_object($metadata);
             }

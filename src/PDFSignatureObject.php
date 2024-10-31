@@ -38,14 +38,14 @@ class PDFSignatureObject extends PDFObject
 
     protected int $_prev_content_size = 0;
 
-    protected $_post_content_size = null;
+    protected $_post_content_size;
 
     // A placeholder for the certificate to use to sign the document
-    protected $_certificate = null;
+    protected $_certificate;
 
-    protected $_signature_ltv_data = null;
+    protected $_signature_ltv_data;
 
-    protected $_signature_tsa = null;
+    protected $_signature_tsa;
 
     /**
      * Constructs the object and sets the default values needed to sign

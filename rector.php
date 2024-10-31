@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
+use Rector\DeadCode\Rector\For_\RemoveDeadIfForeachForRector;
+use Rector\DeadCode\Rector\For_\RemoveDeadLoopRector;
+use Rector\DeadCode\Rector\If_\RemoveAlwaysTrueIfConditionRector;
+use Rector\DeadCode\Rector\Stmt\RemoveUnreachableStatementRector;
+use Rector\DeadCode\Rector\Switch_\RemoveDuplicatedCaseInSwitchRector;
 
 return RectorConfig::configure()
     ->withPaths([
@@ -18,4 +23,11 @@ return RectorConfig::configure()
     ->withPreparedSets(typeDeclarations: true)
     ->withPreparedSets(codeQuality: true)
     ->withPreparedSets(codingStyle: true)
-    ;
+    ->withPreparedSets(deadCode: true)
+    ->withSkip([
+        RemoveDeadIfForeachForRector::class,
+        RemoveDeadLoopRector::class,
+        RemoveDuplicatedCaseInSwitchRector::class,
+        RemoveUnreachableStatementRector::class,
+        RemoveAlwaysTrueIfConditionRector::class,
+    ]);

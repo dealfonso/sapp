@@ -19,25 +19,25 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+use ddn\sapp\AlmostOriginalLogger;
 use ddn\sapp\PDFDoc;
+use Psr\Log\AbstractLogger;
 
 require_once 'vendor/autoload.php';
 
-if ($argc < 2 || $argc > 3)
+if ($argc < 2 || $argc > 3) {
     fwrite(STDERR, sprintf("usage: %s <filename> [<output>]", $argv[0]));
-else {
-    if (!file_exists($argv[1]))
+} else {
+    if (!file_exists($argv[1])) {
         fwrite(STDERR, "failed to open file " . $argv[1]);
-    else {
+    } else {
         $obj = PDFDoc::from_string(file_get_contents($argv[1]));
+        $obj->setLogger(new AlmostOriginalLogger());
 
-        if ($obj === false)
-            fwrite(STDERR, "failed to parse file " . $argv[1]);
-        else {
-            if ($argc == 3)
-                file_put_contents($argv[2], $obj->to_pdf_file_s(true));
-            else
-                echo $obj->to_pdf_file_s(true);
+        if ($argc == 3) {
+            file_put_contents($argv[2], $obj->to_pdf_file_s(true));
+        } else {
+            echo $obj->to_pdf_file_s(true);
         }
     }
 }

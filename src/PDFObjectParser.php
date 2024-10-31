@@ -101,7 +101,7 @@ class PDFObjectParser implements Stringable
         self::T_COMMENT,
     ];
 
-    protected $_buffer = null;
+    protected $_buffer;
 
     protected $_c = false;
 

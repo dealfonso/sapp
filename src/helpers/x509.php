@@ -489,9 +489,8 @@ class x509
     {
         $x509_pem = "-----BEGIN CERTIFICATE-----\r\n";
         $x509_pem .= chunk_split(base64_encode($der_cert), 64);
-        $x509_pem .= "-----END CERTIFICATE-----\r\n";
 
-        return $x509_pem;
+        return $x509_pem . "-----END CERTIFICATE-----\r\n";
     }
 
     /**

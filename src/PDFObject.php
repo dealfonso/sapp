@@ -46,9 +46,9 @@ class PDFObject implements ArrayAccess, Stringable
 
     protected static $_xref_table_version;
 
-    protected $_stream = null;
+    protected $_stream;
 
-    protected $_value = null;
+    protected $_value;
 
     protected int $_generation;
 
@@ -218,8 +218,6 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @param field the field to set the value
      * @param value the value to set
-     *
-     * @return void
      */
     public function offsetSet($offset, $value): void
     {

@@ -558,9 +558,7 @@ class PDFUtilFnc
             return self::find_object_at_pos($_buffer, $oid, $object_offset, $xref_table);
         }
 
-        $object = self::find_object_in_objstm($_buffer, $xref_table, $object_offset['stmoid'], $object_offset['pos'], $oid);
-
-        return $object;
+        return self::find_object_in_objstm($_buffer, $xref_table, $object_offset['stmoid'], $object_offset['pos'], $oid);
     }
 
     /**
