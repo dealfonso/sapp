@@ -21,65 +21,73 @@
 
 namespace ddn\sapp;
 
-use ddn\sapp\PDFBaseDoc;
-use ddn\sapp\PDFBaseObject;
-use ddn\sapp\PDFSignatureObject;
-use ddn\sapp\pdfvalue\PDFValueObject;
-use ddn\sapp\pdfvalue\PDFValueList;
-use ddn\sapp\pdfvalue\PDFValueReference;
-use ddn\sapp\pdfvalue\PDFValueType;
-use ddn\sapp\pdfvalue\PDFValueSimple;
-use ddn\sapp\pdfvalue\PDFValueHexString;
-use ddn\sapp\pdfvalue\PDFValueString;
-use ddn\sapp\helpers\CMS;
-use ddn\sapp\helpers\x509;
-use ddn\sapp\helpers\asn1;
+use DateTime;
 use ddn\sapp\helpers\Buffer;
-use ddn\sapp\helpers\UUID;
+use ddn\sapp\helpers\CMS;
 use ddn\sapp\helpers\DependencyTreeObject;
-use const ddn\sapp\helpers\BLACKLIST;
-use function ddn\sapp\helpers\references_in_object;
-
-use function ddn\sapp\helpers\get_random_string;
-use function ddn\sapp\helpers\p_debug;
-use function ddn\sapp\helpers\p_debug_var;
-use function ddn\sapp\helpers\p_error;
-use function ddn\sapp\helpers\p_warning;
+use ddn\sapp\helpers\LoadHelpers;
+use ddn\sapp\helpers\UUID;
+use ddn\sapp\pdfvalue\PDFValueHexString;
+use ddn\sapp\pdfvalue\PDFValueList;
+use ddn\sapp\pdfvalue\PDFValueObject;
+use ddn\sapp\pdfvalue\PDFValueReference;
+use ddn\sapp\pdfvalue\PDFValueSimple;
+use ddn\sapp\pdfvalue\PDFValueString;
+use Generator;
+use Psr\Log\LoggerInterface;
+use Throwable;
 use function ddn\sapp\helpers\_add_image;
+use function ddn\sapp\helpers\get_random_string;
+use function ddn\sapp\helpers\references_in_object;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
 // Loading the functions
-use ddn\sapp\helpers\LoadHelpers;
-if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
-    new LoadHelpers;
 
-if (!defined('__TMP_FOLDER'))
-    define('__TMP_FOLDER', sys_get_temp_dir());
+if (! defined(LoadHelpers::class)) {
+    new LoadHelpers();
+}
 
 // TODO: move the signature of documents to a new class (i.e. PDFDocSignable)
 // TODO: create a new class "PDFDocIncremental"
 
-class PDFDoc extends Buffer {
-
+class PDFDoc extends Buffer
+{
     // The PDF version of the parsed file
     protected $_pdf_objects = [];
-    protected $_pdf_version_string = null;
-    protected $_pdf_trailer_object = null;
-    protected $_xref_position = 0;
-    protected $_xref_table = [];
-    protected $_max_oid = 0;
-    protected $_buffer = "";
-    protected $_backup_state = [];
-    protected $_certificate = null;
-    protected $_signature_ltv_data = null;
-    protected $_signature_tsa = null;
-    protected $_appearance = null;
+
+    protected $_pdf_version_string;
+
+    protected $_pdf_trailer_object;
+
+    protected int $_xref_position = 0;
+
+    protected array $_xref_table = [];
+
+    protected int $_max_oid = 0;
+
+    protected ?string $_buffer = '';
+
+    protected array $_backup_state = [];
+
+    protected $_certificate;
+
+    protected $_signature_ltv_data;
+
+    protected $_signature_tsa;
+
+    protected $_appearance;
+
     protected $_xref_table_version;
+
     protected $_revisions;
-    protected $_metadata_name = null;
-    protected $_metadata_reason = null;
-    protected $_metadata_location = null;
-    protected $_metadata_contact_info = null;
+
+    protected $_metadata_name;
+
+    protected $_metadata_reason;
+
+    protected $_metadata_location;
+
+    protected $_metadata_contact_info;
 
     // Array of pages ordered by appearance in the final doc (i.e. index 0 is the first page rendered; index 1 is the second page rendered, etc.)
     // Each entry is an array with the following fields:
@@ -88,17 +96,20 @@ class PDFDoc extends Buffer {
     //      - size: the size of the page
     protected $_pages_info = [];
 
-    // Gets a new oid for a new object
-    protected function get_new_oid() {
-        $this->_max_oid++;
-        return $this->_max_oid;
+    protected ?LoggerInterface $logger = null;
+
+    public function setLogger(?LoggerInterface $logger = null): void
+    {
+        $this->logger = $logger;
     }
 
     /**
      * Retrieve the number of pages in the document (not considered those pages that could be added by the user using this object or derived ones)
+     *
      * @return pagecount number of pages in the original document
      */
-    public function get_page_count() {
+    public function get_page_count(): int
+    {
         return count($this->_pages_info);
     }
 
@@ -107,86 +118,104 @@ class PDFDoc extends Buffer {
      *   the state using function "pop_state". Many states can be stored, and they will be retrieved in reverse order
      *   using pop_state
      */
-    public function push_state() {
+    public function push_state(): void
+    {
         $cloned_objects = [];
         foreach ($this->_pdf_objects as $oid => $object) {
             $cloned_objects[$oid] = clone $object;
         }
-        array_push($this->_backup_state, [ 'max_oid' => $this->_max_oid, 'pdf_objects' => $cloned_objects ]);
+
+        $this->_backup_state[] = [
+            'max_oid' => $this->_max_oid,
+            'pdf_objects' => $cloned_objects,
+        ];
     }
 
     /**
      * Function that retrieves an stored state by means of function "push_state"
+     *
      * @return restored true if a previous state was restored; false if there was no stored state
      */
-    public function pop_state() {
-        if (count($this->_backup_state) > 0) {
+    public function pop_state(): bool
+    {
+        if ($this->_backup_state !== []) {
             $state = array_pop($this->_backup_state);
             $this->_max_oid = $state['max_oid'];
             $this->_pdf_objects = $state['pdf_objects'];
+
             return true;
         }
+
         return false;
     }
 
     /**
      * The function parses a document from a string: analyzes the structure and obtains and object
      *   of type PDFDoc (if possible), or false, if an error happens.
+     *
      * @param buffer a string that contains the file to analyze
      * @param depth the number of previous versions to consider; if null, will consider any version;
      *              otherwise only the object ids from the latest $depth versions will be considered
      *              (if it is an incremental updated document)
      */
-    public static function from_string($buffer, $depth = null) {
+    public static function from_string(string $buffer, ?int $depth = null): self
+    {
         $structure = PDFUtilFnc::acquire_structure($buffer, $depth);
-        if ($structure === false)
-            return false;
+        if ($structure === false) {
+            throw new PDFException('acquire_structure failed');
+        }
 
-        $trailer = $structure["trailer"];
-        $version = $structure["version"];
-        $xref_table = $structure["xref"];
-        $xref_position = $structure["xrefposition"];
-        $revisions = $structure["revisions"];
+        $trailer = $structure['trailer'];
+        $version = $structure['version'];
+        $xref_table = $structure['xref'];
+        $xref_position = $structure['xrefposition'];
+        $revisions = $structure['revisions'];
 
-        $pdfdoc = new PDFDoc();
+        $pdfdoc = new self();
         $pdfdoc->_pdf_version_string = $version;
         $pdfdoc->_pdf_trailer_object = $trailer;
         $pdfdoc->_xref_position = $xref_position;
         $pdfdoc->_xref_table = $xref_table;
-        $pdfdoc->_xref_table_version = $structure["xrefversion"];
+        $pdfdoc->_xref_table_version = $structure['xrefversion'];
         $pdfdoc->_revisions = $revisions;
         $pdfdoc->_buffer = $buffer;
 
-        if ($trailer !== false)
-            if ($trailer['Encrypt'] !== false)
-                // TODO: include encryption (maybe borrowing some code: http://www.fpdf.org/en/script/script37.php)
-                p_error("encrypted documents are not fully supported; maybe you cannot get the expected results");
+        if ($trailer !== false && $trailer['Encrypt'] !== false) {
+            // TODO: include encryption (maybe borrowing some code: http://www.fpdf.org/en/script/script37.php)
+            throw new PDFException('encrypted documents are not fully supported; maybe you cannot get the expected results');
+        }
 
         $oids = array_keys($xref_table);
         sort($oids);
         $pdfdoc->_max_oid = array_pop($oids);
 
-        if ($trailer === false)
-            p_warning("invalid trailer object");
-        else
-            $pdfdoc->_acquire_pages_info();
+        if ($trailer === false) {
+            throw new PDFException('invalid trailer object');
+        }
+
+        $pdfdoc->_acquire_pages_info();
 
         return $pdfdoc;
     }
 
-    public function get_revision($rev_i) {
-        if ($rev_i === null)
+    public function get_revision(?int $rev_i): string
+    {
+        if ($rev_i === null) {
             $rev_i = count($this->_revisions) - 1;
-        if ($rev_i < 0)
-            $rev_i = count($this->_revisions) + $rev_i - 1;
+        }
 
-        return substr($this->_buffer, 0, $this->_revisions[$rev_i]);
+        if ($rev_i < 0) {
+            $rev_i = count($this->_revisions) + $rev_i - 1;
+        }
+
+        return substr((string) $this->_buffer, 0, $this->_revisions[$rev_i]);
     }
 
     /**
      * Function that builds the object list from the xref table
      */
-    public function build_objects_from_xref() {
+    public function build_objects_from_xref(): void
+    {
         foreach ($this->_xref_table as $oid => $obj) {
             $obj = $this->get_object($oid);
             $this->add_object($obj);
@@ -198,21 +227,28 @@ class PDFDoc extends Buffer {
      *   This mechanism enables to walk over any object, either they are new ones or they were in the original doc.
      *   Enables:
      *         foreach ($doc->get_object_iterator() as $oid => obj) { ... }
+     *
      * @param allobjects the iterator obtains any possible object, according to the oids; otherwise, only will return the
      *      objects that appear in the current version of the xref
-     * @return oid=>obj the objects
+     *
+     * @return Generator<int, PDFObject>
      */
-    public function get_object_iterator($allobjects = false) {
-        if ($allobjects === true) {
+    public function get_object_iterator(bool $allobjects = false)
+    {
+        if ($allobjects) {
             for ($i = 0; $i <= $this->_max_oid; $i++) {
                 yield $i => $this->get_object($i);
             }
         } else {
             foreach ($this->_xref_table as $oid => $offset) {
-                if ($offset === null) continue;
+                if ($offset === null) {
+                    continue;
+                }
 
                 $o = $this->get_object($oid);
-                if ($o === false) continue;
+                if ($o === false) {
+                    continue;
+                }
 
                 yield $oid => $o;
             }
@@ -222,40 +258,50 @@ class PDFDoc extends Buffer {
     /**
      * This function checks whether the passed object is a reference or not, and in case that
      *   it is a reference, it returns the referenced object; otherwise it return the object itself
+     *
      * @param reference the reference value to obtain
+     *
      * @return obj it reference can be interpreted as a reference, the referenced object; otherwise, the object itself.
      *   If the passed value is an array of references, it will return false
      */
-    public function get_indirect_object( $reference ) {
+    public function get_indirect_object($reference)
+    {
         $object_id = $reference->get_object_referenced();
         if ($object_id !== false) {
-            if (is_array($object_id))
+            if (is_array($object_id)) {
                 return false;
+            }
+
             return $this->get_object($object_id);
         }
+
         return $reference;
     }
 
     /**
      * Obtains an object from the document, usign the oid in the PDF document.
+     *
      * @param oid the oid of the object that is being retrieved
      * @param original if true and the object has been overwritten in this document, the object
      *                 retrieved will be the original one. Setting to false will retrieve the
      *                 more recent object
+     *
      * @return obj the object retrieved (or false if not found)
      */
-    public function get_object($oid, $original_version = false) {
-        if ($original_version === true) {
+    public function get_object(int $oid, bool $original_version = false)
+    {
+        if ($original_version) {
             // Prioritizing the original version
             $object = PDFUtilFnc::find_object($this->_buffer, $this->_xref_table, $oid);
-            if ($object === false)
-                $object = $this->_pdf_objects[$oid]??false;
-
+            if ($object === false) {
+                $object = $this->_pdf_objects[$oid] ?? false;
+            }
         } else {
             // Prioritizing the new versions
-            $object = $this->_pdf_objects[$oid]??false;
-            if ($object === false)
+            $object = $this->_pdf_objects[$oid] ?? false;
+            if ($object === false) {
                 $object = PDFUtilFnc::find_object($this->_buffer, $this->_xref_table, $oid);
+            }
         }
 
         return $object;
@@ -264,63 +310,77 @@ class PDFDoc extends Buffer {
     /**
      * Function that sets the appearance of the signature (if the document is to be signed). At this time, it is possible to set
      *   the page in which the signature will appear, the rectangle, and an image that will be shown in the signature form.
+     *
      * @param page the page (zero based) in which the signature will appear
      * @param rect the rectangle (in page-based coordinates) where the signature will appear in that page
      * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect
      */
-    public function set_signature_appearance($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0], $imagefilename = null) {
+    public function set_signature_appearance($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0], $imagefilename = null): void
+    {
         $this->_appearance = [
-            "page" => $page_to_appear,
-            "rect" => $rect_to_appear,
-            "image" => $imagefilename
+            'page' => $page_to_appear,
+            'rect' => $rect_to_appear,
+            'image' => $imagefilename,
         ];
     }
 
     /**
      * Removes the settings of signature appearance (i.e. no signature will appear in the document)
      */
-    public function clear_signature_appearance() {
+    public function clear_signature_appearance(): void
+    {
         $this->_appearance = null;
     }
 
     /**
      * Removes the certificate for the signature (i.e. the document will not be signed)
      */
-    public function clear_signature_certificate() {
+    public function clear_signature_certificate(): void
+    {
         $this->_certificate = null;
     }
 
     /**
      * Function that stores the certificate to use, when signing the document
+     *
      * @param certfile a file that contains a user certificate in pkcs12 format,
      *                 or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem>, 'extracerts' => <extracerts.pem|null> ]
      *                 that would be the output of openssl_pkcs12_read
      * @param password the password to read the private key
+     *
      * @return valid true if the certificate can be used to sign the document, false otherwise
      */
-    public function set_signature_certificate($certfile, $certpass = null) {
+    public function set_signature_certificate($certfile, ?string $certpass = null): bool
+    {
         // First we read the certificate
         if (is_array($certfile)) {
             $certificate = $certfile;
-            $certificate["pkey"] = [$certificate["pkey"], $certpass];
+            $certificate['pkey'] = [$certificate['pkey'], $certpass];
 
             // If a password is provided, we'll try to decode the private key
-            if (openssl_pkey_get_private($certificate["pkey"]) === false)
-                return p_error("invalid private key");
-            if (! openssl_x509_check_private_key($certificate["cert"], $certificate["pkey"]))
-                return p_error("private key doesn't corresponds to certificate");
+            if (openssl_pkey_get_private($certificate['pkey']) === false) {
+                throw new PDFException('invalid private key');
+            }
+
+            if (! openssl_x509_check_private_key($certificate['cert'], $certificate['pkey'])) {
+                throw new PDFException("private key doesn't corresponds to certificate");
+            }
 
             if (is_string($certificate['extracerts'] ?? null)) {
                 $certificate['extracerts'] = array_filter(explode("-----END CERTIFICATE-----\n", $certificate['extracerts']));
-                foreach ($certificate['extracerts'] as &$extracerts)
-                    $extracerts = $extracerts . "-----END CERTIFICATE-----\n";
+                foreach ($certificate['extracerts'] as &$extracerts) {
+                    $extracerts .= "-----END CERTIFICATE-----\n";
+                }
             }
         } else {
             $certfilecontent = file_get_contents($certfile);
-            if ($certfilecontent === false)
-                return p_error("could not read file $certfile");
-            if (openssl_pkcs12_read($certfilecontent, $certificate, $certpass) === false)
-                return p_error("could not get the certificates from file $certfile");
+            if ($certfilecontent === false) {
+                throw new PDFException('could not read file ' . $certfile);
+            }
+
+            if (openssl_pkcs12_read($certfilecontent, $certificate, $certpass) === false) {
+                throw new PDFException('could not get the certificates from file ' . $certfile);
+            }
         }
 
         // Store the certificate
@@ -331,11 +391,13 @@ class PDFDoc extends Buffer {
 
     /**
      * Function that stores the ltv configuration to use, when signing the document
-     * @param $ocspURI  OCSP Url to validate cert file
-     * @param $crlURIorFILE Crl filename/url to validate cert
-     * @param $issuerURIorFILE issuer filename/url
+     *
+     * @param $ocspURI  OCSP|null Url to validate cert file
+     * @param $crlURIorFILE Crl|null filename/url to validate cert
+     * @param $issuerURIorFILE issuer|null filename/url
      */
-    public function set_ltv($ocspURI=null, $crlURIorFILE=null, $issuerURIorFILE=null) {
+    public function set_ltv(?string $ocspURI = null, ?string $crlURIorFILE = null, ?string $issuerURIorFILE = null): void
+    {
         $this->_signature_ltv_data['ocspURI'] = $ocspURI;
         $this->_signature_ltv_data['crlURIorFILE'] = $crlURIorFILE;
         $this->_signature_ltv_data['issuerURIorFILE'] = $issuerURIorFILE;
@@ -343,11 +405,12 @@ class PDFDoc extends Buffer {
 
     /**
      * Function that stores the tsa configuration to use, when signing the document
-     * @param $tsaurl  Link to tsa service
-     * @param $tsauser the user for tsa service
-     * @param $tsapass the password for tsa service
+     *
+     * @param $tsauser ?string user for tsa service
+     * @param $tsapass ?string password for tsa service
      */
-    public function set_tsa($tsa, $tsauser = null, $tsapass = null) {
+    public function set_tsa(string $tsa, ?string $tsauser = null, ?string $tsapass = null): void
+    {
         $this->_signature_tsa['host'] = $tsa;
         if ($tsauser && $tsapass) {
             $this->_signature_tsa['user'] = $tsauser;
@@ -357,13 +420,8 @@ class PDFDoc extends Buffer {
 
     /**
      * Function to set the metadata properties for the certificate options
-     * @param $name
-     * @param $reason
-     * @param $location
-     * @param $contact
-     * @return void
      */
-    public function set_metadata_props($name = null, $reason = null, $location = null, $contact = null)
+    public function set_metadata_props($name = null, $reason = null, $location = null, $contact = null): void
     {
         $this->_metadata_name = $name;
         $this->_metadata_reason = $reason;
@@ -372,304 +430,41 @@ class PDFDoc extends Buffer {
     }
 
     /**
-     * Function that creates and updates the PDF objects needed to sign the document. The workflow for a signature is:
-     * - create a signature object
-     * - create an annotation object whose value is the signature object
-     * - create a form object (along with other objects) that will hold the appearance of the annotation object
-     * - modify the root object to make acroform point to the annotation object
-     * - modify the page object to make the annotations of that page include the annotation object
-     *
-     * > If the appearance is not set, the image will not appear, and the signature object will be invisible.
-     * > If the certificate is not set, the signature created will be a placeholder (that acrobat will able to sign)
-     *
-     *      LIMITATIONS: one document can be signed once at a time; if wanted more signatures, then chain the documents:
-     *      $o1->set_signature_certificate(...);
-     *      $o2 = PDFDoc::fromstring($o1->to_pdf_file_s);
-     *      $o2->set_signature_certificate(...);
-     *      $o2->to_pdf_file_s();
-     *
-     * @return signature a signature object, or null if the document is not signed; false if an error happens
-     */
-    protected function _generate_signature_in_document() {
-        $imagefilename = null;
-        $recttoappear = [ 0, 0, 0, 0];
-        $pagetoappear = 0;
-
-        if ($this->_appearance !== null) {
-            $imagefilename = $this->_appearance["image"];
-            $recttoappear = $this->_appearance["rect"];
-            $pagetoappear = $this->_appearance["page"];
-        }
-
-        // First of all, we are searching for the root object (which should be in the trailer)
-        $root = $this->_pdf_trailer_object["Root"];
-
-        if (($root === false) || (($root = $root->get_object_referenced()) === false))
-            return p_error("could not find the root object from the trailer");
-
-        $root_obj = $this->get_object($root);
-        if ($root_obj === false)
-            return p_error("invalid root object");
-
-        // Now the object corresponding to the page number in which to appear
-        $page_obj = $this->get_page($pagetoappear);
-        if ($page_obj === false)
-            return p_error("invalid page");
-
-        // The objects to update
-        $updated_objects = [ ];
-
-        // Add the annotation to the page
-        if (!isset($page_obj["Annots"]))
-            $page_obj["Annots"] = new PDFValueList();
-
-        $annots = &$page_obj["Annots"];
-        $page_rotation = $page_obj["Rotate"]??new PDFValueSimple(0);
-
-        if ((($referenced = $annots->get_object_referenced()) !== false) && (!is_array($referenced))) {
-            // It is an indirect object, so we need to update that object
-            $newannots = $this->create_object(
-                $this->get_object($referenced)->get_value()
-            );
-        } else {
-            $newannots = $this->create_object(
-                new PDFValueList()
-            );
-            $newannots->push($annots);
-        }
-
-        // Create the annotation object, annotate the offset and append the object
-        $annotation_object = $this->create_object([
-                "Type" => "/Annot",
-                "Subtype" => "/Widget",
-                "FT" => "/Sig",
-                "V" => new PDFValueString(""),
-                "T" => new PDFValueString('Signature' . get_random_string()),
-                "P" => new PDFValueReference($page_obj->get_oid()),
-                "Rect" => $recttoappear,
-                "F" => 132  // TODO: check this value
-            ]
-        );
-
-        // Prepare the signature object (we need references to it)
-        $signature = null;
-        if ($this->_certificate !== null) {
-            // Perform signature test to get signature size to define __SIGNATURE_MAX_LENGTH
-            p_debug("     ########## PERFORM SIGNATURE LENGTH CHECK ##########\n");
-            $CMS = new helpers\CMS;
-            $CMS->signature_data['signcert'] = $this->_certificate['cert'];
-            $CMS->signature_data['extracerts'] = $this->_certificate['extracerts']??null;
-            $CMS->signature_data['hashAlgorithm'] = 'sha256';
-            $CMS->signature_data['privkey'] = $this->_certificate['pkey'];
-            $CMS->signature_data['tsa'] = $this->_signature_tsa;
-            $CMS->signature_data['ltv'] = $this->_signature_ltv_data;
-            $res = $CMS->pkcs7_sign('0');
-            $len = strlen($res);
-            p_debug("     Signature Length is \"$len\" Bytes");
-            p_debug("     ########## FINISHED SIGNATURE LENGTH CHECK #########\n\n");
-            PDFSignatureObject::$__SIGNATURE_MAX_LENGTH = $len;
-
-            $signature = $this->create_object([], PDFSignatureObject::class, false);
-            //$signature = new PDFSignatureObject([]);
-            $signature->set_metadata($this->_metadata_name, $this->_metadata_reason, $this->_metadata_location, $this->_metadata_contact_info);
-            $signature->set_certificate($this->_certificate);
-            if($this->_signature_tsa !== null) {
-              $signature->set_signature_tsa($this->_signature_tsa);
-            }
-            if($this->_signature_ltv_data !== null) {
-              $signature->set_signature_ltv($this->_signature_ltv_data);
-            }
-
-            // Update the value to the annotation object
-            $annotation_object["V"] = new PDFValueReference($signature->get_oid());
-        }
-
-        // If an image is provided, let's load it
-        if ($imagefilename !== null) {
-            // Signature with appearance, following the Adobe workflow:
-            //   1. form
-            //   2. layers /n0 (empty) and /n2
-            // https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/acrobat_digital_signature_appearances_v9.pdf
-
-            // Get the page height, to change the coordinates system (up to down)
-            $pagesize = $this->get_page_size($pagetoappear);
-            $pagesize = explode(" ", $pagesize[0]->val());
-            $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
-
-            $bbox = [ 0, 0, $recttoappear[2] - $recttoappear[0], $recttoappear[3] - $recttoappear[1]];
-            $form_object = $this->create_object([
-                "BBox" => $bbox,
-                "Subtype" => "/Form",
-                "Type" => "/XObject",
-                "Group" => [
-                    'Type' => '/Group',
-                    'S' => '/Transparency',
-                    'CS' => '/DeviceRGB'
-                ]
-            ]);
-
-            $container_form_object = $this->create_object([
-                "BBox" => $bbox,
-                "Subtype" => "/Form",
-                "Type" => "/XObject",
-                "Resources" => [ "XObject" => [
-                    "n0" => new PDFValueSimple(""),
-                    "n2" => new PDFValueSimple("")
-                    ] ]
-                ]);
-            $container_form_object->set_stream("q 1 0 0 1 0 0 cm /n0 Do Q\nq 1 0 0 1 0 0 cm /n2 Do Q\n", false);
-
-            $layer_n0 = $this->create_object([
-                "BBox" => [ 0.0, 0.0, 100.0, 100.0 ],
-                "Subtype" => "/Form",
-                "Type" => "/XObject",
-                "Resources" => new PDFValueObject()
-            ]);
-
-            // Add the same structure than Acrobat Reader
-            $layer_n0->set_stream("% DSBlank" . __EOL, false);
-
-            $layer_n2 = $this->create_object([
-                "BBox" => $bbox,
-                "Subtype" => "/Form",
-                "Type" => "/XObject",
-                "Resources" => new PDFValueObject()
-            ]);
-
-            $result = _add_image([$this, "create_object"], $imagefilename, $bbox[0], $bbox[1], $bbox[2], $bbox[3], $page_rotation->val());
-            if ($result === false)
-                return p_error("could not add the image");
-
-            $layer_n2["Resources"] = $result["resources"];
-            $layer_n2->set_stream($result['command'], false);
-
-            $container_form_object["Resources"]["XObject"]["n0"] = new PDFValueReference($layer_n0->get_oid());
-            $container_form_object["Resources"]["XObject"]["n2"] = new PDFValueReference($layer_n2->get_oid());
-
-            $form_object['Resources'] = new PDFValueObject([
-                "XObject" => [
-                    "FRM" => new PDFValueReference($container_form_object->get_oid())
-                ]
-            ]);
-            $form_object->set_stream("/FRM Do", false);
-
-            // Set the signature appearance field to the form object
-            $annotation_object["AP"] = [ "N" => new PDFValueReference($form_object->get_oid())];
-            $annotation_object["Rect"] = [ $recttoappear[0], $pagesize_h - $recttoappear[1], $recttoappear[2], $pagesize_h - $recttoappear[3] ];
-        }
-
-        if (!$newannots->push(new PDFValueReference($annotation_object->get_oid())))
-            return p_error("Could not update the page where the signature has to appear");
-
-        $page_obj["Annots"] = new PDFValueReference($newannots->get_oid());
-        array_push($updated_objects, $page_obj);
-
-        // AcroForm may be an indirect object
-        if (!isset($root_obj["AcroForm"]))
-            $root_obj["AcroForm"] = new PDFValueObject();
-
-        $acroform = &$root_obj["AcroForm"];
-        if ((($referenced = $acroform->get_object_referenced()) !== false) && (!is_array($referenced))) {
-            $acroform = $this->get_object($referenced);
-            array_push($updated_objects, $acroform);
-        } else {
-            array_push($updated_objects, $root_obj);
-        }
-
-        // Add the annotation to the interactive form
-        $acroform["SigFlags"] = 3;
-        if (!isset($acroform['Fields']))
-            $acroform['Fields'] = new PDFValueList();
-
-        // Add the annotation object to the interactive form
-        if (!$acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
-            return p_error("could not create the signature field");
-        }
-
-        // Store the objects
-        foreach ($updated_objects as &$object) {
-            $this->add_object($object);
-        }
-
-        return $signature;
-    }
-
-    /**
-     * Function that updates the modification date of the document. If modifies two parts: the "info" field of the trailer object
-     *   and the xmp metadata field pointed by the root object.
-     * @param date a DateTime object that contains the date to be set; null to set "now"
-     * @return ok true if the date could be set; false otherwise
-     */
-    protected function update_mod_date(\DateTime $date = null) {
-        // First of all, we are searching for the root object (which should be in the trailer)
-        $root = $this->_pdf_trailer_object["Root"];
-
-        if (($root === false) || (($root = $root->get_object_referenced()) === false))
-            return p_error("could not find the root object from the trailer");
-
-        $root_obj = $this->get_object($root);
-        if ($root_obj === false)
-            return p_error("invalid root object");
-
-        if ($date === null)
-            $date = new \DateTime();
-
-        // Update the xmp metadata if exists
-        if (isset($root_obj["Metadata"])) {
-            $metadata = $root_obj["Metadata"];
-            if ((($referenced = $metadata->get_object_referenced()) !== false) && (!is_array($referenced))) {
-                $metadata = $this->get_object($referenced);
-                $metastream = $metadata->get_stream();
-                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . $date->format("c") . '</xmp:ModifyDate>', $metastream);
-                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . $date->format("c") . '</xmp:MetadataDate>', $metastream);
-                $metastream = preg_replace('/<xmpMM:InstanceID>([^<]*)<\/xmpMM:InstanceID>/', '<xmpMM:InstanceID>uuid:' . UUID::v4() . '</xmpMM:InstanceID>', $metastream);
-                $metadata->set_stream($metastream, false);
-                $this->add_object($metadata);
-            }
-        }
-
-        // Update the information object (not really needed)
-        $info = $this->_pdf_trailer_object["Info"];
-        if (($info === false) || (($info = $info->get_object_referenced()) === false))
-            return p_error("could not find the info object from the trailer");
-
-        $info_obj = $this->get_object($info);
-        if ($info_obj === false)
-            return p_error("invalid info object");
-
-        $info_obj["ModDate"] = new PDFValueString(timestamp_to_pdfdatestring($date));
-        $info_obj["Producer"] = new PDFValueString("Modificado con SAPP");
-        $this->add_object($info_obj);
-        return true;
-    }
-
-    /**
      * Function that gets the objects that have been read from the document
+     *
      * @return objects an array of objects, indexed by the oid of each object
      */
-    public function get_objects() {
+    public function get_objects()
+    {
         return $this->_pdf_objects;
     }
 
     /**
      * Function that gets the version of the document. It will have the form
      *   PDF-1.x
+     *
      * @return version the PDF version
      */
-    public function get_version() {
+    public function get_version()
+    {
         return $this->_pdf_version_string;
     }
 
     /**
      * Function that sets the version for the document.
+     *
      * @param version the version of the PDF document (it shall have the form PDF-1.x)
+     *
      * @return correct true if the version had the proper form; false otherwise
      */
-    public function set_version($version) {
-        if (preg_match("/PDF-1.\[0-9\]/", $version) !== 1) {
+    public function set_version($version): bool
+    {
+        if (preg_match("/PDF-1.\[0-9\]/", (string) $version) !== 1) {
             return false;
         }
+
         $this->_pdf_version_string = $version;
+
         return true;
     }
 
@@ -677,87 +472,59 @@ class PDFDoc extends Buffer {
      * Function that creates a new PDFObject and stores it in the document object list, so that
      *   it is automatically managed by the document. The returned object can be modified and
      *   that modifications will be reflected in the document.
+     *
      * @param value the value that the object will contain
+     *
      * @return obj the PDFObject created
      */
-    public function create_object($value = [], $class = "ddn\\sapp\\PDFObject", $autoadd = true): PDFObject {
+    public function create_object($value = [], $class = PDFObject::class, $autoadd = true): PDFObject
+    {
         $o = new $class($this->get_new_oid(), $value);
-        if ($autoadd === true)
+        if ($autoadd === true) {
             $this->add_object($o);
+        }
+
         return $o;
     }
 
     /**
      * Adds a pdf object to the document (overwrites the one with the same oid, if existed)
+     *
      * @param pdf_object the object to add to the document
+     *
      * @return true if the object was added; false otherwise (e.g. already exists an object of a greater generation)
      */
-    public function add_object(PDFObject $pdf_object) {
+    public function add_object(PDFObject $pdf_object): bool
+    {
         $oid = $pdf_object->get_oid();
 
-        if (isset($this->_pdf_objects[$oid])) {
-            if ($this->_pdf_objects[$oid]->get_generation() > $pdf_object->get_generation()) {
-                return false;
-            }
+        if (isset($this->_pdf_objects[$oid]) && $this->_pdf_objects[$oid]->get_generation() > $pdf_object->get_generation()) {
+            return false;
         }
 
         $this->_pdf_objects[$oid] = $pdf_object;
 
         // Update the maximum oid
-        if ($oid > $this->_max_oid)
+        if ($oid > $this->_max_oid) {
             $this->_max_oid = $oid;
+        }
 
         return true;
     }
 
     /**
-     * This function generates all the contents of the file up to the xref entry.
-     * @param rebuild whether to generate the xref with all the objects in the document (true) or
-     *                consider only the new ones (false)
-     * @return xref_data [ the text corresponding to the objects, array of offsets for each object ]
-     */
-    protected function _generate_content_to_xref($rebuild = false) {
-        if ($rebuild === true) {
-            $result  = new Buffer("%$this->_pdf_version_string" . __EOL);
-        }  else {
-            $result = new Buffer($this->_buffer);
-        }
-
-        // Need to calculate the objects offset
-        $offsets = [];
-        $offsets[0] = 0;
-
-        // The objects
-        $offset = $result->size();
-
-        if ($rebuild === true) {
-            for ($i = 0; $i <= $this->_max_oid; $i++) {
-                if (($object = $this->get_object($i)) ===  false) continue;
-
-                $result->data($object->to_pdf_entry());
-                $offsets[$i] = $offset;
-                $offset = $result->size();
-            }
-        } else {
-            foreach ($this->_pdf_objects as $obj_id => $object) {
-                $result->data($object->to_pdf_entry());
-                $offsets[$obj_id] = $offset;
-                $offset = $result->size();
-            }
-        }
-
-        return [ $result, $offsets ];
-    }
-
-    /**
      * This functions outputs the document to a buffer object, ready to be dumped to a file.
+     *
      * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
+     *
      * @return buffer a buffer that contains a pdf dumpable document
      */
-    public function to_pdf_file_b($rebuild = false) : Buffer {
+    public function to_pdf_file_b(bool $rebuild = false): Buffer
+    {
         // We made no updates, so return the original doc
-        if (($rebuild === false) && (count($this->_pdf_objects) === 0) && ($this->_certificate === null) && ($this->_appearance === null))
+        if ($rebuild === false && count($this->_pdf_objects) === 0 && $this->_certificate === null && $this->_appearance === null) {
             return new Buffer($this->_buffer);
+        }
 
         // Save the state prior to generating the objects
         $this->push_state();
@@ -766,40 +533,41 @@ class PDFDoc extends Buffer {
         $this->update_mod_date();
 
         $_signature = null;
-        if (($this->_appearance !== null) || ($this->_certificate !== null)) {
+        if ($this->_appearance !== null || $this->_certificate !== null) {
             $_signature = $this->_generate_signature_in_document();
             if ($_signature === false) {
                 $this->pop_state();
-                return p_error("could not generate the signed document");
+
+                throw new PDFException('could not generate the signed document');
             }
         }
 
         // Generate the first part of the document
-        [ $_doc_to_xref, $_obj_offsets ] = $this->_generate_content_to_xref($rebuild);
+        [$_doc_to_xref, $_obj_offsets] = $this->_generate_content_to_xref($rebuild);
         $xref_offset = $_doc_to_xref->size();
 
-        if ($_signature !== null) {
+        if ($_signature instanceof PDFSignatureObject) {
             $_obj_offsets[$_signature->get_oid()] = $_doc_to_xref->size();
-            $xref_offset +=  strlen($_signature->to_pdf_entry());
+            $xref_offset += strlen($_signature->to_pdf_entry());
         }
 
-        $doc_version_string = str_replace("PDF-", "", $this->_pdf_version_string);
+        $doc_version_string = str_replace('PDF-', '', $this->_pdf_version_string);
 
         // The version considered for the cross reference table depends on the version of the current xref table,
         //   as it is not possible to mix xref tables. Anyway we are
         $target_version = $this->_xref_table_version;
-        if ($this->_xref_table_version >= "1.5") {
+        if ($this->_xref_table_version >= '1.5') {
             // i.e. xref streams
-            if ($doc_version_string > $target_version)
+            if ($doc_version_string > $target_version) {
                 $target_version = $doc_version_string;
-        } else {
+            }
+        } elseif ($doc_version_string < $target_version) {
             // i.e. xref+trailer
-            if ($doc_version_string < $target_version)
-                $target_version = $doc_version_string;
+            $target_version = $doc_version_string;
         }
 
-        if ($target_version >= "1.5") {
-            p_debug("generating xref using cross-reference streams");
+        if ($target_version >= '1.5') {
+            $this->logger?->debug('generating xref using cross-reference streams');
 
             // Create a new object for the trailer
             $trailer = $this->create_object(
@@ -813,44 +581,50 @@ class PDFDoc extends Buffer {
             $xref = PDFUtilFnc::build_xref_1_5($_obj_offsets);
 
             // Set the parameters for the trailer
-            $trailer["Index"] = explode(" ", $xref["Index"]);
-            $trailer["W"] = $xref["W"];
-            $trailer["Size"] = $this->_max_oid + 1;
-            $trailer["Type"] = "/XRef";
+            $trailer['Index'] = explode(' ', (string) $xref['Index']);
+            $trailer['W'] = $xref['W'];
+            $trailer['Size'] = $this->_max_oid + 1;
+            $trailer['Type'] = '/XRef';
 
             // Not needed to generate new IDs, as in metadata the IDs will be set
             // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref["stream"]);
-            $ID2 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $this->_pdf_trailer_object);
+            $ID2 = md5('' . (new DateTime())->getTimestamp() . '-' . $this->_xref_position . $this->_pdf_trailer_object);
             // $trailer["ID"] = [ new PDFValueHexString($ID1), new PDFValueHexString($ID2) ];
-            $trailer["ID"] = [ $trailer["ID"][0], new PDFValueHexString(strtoupper($ID2)) ];
+            $trailer['ID'] = [$trailer['ID'][0], new PDFValueHexString(strtoupper($ID2))];
 
             // We are not using predictors nor encoding
-            if (isset($trailer["DecodeParms"])) unset($trailer["DecodeParms"]);
+            if (isset($trailer['DecodeParms'])) {
+                unset($trailer['DecodeParms']);
+            }
 
             // We are not compressing the stream
-            if (isset($trailer["Filter"])) unset($trailer["Filter"]);
-            $trailer->set_stream($xref["stream"], false);
+            if (isset($trailer['Filter'])) {
+                unset($trailer['Filter']);
+            }
+
+            $trailer->set_stream($xref['stream'], false);
 
             // If creating an incremental modification, point to the previous xref table
-            if ($rebuild === false)
+            if ($rebuild === false) {
                 $trailer['Prev'] = $this->_xref_position;
-            else
+            } elseif (isset($trailer['Prev'])) {
                 // If rebuilding the document, remove the references to previous xref tables, because it will be only one
-                if (isset($trailer['Prev']))
-                    unset($trailer['Prev']);
+                unset($trailer['Prev']);
+            }
 
             // And generate the part of the document related to the xref
             $_doc_from_xref = new Buffer($trailer->to_pdf_entry());
-            $_doc_from_xref->data("startxref" . __EOL . "$xref_offset" . __EOL ."%%EOF" . __EOL);
+            $_doc_from_xref->data('startxref' . __EOL . $xref_offset . __EOL . '%%EOF' . __EOL);
         } else {
-            p_debug("generating xref using classic xref...trailer");
+            $this->logger?->debug('generating xref using classic xref...trailer');
             $xref_content = PDFUtilFnc::build_xref($_obj_offsets);
 
             // Update the trailer
             $this->_pdf_trailer_object['Size'] = $this->_max_oid + 1;
 
-            if ($rebuild === false)
+            if ($rebuild === false) {
                 $this->_pdf_trailer_object['Prev'] = $this->_xref_position;
+            }
 
             // Not needed to generate new IDs, as in metadata the IDs may be set
             // $ID1 = md5("" . (new \DateTime())->getTimestamp() . "-" . $this->_xref_position . $xref_content);
@@ -861,95 +635,123 @@ class PDFDoc extends Buffer {
 
             // Generate the part of the document related to the xref
             $_doc_from_xref = new Buffer($xref_content);
-            $_doc_from_xref->data("trailer\n$this->_pdf_trailer_object");
-            $_doc_from_xref->data("\nstartxref\n$xref_offset\n%%EOF\n");
+            $_doc_from_xref->data("trailer\n" . $this->_pdf_trailer_object);
+            $_doc_from_xref->data("\nstartxref\n{$xref_offset}\n%%EOF\n");
         }
 
-        if ($_signature !== null) {
+        if ($_signature instanceof PDFSignatureObject) {
             // In case that the document is signed, calculate the signature
 
             $_signature->set_sizes($_doc_to_xref->size(), $_doc_from_xref->size());
-            $_signature["Contents"] = new PDFValueSimple("");
+            $_signature['Contents'] = new PDFValueSimple('');
+            assert($_signature instanceof PDFSignatureObject);
             $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
             $certificate = $_signature->get_certificate();
-            $extracerts = (array_key_exists('extracerts', $certificate)) ? $certificate['extracerts'] : null;
-            $cms = new CMS;
+            $extracerts = $certificate['extracerts'] ?? null;
+            $cms = new CMS($this->logger);
             $cms->signature_data['hashAlgorithm'] = 'sha256';
             $cms->signature_data['privkey'] = $certificate['pkey'];
             $cms->signature_data['extracerts'] = $extracerts;
-            $cms->signature_data['signcert'] =  $certificate['cert'];
+            $cms->signature_data['signcert'] = $certificate['cert'];
             $cms->signature_data['ltv'] = $_signature->get_ltv();
             $cms->signature_data['tsa'] = $_signature->get_tsa();
             $signature_contents = $cms->pkcs7_sign($_signable_document->get_raw());
             //$signature_contents = str_pad($signature_contents, strlen($signature_contents), '0');
 
             // Then restore the contents field
-            $_signature["Contents"] = new PDFValueHexString($signature_contents);
+            $_signature['Contents'] = new PDFValueHexString($signature_contents);
 
             // Add this object to the content previous to this document xref
+            assert($_signature instanceof PDFSignatureObject);
             $_doc_to_xref->data($_signature->to_pdf_entry());
         }
 
         // Reset the state to make signature objects not to mess with the user's objects
         $this->pop_state();
+
         return new Buffer($_doc_to_xref->get_raw() . $_doc_from_xref->get_raw());
     }
 
     /**
      * This functions outputs the document to a string, ready to be written
+     *
      * @return buffer a buffer that contains a pdf document
      */
-    public function to_pdf_file_s($rebuild = false) {
-        $pdf_content = $this->to_pdf_file_b($rebuild);
-        return $pdf_content->get_raw();
+    public function to_pdf_file_s(bool $rebuild = false): ?string
+    {
+        return $this->to_pdf_file_b($rebuild)->get_raw();
     }
 
     /**
      * This function writes the document to a file
+     *
      * @param filename the name of the file to be written (it will be overwritten, if exists)
+     *
      * @return written true if the file has been correcly written to the file; false otherwise
      */
-    public function to_pdf_file($filename, $rebuild = false) {
+    public function to_pdf_file($filename, bool $rebuild = false): bool
+    {
         $pdf_content = $this->to_pdf_file_b($rebuild);
 
-        $file = fopen($filename, "wb");
+        $file = fopen($filename, 'wb');
         if ($file === false) {
-            return p_error("failed to create the file");
+            throw new PDFException('failed to create the file');
         }
+
         if (fwrite($file, $pdf_content->get_raw()) !== $pdf_content->size()) {
             fclose($file);
-            return p_error("failed to write to file");
+
+            throw new PDFException('failed to write to file');
         }
+
         fclose($file);
+
         return true;
     }
 
     /**
      * Gets the page object which is rendered in position i
+     *
      * @param i the number of page (according to the rendering order)
+     *
      * @return page the page object
      */
-    public function get_page($i) {
-        if ($i < 0) return false;
-        if ($i >= count($this->_pages_info)) return false;
+    public function get_page(int $i): PDFObject|false
+    {
+        if ($i < 0) {
+            return false;
+        }
+
+        if ($i >= count($this->_pages_info)) {
+            return false;
+        }
+
         return $this->get_object($this->_pages_info[$i]['id']);
     }
 
     /**
      * Gets the size of the page in the form of a rectangle [ x0 y0 x1 y1 ]
+     *
      * @param i the number of page (according to the rendering order), or the page object
+     *
      * @return box the bounding box of the page
      */
-    public function get_page_size($i) {
+    public function get_page_size(int $i): false|array
+    {
         $pageinfo = false;
 
         if (is_int($i)) {
-            if ($i < 0) return false;
-            if ($i > count($this->_pages_info)) return false;
+            if ($i < 0) {
+                return false;
+            }
+
+            if ($i > count($this->_pages_info)) {
+                return false;
+            }
 
             $pageinfo = $this->_pages_info[$i]['info'];
         } else {
-            foreach ($this->_pages_info as $k => $info) {
+            foreach ($this->_pages_info as $info) {
                 if ($info['oid'] === $i->get_oid()) {
                     $pageinfo = $info['info'];
                     break;
@@ -958,81 +760,21 @@ class PDFDoc extends Buffer {
         }
 
         // The page has not been found
-        if (($pageinfo === false) || (!isset($pageinfo['size'])))
+        if ($pageinfo === false || ! isset($pageinfo['size'])) {
             return false;
+        }
 
         return $pageinfo['size'];
     }
 
     /**
-     * This function builds the page IDs for object with id oid. If it is a page, it returns the oid; if it is not and it has
-     *   kids and every kid is a page (or a set of pages), it finds the pages.
-     * @param oid the object id to inspect
-     * @return pages the ordered list of page ids corresponding to object oid, or false if any of the kid objects
-     *               is not of type page or pages.
-     */
-    protected function _get_page_info($oid, $info = []) {
-        $object = $this->get_object($oid);
-        if ($object === false)
-            return p_error("could not get information about the page");
-
-        $page_ids = [];
-
-        switch ($object["Type"]->val()) {
-            case "Pages":
-                $kids = $object["Kids"];
-                $kids = $kids->get_object_referenced();
-                if ($kids !== false) {
-                    if (isset($object['MediaBox'])) {
-                        $info['size'] = $object['MediaBox']->val();
-                    }
-                    foreach ($kids as $kid) {
-                        $ids = $this->_get_page_info($kid, $info);
-                        if ($ids === false)
-                            return false;
-                        array_push($page_ids, ...$ids);
-                    }
-                } else {
-                    return p_error("could not get the pages");
-                }
-                break;
-            case "Page":
-                if (isset($object['MediaBox']))
-                    $info['size'] = $object['MediaBox']->val();
-                return [ [ 'id' => $oid, 'info' => $info ]  ];
-            default:
-                return false;
-        }
-        return $page_ids;
-    }
-
-    /**
-     * Obtains an ordered list of objects that contain the ids of the page objects of the document.
-     *   The order is made according to the catalog and the document structure.
-     * @return list an ordered list of the id of the page objects, or false if could not be found
-     */
-    protected function _acquire_pages_info() {
-        $root = $this->_pdf_trailer_object["Root"];
-        if (($root === false) || (($root = $root->get_object_referenced()) === false))
-            return p_error("could not find the root object from the trailer");
-
-        $root = $this->get_object($root);
-        if ($root !== false) {
-            $pages = $root["Pages"];
-            if (($pages === false) || (($pages = $pages->get_object_referenced()) === false))
-                return p_error("could not find the pages for the document");
-
-            $this->_pages_info = $this->_get_page_info($pages);
-        } else
-            p_warning("root object does not exist, so cannot get information about pages");
-    }
-
-
-    /**
      * This function compares this document with other document, object by object. The idea is to compare the objects with the same oid in the
      *  different documents, checking field by field; it does not take into account the streams.
+     *
+     * @return PDFObject[]
      */
-    public function compare($other) {
+    public function compare($other): array
+    {
         $other_objects = [];
         foreach ($other->get_object_iterator(false) as $oid => $object) {
             $other_objects[$oid] = $object;
@@ -1050,31 +792,37 @@ class PDFDoc extends Buffer {
             } else {
                 $differences[$oid] = new PDFObject($oid, $object->get_value());
             }
-
         }
+
         return $differences;
     }
 
     /**
      * Obtains the tree of objects in the PDF Document. The result is an array of DependencyTreeObject objects (indexed by the oid), where
      *  each element has a set of children that can be retrieved using the iterator (foreach $o->children() as $oid => $object ...)
+     *
+     * @return DependencyTreeObject[]
      */
-    public function get_object_tree() {
-
+    public function get_object_tree(): array
+    {
         // Prepare the return value
         $objects = [];
 
         foreach ($this->_xref_table as $oid => $offset) {
-            if ($offset === null) continue;
+            if ($offset === null) {
+                continue;
+            }
 
             $o = $this->get_object($oid);
-            if ($o === false) continue;
+            if ($o === false) {
+                continue;
+            }
 
-        // foreach ($this->get_object_iterator() as $oid => $o) {
+            // foreach ($this->get_object_iterator() as $oid => $o) {
 
             // Create the object in the dependency tree and add it to the list of objects
             if (! array_key_exists($oid, $objects)) {
-                $objects[$oid] = new DependencyTreeObject($oid, $o["Type"]);
+                $objects[$oid] = new DependencyTreeObject($oid, $o['Type']);
             }
 
             // The object is a PDFObject so we need the PDFValueObject to get the value of the fields
@@ -1082,29 +830,34 @@ class PDFDoc extends Buffer {
             $val = $o->get_value();
 
             // We'll only consider those objects that may create an structure (i.e. the objects, whose fields may include references to other objects)
-            if (is_a($val, "ddn\\sapp\\pdfvalue\\PDFValueObject")) {
-                $references = references_in_object($val, $oid);
+            if (is_a($val, PDFValueObject::class)) {
+                $references = references_in_object($val);
             } else {
                 $references = $val->get_object_referenced();
-                if ($references === false)
+                if ($references === false) {
                     continue;
-                if (!is_array($references)) $references = [ $references ];
+                }
+
+                if (! is_array($references)) {
+                    $references = [$references];
+                }
             }
 
-            // p_debug("$oid references " . implode(", ", $references));
+            // $this->logger?->debug("$oid references " . implode(", ", $references));
             foreach ($references as $r_object) {
                 if (! array_key_exists($r_object, $objects)) {
                     $r_object_o = $this->get_object($r_object);
-                    $objects[$r_object] = new DependencyTreeObject($r_object, $r_object_o["Type"]);
+                    $objects[$r_object] = new DependencyTreeObject($r_object, $r_object_o['Type']);
                 }
+
                 $object->addchild($r_object, $objects[$r_object]);
             }
         }
 
         //
         $xref_children = [];
-        foreach ($objects as $oid => $t_object) {
-            if ($t_object->info == "/XRef") {
+        foreach ($objects as $t_object) {
+            if ($t_object->info === '/XRef') {
                 array_push($xref_children, ...iterator_to_array($t_object->children()));
             }
         }
@@ -1113,49 +866,61 @@ class PDFDoc extends Buffer {
 
         // Remove those objects that are child of other objects from the top of the tree
         foreach ($objects as $oid => $t_object) {
-            if (($t_object->is_child > 0) || (in_array($t_object->info, [ "/XRef", "/ObjStm"] ))) {
-                if (! in_array($oid, $xref_children))
-                    unset($objects[$oid]);
+            if (($t_object->is_child > 0 || in_array($t_object->info, ['/XRef', '/ObjStm'], true)) && ! in_array($oid, $xref_children, true)) {
+                unset($objects[$oid]);
             }
         }
 
         return $objects;
     }
 
-
     /**
      * Retrieve the signatures in the document
+     *
      * @return array of signatures in the original document
      */
-    public function get_signatures() {
-
+    public function get_signatures(): array
+    {
         // Prepare the return value
         $signatures = [];
 
         foreach ($this->_xref_table as $oid => $offset) {
-            if ($offset === null) continue;
+            if ($offset === null) {
+                continue;
+            }
 
             $o = $this->get_object($oid);
-            if ($o === false) continue;
+            if ($o === false) {
+                continue;
+            }
 
             $o_value = $o->get_value()->val();
-            if (! is_array($o_value) || ! isset($o_value['Type'])) continue;
-            if ($o_value['Type']->val() != 'Sig') continue;
+            if (! is_array($o_value) || ! isset($o_value['Type'])) {
+                continue;
+            }
 
-            $signature = ['content' => $o_value['Contents']->val()];
+            if ($o_value['Type']->val() !== 'Sig') {
+                continue;
+            }
+
+            $signature = [
+                'content' => $o_value['Contents']->val(),
+            ];
 
             try {
-                $cert=[];
+                $cert = [];
 
                 openssl_pkcs7_read(
                     "-----BEGIN CERTIFICATE-----\n"
-                       . chunk_split(base64_encode(hex2bin($signature['content'])), 64, "\n")
-                       . "-----END CERTIFICATE-----\n",
-                   $cert
+                    . chunk_split(base64_encode(hex2bin((string) $signature['content'])), 64, "\n")
+                    . "-----END CERTIFICATE-----\n",
+                    $cert
                 );
 
-                $signature += openssl_x509_parse($cert[0] ?? '') ?: [];
-            } catch (\Throwable $e) {}
+                $signature += openssl_x509_parse($cert[0] ?? '');
+            } catch (Throwable $e) {
+                throw new PDFException('failed to read certificate', 0, $e);
+            }
 
             $signatures[] = $signature;
         }
@@ -1165,16 +930,18 @@ class PDFDoc extends Buffer {
 
     /**
      * Retrieve the number of signatures in the document
+     *
      * @return int signatures number in the original document
      */
-    public function get_signature_count() {
+    public function get_signature_count(): int
+    {
         return count($this->get_signatures());
     }
-
 
     /**
      * Generates a new document that is the result of signing the current
      * document
+     *
      * @param certfile a file that contains a user certificate in pkcs12 format, or an array [ 'cert' => <cert.pem>, 'pkey' => <key.pem> ]
      *                 that would be the output of openssl_pkcs12_read
      * @param password the password to read the private key
@@ -1188,68 +955,503 @@ class PDFDoc extends Buffer {
      *          - if array [ width, height ], it will be the width and the height for the image to be included as a signature appearance (if
      *            one of these values is null, it will fallback to the actual width or height of the image)
      */
-    public function sign_document($certfile, $password = null, $page_to_appear = 0, $imagefilename = null, $px = 0, $py = 0, $size = null) {
-
+    public function sign_document($certfile, $password = null, $page_to_appear = 0, $imagefilename = null, $px = 0, $py = 0, $size = null): self
+    {
         if ($imagefilename !== null) {
-            $position = [ ];
             $imagesize = @getimagesize($imagefilename);
             if ($imagesize === false) {
-                return p_warning("failed to open the image $image");
+                throw new PDFException('failed to open the image ' . $imagesize);
             }
-            if (($page_to_appear < 0) || ($page_to_appear > $this->get_page_count() - 1)) {
-                return p_error("invalid page number");
+
+            if ($page_to_appear < 0 || $page_to_appear > $this->get_page_count() - 1) {
+                throw new PDFException('invalid page number');
             }
+
             $pagesize = $this->get_page_size($page_to_appear);
             if ($pagesize === false) {
-                return p_error("failed to get page size");
+                throw new PDFException('failed to get page size');
             }
 
-            $pagesize = explode(" ", $pagesize[0]->val());
+            $pagesize = explode(' ', (string) $pagesize[0]->val());
 
             // Get the bounding box for the image
-            $p_x = intval("". $pagesize[0]);
-            $p_y = intval("". $pagesize[1]);
-            $p_w = intval("". $pagesize[2]) - $p_x;
-            $p_h = intval("". $pagesize[3]) - $p_y;
+            $p_x = (int) $pagesize[0];
+            $p_y = (int) $pagesize[1];
 
             // Add the position for the image
-            $p_x = $p_x + $px;
-            $p_y = $p_y + $py;
+            $p_x += $px;
+            $p_y += $py;
 
             $i_w = $imagesize[0];
             $i_h = $imagesize[1];
 
             if (is_array($size)) {
                 if (count($size) != 2) {
-                    return p_error("invalid size");
+                    throw new PDFException('invalid size');
                 }
+
                 $width = $size[0];
                 $height = $size[1];
-            } else if ($size === null) {
+            } elseif ($size === null) {
                 $width = $i_w;
                 $height = $i_h;
-            } else if (is_float($size) || is_int($size)) {
+            } elseif (is_float($size) || is_int($size)) {
                 $width = $i_w * $size;
                 $height = $i_h * $size;
             } else {
-                return p_error("invalid size format");
+                throw new PDFException('invalid size format');
             }
 
-            $i_w = $width===null?$imagesize[0]:$width;
-            $i_h = $height===null?$imagesize[1]:$height;
+            $i_w = $width ?? $imagesize[0];
+            $i_h = $height ?? $imagesize[1];
 
             // Set the image appearance and the certificate file
-            $this->set_signature_appearance($page_to_appear, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $imagefilename);
+            $this->set_signature_appearance($page_to_appear, [$p_x, $p_y, $p_x + $i_w, $p_y + $i_h], $imagefilename);
         }
 
-        if (!$this->set_signature_certificate($certfile, $password)) {
-            return p_error("the certificate or the signature is not valid");
+        if (! $this->set_signature_certificate($certfile, $password)) {
+            throw new PDFException('the certificate or the signature is not valid');
         }
 
         $docsigned = $this->to_pdf_file_s();
         if ($docsigned === false) {
-            return p_error("failed to sign the document");
+            throw new PDFException('failed to sign the document');
         }
-        return PDFDoc::from_string($docsigned);
+
+        return self::from_string($docsigned);
+    }
+
+    // Gets a new oid for a new object
+    protected function get_new_oid(): int|float
+    {
+        $this->_max_oid++;
+
+        return $this->_max_oid;
+    }
+
+    /**
+     * Function that creates and updates the PDF objects needed to sign the document. The workflow for a signature is:
+     * - create a signature object
+     * - create an annotation object whose value is the signature object
+     * - create a form object (along with other objects) that will hold the appearance of the annotation object
+     * - modify the root object to make acroform point to the annotation object
+     * - modify the page object to make the annotations of that page include the annotation object
+     * > If the appearance is not set, the image will not appear, and the signature object will be invisible.
+     * > If the certificate is not set, the signature created will be a placeholder (that acrobat will able to sign)
+     *      LIMITATIONS: one document can be signed once at a time; if wanted more signatures, then chain the documents:
+     *      $o1->set_signature_certificate(...);
+     *      $o2 = PDFDoc::fromstring($o1->to_pdf_file_s);
+     *      $o2->set_signature_certificate(...);
+     *      $o2->to_pdf_file_s();
+     *
+     * @return signature a signature object, or null if the document is not signed; false if an error happens
+     */
+    protected function _generate_signature_in_document(): PDFSignatureObject|false
+    {
+        $imagefilename = null;
+        $recttoappear = [0, 0, 0, 0];
+        $pagetoappear = 0;
+
+        if ($this->_appearance !== null) {
+            $imagefilename = $this->_appearance['image'];
+            $recttoappear = $this->_appearance['rect'];
+            $pagetoappear = $this->_appearance['page'];
+        }
+
+        // First of all, we are searching for the root object (which should be in the trailer)
+        $root = $this->_pdf_trailer_object['Root'];
+
+        if ($root === false || ($root = $root->get_object_referenced()) === false) {
+            throw new PDFException('could not find the root object from the trailer');
+        }
+
+        $root_obj = $this->get_object($root);
+        if ($root_obj === false) {
+            throw new PDFException('invalid root object');
+        }
+
+        // Now the object corresponding to the page number in which to appear
+        $page_obj = $this->get_page($pagetoappear);
+        if ($page_obj === false) {
+            throw new PDFException('invalid page');
+        }
+
+        assert($page_obj instanceof PDFObject);
+        // The objects to update
+        $updated_objects = [];
+
+        // Add the annotation to the page
+        if (! isset($page_obj['Annots'])) {
+            $page_obj['Annots'] = new PDFValueList();
+        }
+
+        $annots = &$page_obj['Annots'];
+        $page_rotation = $page_obj['Rotate'] ?? new PDFValueSimple(0);
+
+        if (($referenced = $annots->get_object_referenced()) !== false && ! is_array($referenced)) {
+            // It is an indirect object, so we need to update that object
+            $newannots = $this->create_object(
+                $this->get_object($referenced)->get_value()
+            );
+        } else {
+            $newannots = $this->create_object(
+                new PDFValueList()
+            );
+            $newannots->push($annots);
+        }
+
+        // Create the annotation object, annotate the offset and append the object
+        $annotation_object = $this->create_object(
+            [
+                'Type' => '/Annot',
+                'Subtype' => '/Widget',
+                'FT' => '/Sig',
+                'V' => new PDFValueString(''),
+                'T' => new PDFValueString('Signature' . get_random_string()),
+                'P' => new PDFValueReference($page_obj->get_oid()),
+                'Rect' => $recttoappear,
+                'F' => 132,  // TODO: check this value
+            ]
+        );
+
+        // Prepare the signature object (we need references to it)
+        $signature = null;
+        if ($this->_certificate !== null) {
+            // Perform signature test to get signature size to define __SIGNATURE_MAX_LENGTH
+            $this->logger?->debug("     ########## PERFORM SIGNATURE LENGTH CHECK ##########\n");
+            $CMS = new CMS($this->logger);
+            $CMS->signature_data['signcert'] = $this->_certificate['cert'];
+            $CMS->signature_data['extracerts'] = $this->_certificate['extracerts'] ?? null;
+            $CMS->signature_data['hashAlgorithm'] = 'sha256';
+            $CMS->signature_data['privkey'] = $this->_certificate['pkey'];
+            $CMS->signature_data['tsa'] = $this->_signature_tsa;
+            $CMS->signature_data['ltv'] = $this->_signature_ltv_data;
+            $res = $CMS->pkcs7_sign('0');
+            $len = strlen($res);
+            $this->logger?->debug(sprintf('     Signature Length is "%d" Bytes', $len));
+            $this->logger?->debug("     ########## FINISHED SIGNATURE LENGTH CHECK #########\n\n");
+            PDFSignatureObject::$__SIGNATURE_MAX_LENGTH = $len;
+
+            $signature = $this->create_object([], PDFSignatureObject::class, false);
+            //$signature = new PDFSignatureObject([]);
+            $signature->set_metadata($this->_metadata_name, $this->_metadata_reason, $this->_metadata_location, $this->_metadata_contact_info);
+            $signature->set_certificate($this->_certificate);
+            if ($this->_signature_tsa !== null) {
+                $signature->set_signature_tsa($this->_signature_tsa);
+            }
+
+            if ($this->_signature_ltv_data !== null) {
+                $signature->set_signature_ltv($this->_signature_ltv_data);
+            }
+
+            // Update the value to the annotation object
+            $annotation_object['V'] = new PDFValueReference($signature->get_oid());
+        }
+
+        // If an image is provided, let's load it
+        if ($imagefilename !== null) {
+            // Signature with appearance, following the Adobe workflow:
+            //   1. form
+            //   2. layers /n0 (empty) and /n2
+            // https://www.adobe.com/content/dam/acom/en/devnet/acrobat/pdfs/acrobat_digital_signature_appearances_v9.pdf
+
+            // Get the page height, to change the coordinates system (up to down)
+            $pagesize = $this->get_page_size($pagetoappear);
+            $pagesize = explode(' ', (string) $pagesize[0]->val());
+            $pagesize_h = (float) ('' . $pagesize[3]) - (float) ('' . $pagesize[1]);
+
+            $bbox = [0, 0, $recttoappear[2] - $recttoappear[0], $recttoappear[3] - $recttoappear[1]];
+            $form_object = $this->create_object([
+                'BBox' => $bbox,
+                'Subtype' => '/Form',
+                'Type' => '/XObject',
+                'Group' => [
+                    'Type' => '/Group',
+                    'S' => '/Transparency',
+                    'CS' => '/DeviceRGB',
+                ],
+            ]);
+
+            $container_form_object = $this->create_object([
+                'BBox' => $bbox,
+                'Subtype' => '/Form',
+                'Type' => '/XObject',
+                'Resources' => [
+                    'XObject' => [
+                        'n0' => new PDFValueSimple(''),
+                        'n2' => new PDFValueSimple(''),
+                    ],
+                ],
+            ]);
+            $container_form_object->set_stream("q 1 0 0 1 0 0 cm /n0 Do Q\nq 1 0 0 1 0 0 cm /n2 Do Q\n", false);
+
+            $layer_n0 = $this->create_object([
+                'BBox' => [0.0, 0.0, 100.0, 100.0],
+                'Subtype' => '/Form',
+                'Type' => '/XObject',
+                'Resources' => new PDFValueObject(),
+            ]);
+
+            // Add the same structure than Acrobat Reader
+            $layer_n0->set_stream('% DSBlank' . __EOL, false);
+
+            $layer_n2 = $this->create_object([
+                'BBox' => $bbox,
+                'Subtype' => '/Form',
+                'Type' => '/XObject',
+                'Resources' => new PDFValueObject(),
+            ]);
+
+            $result = _add_image($this->create_object(...), $imagefilename, $bbox[0], $bbox[1], $bbox[2], $bbox[3], $page_rotation->val());
+            if ($result === false) {
+                throw new PDFException('could not add the image');
+            }
+
+            $layer_n2['Resources'] = $result['resources'];
+            $layer_n2->set_stream($result['command'], false);
+
+            $container_form_object['Resources']['XObject']['n0'] = new PDFValueReference($layer_n0->get_oid());
+            $container_form_object['Resources']['XObject']['n2'] = new PDFValueReference($layer_n2->get_oid());
+
+            assert($container_form_object instanceof PDFObject);
+            $form_object['Resources'] = new PDFValueObject([
+                'XObject' => [
+                    'FRM' => new PDFValueReference($container_form_object->get_oid()),
+                ],
+            ]);
+            $form_object->set_stream('/FRM Do', false);
+
+            // Set the signature appearance field to the form object
+            $annotation_object['AP'] = [
+                'N' => new PDFValueReference($form_object->get_oid()),
+            ];
+            $annotation_object['Rect'] = [$recttoappear[0], $pagesize_h - $recttoappear[1], $recttoappear[2], $pagesize_h - $recttoappear[3]];
+        }
+
+        if (! $newannots->push(new PDFValueReference($annotation_object->get_oid()))) {
+            throw new PDFException('Could not update the page where the signature has to appear');
+        }
+
+        $page_obj['Annots'] = new PDFValueReference($newannots->get_oid());
+        $updated_objects[] = $page_obj;
+
+        // AcroForm may be an indirect object
+        if (! isset($root_obj['AcroForm'])) {
+            $root_obj['AcroForm'] = new PDFValueObject();
+        }
+
+        $acroform = &$root_obj['AcroForm'];
+        if (($referenced = $acroform->get_object_referenced()) !== false && ! is_array($referenced)) {
+            $acroform = $this->get_object($referenced);
+            $updated_objects[] = $acroform;
+        } else {
+            $updated_objects[] = $root_obj;
+        }
+
+        // Add the annotation to the interactive form
+        $acroform['SigFlags'] = 3;
+        if (! isset($acroform['Fields'])) {
+            $acroform['Fields'] = new PDFValueList();
+        }
+
+        // Add the annotation object to the interactive form
+        if (! $acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
+            throw new PDFException('could not create the signature field');
+        }
+
+        // Store the objects
+        foreach ($updated_objects as $object) {
+            $this->add_object($object);
+        }
+
+        return $signature;
+    }
+
+    /**
+     * Function that updates the modification date of the document. If modifies two parts: the "info" field of the trailer object
+     *   and the xmp metadata field pointed by the root object.
+     *
+     * @param date a DateTime object that contains the date to be set; null to set "now"
+     *
+     * @return ok true if the date could be set; false otherwise
+     */
+    protected function update_mod_date(?DateTime $date = null): bool
+    {
+        // First of all, we are searching for the root object (which should be in the trailer)
+        $root = $this->_pdf_trailer_object['Root'];
+
+        if ($root === false || ($root = $root->get_object_referenced()) === false) {
+            throw new PDFException('could not find the root object from the trailer');
+        }
+
+        $root_obj = $this->get_object($root);
+        if ($root_obj === false) {
+            throw new PDFException('invalid root object');
+        }
+
+        if (! $date instanceof DateTime) {
+            $date = new DateTime();
+        }
+
+        // Update the xmp metadata if exists
+        if (isset($root_obj['Metadata'])) {
+            $metadata = $root_obj['Metadata'];
+            if (($referenced = $metadata->get_object_referenced()) !== false && ! is_array($referenced)) {
+                $metadata = $this->get_object($referenced);
+                $metastream = $metadata->get_stream();
+                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . $date->format('c') . '</xmp:ModifyDate>', (string) $metastream);
+                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . $date->format('c') . '</xmp:MetadataDate>', (string) $metastream);
+                $metastream = preg_replace('/<xmpMM:InstanceID>([^<]*)<\/xmpMM:InstanceID>/', '<xmpMM:InstanceID>uuid:' . UUID::v4() . '</xmpMM:InstanceID>', (string) $metastream);
+                $metadata->set_stream($metastream, false);
+                $this->add_object($metadata);
+            }
+        }
+
+        // Update the information object (not really needed)
+        $info = $this->_pdf_trailer_object['Info'];
+        if ($info === false || ($info = $info->get_object_referenced()) === false) {
+            throw new PDFException('could not find the info object from the trailer');
+        }
+
+        $info_obj = $this->get_object($info);
+        if ($info_obj === false) {
+            throw new PDFException('invalid info object');
+        }
+
+        $info_obj['ModDate'] = new PDFValueString(timestamp_to_pdfdatestring($date));
+        $info_obj['Producer'] = new PDFValueString('Modificado con SAPP');
+        $this->add_object($info_obj);
+
+        return true;
+    }
+
+    /**
+     * This function generates all the contents of the file up to the xref entry.
+     *
+     * @param rebuild whether to generate the xref with all the objects in the document (true) or
+     *                consider only the new ones (false)
+     *
+     * @return xref_data [ the text corresponding to the objects, array of offsets for each object ]
+     */
+    protected function _generate_content_to_xref(bool $rebuild = false): array
+    {
+        if ($rebuild) {
+            $result = new Buffer('%' . $this->_pdf_version_string . __EOL);
+        } else {
+            $result = new Buffer($this->_buffer);
+        }
+
+        // Need to calculate the objects offset
+        $offsets = [];
+        $offsets[0] = 0;
+
+        // The objects
+        $offset = $result->size();
+
+        if ($rebuild) {
+            for ($i = 0; $i <= $this->_max_oid; $i++) {
+                if (($object = $this->get_object($i)) === false) {
+                    continue;
+                }
+
+                $result->data($object->to_pdf_entry());
+                $offsets[$i] = $offset;
+                $offset = $result->size();
+            }
+        } else {
+            foreach ($this->_pdf_objects as $obj_id => $object) {
+                $result->data($object->to_pdf_entry());
+                $offsets[$obj_id] = $offset;
+                $offset = $result->size();
+            }
+        }
+
+        return [$result, $offsets];
+    }
+
+    /**
+     * This function builds the page IDs for object with id oid. If it is a page, it returns the oid; if it is not and it has
+     *   kids and every kid is a page (or a set of pages), it finds the pages.
+     *
+     * @param oid the object id to inspect
+     *
+     * @return pages the ordered list of page ids corresponding to object oid, or false if any of the kid objects
+     *               is not of type page or pages.
+     */
+    protected function _get_page_info(int $oid, array $info = []): array
+    {
+        $object = $this->get_object($oid);
+        if ($object === false) {
+            throw new PDFException('could not get information about the page');
+        }
+
+        $page_ids = [];
+
+        switch ($object['Type']->val()) {
+            case 'Pages':
+                $kids = $object['Kids'];
+                $kids = $kids->get_object_referenced();
+                if ($kids !== false) {
+                    if (isset($object['MediaBox'])) {
+                        $info['size'] = $object['MediaBox']->val();
+                    }
+
+                    foreach ($kids as $kid) {
+                        $ids = $this->_get_page_info($kid, $info);
+                        if ($ids === false) {
+                            return false;
+                        }
+
+                        array_push($page_ids, ...$ids);
+                    }
+                } else {
+                    throw new PDFException('could not get the pages');
+                }
+
+                break;
+            case 'Page':
+                if (isset($object['MediaBox'])) {
+                    $info['size'] = $object['MediaBox']->val();
+                }
+
+                return [
+                    [
+                        'id' => $oid,
+                        'info' => $info,
+                    ],
+                ];
+            default:
+                return false;
+        }
+
+        return $page_ids;
+    }
+
+    /**
+     * Obtains an ordered list of objects that contain the ids of the page objects of the document.
+     *   The order is made according to the catalog and the document structure.
+     *
+     * @return list an ordered list of the id of the page objects, or false if could not be found
+     */
+    protected function _acquire_pages_info(): array
+    {
+        $root = $this->_pdf_trailer_object['Root'];
+        if ($root === false || ($root = $root->get_object_referenced()) === false) {
+            throw new PDFException('could not find the root object from the trailer');
+        }
+
+        $root = $this->get_object($root);
+        if ($root !== false) {
+            $pages = $root['Pages'];
+            if ($pages === false || ($pages = $pages->get_object_referenced()) === false) {
+                throw new PDFException('could not find the pages for the document');
+            }
+
+            $this->_pages_info = $this->_get_page_info($pages);
+        } else {
+            $this->logger?->warning('root object does not exist, so cannot get information about pages');
+        }
+
+        return [];
     }
 }

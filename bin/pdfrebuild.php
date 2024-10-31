@@ -19,37 +19,25 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-namespace ddn\sapp\pdfvalue;
+use ddn\sapp\AlmostOriginalLogger;
+use ddn\sapp\PDFDoc;
 
-class PDFValueSimple extends PDFValue
-{
-    public function push($v): bool
-    {
-        if ($v::class === static::class) {
-            // Can push
-            $this->value .= ' ' . $v->val();
+require_once __DIR__ . '/../vendor/autoload.php';
 
-            return true;
-        }
+if ($argc < 2 || $argc > 3) {
+    fwrite(STDERR, sprintf('usage: %s <filename> [<output>]', $argv[0]));
+    exit(1);
+}
 
-        return false;
-    }
+if (! file_exists($argv[1])) {
+    fwrite(STDERR, 'failed to open file ' . $argv[1]);
+} else {
+    $obj = PDFDoc::from_string(file_get_contents($argv[1]));
+    $obj->setLogger(new AlmostOriginalLogger());
 
-    public function get_object_referenced(): false|int
-    {
-        if (! preg_match('/^\s*([0-9]+)\s+([0-9]+)\s+R\s*$/ms', (string) $this->value, $matches)) {
-            return false;
-        }
-
-        return (int) $matches[1];
-    }
-
-    public function get_int(): false|int
-    {
-        if (! is_numeric($this->value)) {
-            return false;
-        }
-
-        return (int) $this->value;
+    if ($argc === 3) {
+        file_put_contents($argv[2], $obj->to_pdf_file_s(true));
+    } else {
+        echo $obj->to_pdf_file_s(true);
     }
 }

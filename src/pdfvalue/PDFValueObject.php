@@ -21,132 +21,167 @@
 
 namespace ddn\sapp\pdfvalue;
 
-class PDFValueObject extends PDFValue {
-    public function __construct($value = []) {
+class PDFValueObject extends PDFValue
+{
+    public function __construct($value = [])
+    {
         $result = [];
         foreach ($value as $k => $v) {
             $result[$k] = self::_convert($v);
         }
+
         parent::__construct($result);
     }
 
-    public function diff($other) {
-        $different = parent::diff($other);
-        if (($different === false) || ($different === null)) return $different;
+    /**
+     * Function to output the object using the PDF format, and trying to make it compact (by reducing spaces, depending on the values)
+     *
+     * @return pdfentry the PDF entry for the object
+     */
+    public function __toString(): string
+    {
+        $result = [];
+        foreach ($this->value as $k => $v) {
+            $v = '' . $v;
+            if ($v === '') {
+                $result[] = '/' . $k;
+                continue;
+            }
 
-        $result = new PDFValueObject();
+            match ($v[0]) {
+                '/', '[', '(', '<' => array_push($result, sprintf('/%s%s', $k, $v)),
+                default => array_push($result, sprintf('/%s %s', $k, $v)),
+            };
+        }
+
+        return '<<' . implode('', $result) . '>>';
+    }
+
+    public function diff(object $other): mixed
+    {
+        $different = parent::diff($other);
+        if ($different === false || $different === null) {
+            return $different;
+        }
+
+        $result = new self();
         $differences = 0;
 
         foreach ($this->value as $k => $v) {
             if (isset($other->value[$k])) {
-                if (is_a($this->value[$k], "ddn\sapp\pdfvalue\PDFValue")) {
+                if (is_a($this->value[$k], PDFValue::class)) {
                     $different = $this->value[$k]->diff($other->value[$k]);
                     if ($different === false) {
                         $result[$k] = $v;
                         $differences++;
-                    } else 
-                    if ($different !== null) {
+                    } elseif ($different !== null) {
                         $result[$k] = $different;
                         $differences++;
-                    } 
-                }    
+                    }
+                }
             } else {
                 $result[$k] = $v;
                 $differences++;
             }
         }
-        if ($differences === 0)
+
+        if ($differences === 0) {
             return null;
-            
+        }
+
         return $result;
     }
 
-    public static function fromarray($parts) {
+    public static function fromarray(array $parts): false|self
+    {
         $k = array_keys($parts);
         $intkeys = false;
         $result = [];
-        foreach ($k as $ck)
+        foreach ($k as $ck) {
             if (is_int($ck)) {
                 $intkeys = true;
                 break;
             }
-        if ($intkeys) return false;
-        foreach ($parts as $k => $v) {
-            $result[$k] = self::_convert($v);
         }
-        return new PDFValueObject($result);
+
+        if ($intkeys) {
+            return false;
+        }
+
+        foreach ($parts as $k2 => $v) {
+            $result[$k2] = self::_convert($v);
+        }
+
+        return new self($result);
     }
 
-    public static function fromstring($str) {
+    public static function fromstring($str): false|self
+    {
         $result = [];
         $field = null;
-        $value = null;
-        $parts = explode(' ', $str);
-        for ($i = 0; $i < count($parts); $i++) {
+        $parts = explode(' ', (string) $str);
+        for ($i = 0, $iMax = count($parts); $i < $iMax; $i++) {
             if ($field === null) {
                 $field = $parts[$i];
-                if ($field === '') return false;
-                if ($field[0] !== '/') return false;
+                if ($field === '') {
+                    return false;
+                }
+
+                if ($field[0] !== '/') {
+                    return false;
+                }
+
                 $field = substr($field, 1);
-                if ($field === '') return false;
+                if ($field === '') {
+                    return false;
+                }
+
                 continue;
             }
+
             $value = $parts[$i];
             $result[$field] = $value;
             $field = null;
         }
+
         // If there is no pair of values, there is no valid
-        if ($field !== null) return false;
-        return new PDFValueObject($result);
+        if ($field !== null) {
+            return false;
+        }
+
+        return new self($result);
     }
 
-    public function get_keys() {
+    public function get_keys(): false|array
+    {
         return array_keys($this->value);
     }
 
     /**
      * Function used to enable using [x] to set values to the fields of the object (from ArrayAccess interface)
      *  i.e. object[offset]=value
+     *
      * @param offset the index used inside the braces
      * @param value the value to set to that index (it will be converted to a PDFValue* object)
+     *
      * @return value the value set to the field
      */
-    public function offsetSet($offset , $value) : void {
+    public function offsetSet($offset, $value): void
+    {
         if ($value === null) {
-            if (isset($this->value[$offset]))
+            if (isset($this->value[$offset])) {
                 unset($this->value[$offset]);
+            }
+
             // return null;
         }
+
         $this->value[$offset] = self::_convert($value);
         // return $this->value[$offset];
     }
-    public function offsetExists ( $offset ) : bool {
-        return isset($this->value[$offset]);
-    }
 
-    /**
-     * Function to output the object using the PDF format, and trying to make it compact (by reducing spaces, depending on the values)
-     * @return pdfentry the PDF entry for the object
-     */
-    public function __toString() {
-        $result = [];
-        foreach ($this->value as $k => $v) {
-            $v = "" . $v;
-            if ($v === "") {
-                array_push($result, "/$k");
-                continue;
-            }
-            switch ($v[0]) {
-                case '/':
-                case '[':
-                case '(':
-                case '<':
-                    array_push($result, "/$k$v");
-                    break;
-                default:
-                    array_push($result, "/$k $v");
-            }
-        }
-        return "<<" . implode('', $result) . ">>";
+    public function offsetExists($offset): bool
+    {
+        return isset($this->value[$offset]);
     }
 }

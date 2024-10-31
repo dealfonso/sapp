@@ -21,28 +21,27 @@
 
 namespace ddn\sapp;
 
-use ddn\sapp\PDFObjectParser;
-use ddn\sapp\helpers\StreamReader;
 use ddn\sapp\helpers\Buffer;
-use function ddn\sapp\helpers\p_debug;
-use function ddn\sapp\helpers\p_debug_var;
-use function ddn\sapp\helpers\p_error;
-use function ddn\sapp\helpers\p_warning;
-use function ddn\sapp\helpers\show_bytes;
-
 use ddn\sapp\helpers\LoadHelpers;
-if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
-    new LoadHelpers;
+use ddn\sapp\helpers\StreamReader;
+use ddn\sapp\pdfvalue\PDFValue;
+use Exception;
+
+if (! defined(LoadHelpers::class)) {
+    new LoadHelpers();
+}
 
 // TODO: use the streamreader to deal with the document in the file, instead of a buffer
 
-class PDFUtilFnc {
-
-    public static function get_trailer(&$_buffer, $trailer_pos) {
+class PDFUtilFnc
+{
+    public static function get_trailer($_buffer, int $trailer_pos): PDFValue|false|null
+    {
         // Search for the trailer structure
-        if (preg_match('/trailer\s*(.*)\s*startxref/ms', $_buffer, $matches, 0, $trailer_pos) !== 1)
-            return p_error("trailer not found");
-        
+        if (preg_match('/trailer\s*(.*)\s*startxref/ms', (string) $_buffer, $matches, 0, $trailer_pos) !== 1) {
+            throw new PDFException('trailer not found');
+        }
+
         $trailer_str = $matches[1];
 
         // We create the object to parse (this is not innefficient, because it is disposed when returning from the function)
@@ -50,15 +49,19 @@ class PDFUtilFnc {
         $parser = new PDFObjectParser();
         try {
             $trailer_obj = $parser->parsestr($trailer_str);
-        } catch (Exception $e) {
-            return p_error("trailer is not valid");
+        } catch (Exception $exception) {
+            throw new PDFException('trailer is not valid', 0, $exception);
         }
 
         return $trailer_obj;
     }
 
-    public static function build_xref_1_5($offsets) {
-        if (isset($offsets[0])) unset($offsets[0]);
+    public static function build_xref_1_5($offsets): array
+    {
+        if (isset($offsets[0])) {
+            unset($offsets[0]);
+        }
+
         $k = array_keys($offsets);
         sort($k);
 
@@ -66,48 +69,51 @@ class PDFUtilFnc {
         $i_k = 0;
         $c_k = 0;
         $count = 1;
-        $result = "";
-        for ($i = 0; $i < count($k); $i++) {
+        $result = '';
+        for ($i = 0, $iMax = count($k); $i < $iMax; $i++) {
             if ($c_k === 0) {
                 $c_k = $k[$i] - 1;
                 $i_k = $k[$i];
                 $count = 0;
             }
+
             if ($k[$i] === $c_k + 1) {
                 $count++;
             } else {
-                array_push($indexes, "$i_k $count");
+                $indexes[] = sprintf('%s %d', $i_k, $count);
                 $count = 1;
                 $i_k = $k[$i];
             }
+
             $c_offset = $offsets[$k[$i]];
 
             if (is_array($c_offset)) {
                 $result .= pack('C', 2);
-                $result .= pack('N', $c_offset["stmoid"]);
-                $result .= pack('C', $c_offset["pos"]);
+                $result .= pack('N', $c_offset['stmoid']);
+                $result .= pack('C', $c_offset['pos']);
             } else {
                 if ($c_offset === null) {
                     $result .= pack('C', 0);
-                    $result .= pack('N', $c_offset);
-                    $result .= pack('C', 0);
                 } else {
                     $result .= pack('C', 1);
-                    $result .= pack('N', $c_offset);
-                    $result .= pack('C', 0);
                 }
+
+                $result .= pack('N', $c_offset);
+                $result .= pack('C', 0);
             }
+
             $c_k = $k[$i];
         }
-        array_push($indexes, "$i_k $count");
-        $indexes = implode(" ", $indexes);
+
+        $indexes[] = sprintf('%s %d', $i_k, $count);
+        $indexes = implode(' ', $indexes);
 
         // p_debug(show_bytes($result, 6));
 
         return [
-            "W" => [ 1, 4, 1 ],
-            "Index" => $indexes,
-            "stream" => $result
+            'W' => [1, 4, 1],
+            'Index' => $indexes,
+            'stream' => $result,
         ];
     }
 
@@ -115,89 +121,92 @@ class PDFUtilFnc {
      * This function obtains the xref from the cross reference streams (7.5.8 Cross-Reference Streams)
      *   which started in PDF 1.5.
      */
-    public static function get_xref_1_5(&$_buffer, $xref_pos, $depth = null) {
+    public static function get_xref_1_5(&$_buffer, int $xref_pos, ?int $depth = null): false|array
+    {
         if ($depth !== null) {
-            if ($depth <= 0)
+            if ($depth <= 0) {
                 return false;
+            }
 
-            $depth = $depth - 1;
+            --$depth;
         }
 
-        $xref_o = PDFUtilFnc::find_object_at_pos($_buffer, null, $xref_pos, []);
-        if ($xref_o === false)
-            return p_error("cross reference object not found when parsing xref at position $xref_pos", [false, false, false]);
+        $xref_o = self::find_object_at_pos($_buffer, null, $xref_pos, []);
+        if ($xref_o === false) {
+            throw new PDFException('cross reference object not found when parsing xref at position ' . $xref_pos, [false, false, false]);
+        }
 
-        if (!(isset($xref_o["Type"])) || ($xref_o["Type"]->val() !== "XRef"))
-            return p_error("invalid xref table", [false, false, false]);
+        if (! isset($xref_o['Type']) || $xref_o['Type']->val() !== 'XRef') {
+            throw new PDFException('invalid xref table', [false, false, false]);
+        }
 
         $stream = $xref_o->get_stream(false);
-        if ($stream === null) 
-            return p_error("cross reference stream not found when parsing xref at position $xref_pos", [false, false, false]);
+        if ($stream === null) {
+            throw new PDFException('cross reference stream not found when parsing xref at position ' . $xref_pos, [false, false, false]);
+        }
 
-        $W = $xref_o["W"]->val(true);
-        if (count($W) !== 3)
-            return p_error("invalid cross reference object", [false, false, false]);
+        $W = $xref_o['W']->val(true);
+        if (count($W) !== 3) {
+            throw new PDFException('invalid cross reference object', [false, false, false]);
+        }
 
-        $W[0] = intval($W[0]);
-        $W[1] = intval($W[1]);
-        $W[2] = intval($W[2]);
+        $W[0] = (int) $W[0];
+        $W[1] = (int) $W[1];
+        $W[2] = (int) $W[2];
 
-        $Size = $xref_o["Size"]->get_int();
-        if ($Size === false)
-            return p_error("could not get the size of the xref table", [false, false, false]);
+        $Size = $xref_o['Size']->get_int();
+        if ($Size === false) {
+            throw new PDFException('could not get the size of the xref table', [false, false, false]);
+        }
 
-        $Index = [ 0, $Size ];
-        if (isset($xref_o["Index"]))
-            $Index = $xref_o["Index"]->val(true);
+        $Index = [0, $Size];
+        if (isset($xref_o['Index'])) {
+            $Index = $xref_o['Index']->val(true);
+        }
 
-        if (count($Index) % 2 !== 0)
-            return p_error("invalid indexes of xref table", [false, false, false]);
+        if (count($Index) % 2 !== 0) {
+            throw new PDFException('invalid indexes of xref table', [false, false, false]);
+        }
 
         // Get the previous xref table, to build up on it
-        $trailer_obj = null;
         $xref_table = [];
 
-        if (($depth === null) || ($depth > 0)) {
-            // If still want to get more versions, let's check whether there is a previous xref table or not
+        // If still want to get more versions, let's check whether there is a previous xref table or not
+        if (($depth === null || $depth > 0) && isset($xref_o['Prev'])) {
+            $Prev = $xref_o['Prev'];
+            $Prev = $Prev->get_int();
+            if ($Prev === false) {
+                throw new PDFException('invalid reference to a previous xref table', [false, false, false]);
+            }
 
-            if (isset($xref_o["Prev"])) {
-                $Prev = $xref_o["Prev"];
-                $Prev = $Prev->get_int();
-                if ($Prev === false)
-                    return p_error("invalid reference to a previous xref table", [false, false, false]);
-
-                // When dealing with 1.5 cross references, we do not allow to use other than cross references
-                [ $xref_table, $trailer_obj ] = PDFUtilFnc::get_xref_1_5($_buffer, $Prev, $depth);
-                // p_debug_var($xref_table);
-            } 
+            // When dealing with 1.5 cross references, we do not allow to use other than cross references
+            [$xref_table] = self::get_xref_1_5($_buffer, $Prev, $depth);
+            // p_debug_var($xref_table);
         }
 
         // p_debug("xref table found at $xref_pos (oid: " . $xref_o->get_oid() . ")");
         $stream_v = new StreamReader($stream);
 
         // Get the format function to un pack the values
-        $get_fmt_function = function($f) {
-            if ($f === false)
+        $get_fmt_function = static function ($f) {
+            if ($f === false) {
                 return false;
-
-            switch ($f) {
-                case 0: return function ($v) { return 0; };
-                case 1: return function ($v) { return unpack('C', str_pad($v, 1, chr(0), STR_PAD_LEFT))[1]; };
-                case 2: return function ($v) { return unpack('n', str_pad($v, 2, chr(0), STR_PAD_LEFT))[1]; };
-                case 3: 
-                case 4: return function ($v) { return unpack('N', str_pad($v, 4, chr(0), STR_PAD_LEFT))[1]; };
-                case 5:
-                case 6:
-                case 7:
-                case 8: return function ($v) { return unpack('J', str_pad($v, 8, chr(0), STR_PAD_LEFT))[1]; };
             }
-            return false;
+
+            return match ($f) {
+                0 => static fn ($v): int => 0,
+                1 => static fn ($v) => unpack('C', str_pad($v, 1, chr(0), STR_PAD_LEFT))[1],
+                2 => static fn ($v) => unpack('n', str_pad($v, 2, chr(0), STR_PAD_LEFT))[1],
+                3, 4 => static fn ($v) => unpack('N', str_pad($v, 4, chr(0), STR_PAD_LEFT))[1],
+                5, 6, 7, 8 => static fn ($v) => unpack('J', str_pad($v, 8, chr(0), STR_PAD_LEFT))[1],
+                default => false,
+            };
         };
 
         $fmt_function = [
             $get_fmt_function($W[0]),
             $get_fmt_function($W[1]),
-            $get_fmt_function($W[2])
+            $get_fmt_function($W[2]),
         ];
 
         // p_debug("xref entries at $xref_pos for object " . $xref_o->get_oid());
@@ -209,13 +218,14 @@ class PDFUtilFnc {
             $object_i = $Index[$index_i++];
             $object_count = $Index[$index_i++];
 
-            while (($stream_v->currentchar() !== false) && ($object_count > 0)) {
-                $f1 = $W[0]!=0?($fmt_function[0]($stream_v->nextchars($W[0]))):1;
+            while ($stream_v->currentchar() !== false && $object_count > 0) {
+                $f1 = $W[0] != 0 ? $fmt_function[0]($stream_v->nextchars($W[0])) : 1;
                 $f2 = $fmt_function[1]($stream_v->nextchars($W[1]));
                 $f3 = $fmt_function[2]($stream_v->nextchars($W[2]));
 
-                if (($f1 === false) || ($f2 === false) || ($f3 === false))
-                    return p_error("invalid stream for xref table", [false, false, false]);
+                if ($f1 === false || $f2 === false || $f3 === false) {
+                    throw new PDFException('invalid stream for xref table', [false, false, false]);
+                }
 
                 switch ($f1) {
                     case 0:
@@ -225,20 +235,18 @@ class PDFUtilFnc {
                     case 1:
                         // Add object
                         $xref_table[$object_i] = $f2;
-                        /*
-                        TODO: consider creating a generation table, but for the purpose of the xref there is no matter... if the document if well-formed.
-                        */
-                        if ($f3 !== 0)
-                            p_warning("Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/");
 
                         break;
                     case 2:
                         // Stream object
                         // $f2 is the number of a stream object, $f3 is the index in that stream object
-                        $xref_table[$object_i] = array("stmoid" => $f2, "pos" => $f3 );
+                        $xref_table[$object_i] = [
+                            'stmoid' => $f2,
+                            'pos' => $f3,
+                        ];
                         break;
                     default:
-                        p_error("do not know about entry of type $f1 in xref table");
+                        throw new PDFException(sprintf('do not know about entry of type %s in xref table', $f1));
                 }
 
                 $object_i++;
@@ -246,55 +254,58 @@ class PDFUtilFnc {
             }
         }
 
-        return [ $xref_table, $xref_o->get_value(), "1.5" ];
+        return [$xref_table, $xref_o->get_value(), '1.5'];
     }
 
-    public static function get_xref_1_4(&$_buffer, $xref_pos, $depth = null) {
+    public static function get_xref_1_4(&$_buffer, string $xref_pos, $depth = null): false|array
+    {
         if ($depth !== null) {
-            if ($depth <= 0)
+            if ($depth <= 0) {
                 return false;
+            }
 
-            $depth = $depth - 1;
+            --$depth;
         }
 
-        $trailer_pos = strpos($_buffer, "trailer", $xref_pos);
-        $min_pdf_version = "1.4";
+        $trailer_pos = strpos((string) $_buffer, 'trailer', $xref_pos);
+        $min_pdf_version = '1.4';
 
         // Get the xref content and make sure that the buffer passed contains the xref tag at the offset provided
-        $xref_substr = substr($_buffer, $xref_pos, $trailer_pos - $xref_pos);
+        $xref_substr = substr((string) $_buffer, $xref_pos, $trailer_pos - $xref_pos);
 
         $separator = "\r\n";
         $xref_line = strtok($xref_substr, $separator);
-        if ($xref_line !== 'xref')
-            return p_error("xref tag not found at position $xref_pos", [false, false, false]);
-        
+        if ($xref_line !== 'xref') {
+            throw new PDFException('xref tag not found at position ' . $xref_pos, [false, false, false]);
+        }
+
         // Now parse the lines and build the xref table
         $obj_id = false;
         $obj_count = 0;
         $xref_table = [];
 
         while (($xref_line = strtok($separator)) !== false) {
-
             // The first type of entry contains the id of the next object and the amount of continuous objects defined
-            if (preg_match('/([0-9]+) ([0-9]+)$/', $xref_line, $matches) === 1) {
+            if (preg_match('/(\d+) (\d+)$/', $xref_line, $matches) === 1) {
                 if ($obj_count > 0) {
                     // If still expecting objects, we'll assume that the xref is malformed
-                    return p_error("malformed xref at position $xref_pos", [false, false, false]);
+                    throw new PDFException('malformed xref at position ' . $xref_pos, [false, false, false]);
                 }
-                $obj_id = intval($matches[1]);
-                $obj_count = intval($matches[2]);
+
+                $obj_id = (int) $matches[1];
+                $obj_count = (int) $matches[2];
                 continue;
             }
 
             // The other type of entry contains the offset of the object, the generation and the command (which is "f" for "free" or "n" for "new")
-            if (preg_match('/^([0-9]+) ([0-9]+) (.)\s*/', $xref_line, $matches) === 1) {
-
+            if (preg_match('/^(\d+) (\d+) (.)\s*/', $xref_line, $matches) === 1) {
                 // If no object expected, we'll assume that the xref is malformed
-                if ($obj_count === 0)
-                    return p_error("unexpected entry for xref: $xref_line", [false, false, false]);
+                if ($obj_count === 0) {
+                    throw new PDFException('unexpected entry for xref: ' . $xref_line, [false, false, false]);
+                }
 
-                $obj_offset = intval($matches[1]);
-                $obj_generation = intval($matches[2]);
+                $obj_offset = (int) $matches[1];
+                $obj_generation = (int) $matches[2];
                 $obj_operation = $matches[3];
 
                 if ($obj_offset !== 0) {
@@ -320,155 +331,167 @@ class PDFUtilFnc {
                             //  in the actual offset.
                             // TODO: consider creating a "generation table"
                             $xref_table[$obj_id] = $obj_offset;
-                            if ($obj_generation != 0)
-                                p_warning("Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/");
+
                             break;
                         default:
                             // If it is not one of the expected, let's skip the object
-                            p_error("invalid entry for xref: $xref_line", [false, false, false]);
+                            throw new PDFException('invalid entry for xref: ' . $xref_line, [false, false, false]);
                     }
                 }
 
-                $obj_count-= 1;
+                $obj_count--;
                 $obj_id++;
                 continue;
             }
 
             // If the entry is not recongised, show the error
-            p_error("invalid xref entry $xref_line");
-            $xref_line = strtok($separator);
+            throw new PDFException('invalid xref entry ' . $xref_line);
         }
 
         // Get the trailer object
-        $trailer_obj = PDFUtilFnc::get_trailer($_buffer, $trailer_pos);
+        $trailer_obj = self::get_trailer($_buffer, $trailer_pos);
 
         // If there exists a previous xref (for incremental PDFs), get it and merge the objects that do not exist in the current xref table
         if (isset($trailer_obj['Prev'])) {
-            
             $xref_prev_pos = $trailer_obj['Prev']->val();
-            if (!is_numeric($xref_prev_pos))
-                return p_error("invalid trailer $trailer_obj", [false, false, false]);
+            if (! is_numeric($xref_prev_pos)) {
+                throw new PDFException('invalid trailer ' . $trailer_obj, [false, false, false]);
+            }
 
-            $xref_prev_pos = intval($xref_prev_pos);
+            $xref_prev_pos = (int) $xref_prev_pos;
 
-            [ $prev_table, $prev_trailer, $prev_min_pdf_version ] = PDFUtilFnc::get_xref_1_4($_buffer, $xref_prev_pos, $depth);
+            [$prev_table, $prev_trailer, $prev_min_pdf_version] = self::get_xref_1_4($_buffer, $xref_prev_pos, $depth);
 
-            if ($prev_min_pdf_version !== $min_pdf_version)
-                return p_error("mixed type of xref tables are not supported", [ false, false, false]);
+            if ($prev_min_pdf_version !== $min_pdf_version) {
+                throw new PDFException('mixed type of xref tables are not supported', [false, false, false]);
+            }
 
             if ($prev_table !== false) {
-                foreach ($prev_table as $obj_id => &$obj_offset) {              // Not modifying the objects, but to make sure that it does not consume additional memory
+                foreach ($prev_table as $obj_id2 => $obj_offset) {              // Not modifying the objects, but to make sure that it does not consume additional memory
                     // If there not exists a new version, we'll acquire it
-                    if (!isset($xref_table[$obj_id])) {
-                        $xref_table[$obj_id] = $obj_offset;
+                    if (! isset($xref_table[$obj_id2])) {
+                        $xref_table[$obj_id2] = $obj_offset;
                     }
                 }
             }
         }
 
-        return [ $xref_table, $trailer_obj, $min_pdf_version ];
+        return [$xref_table, $trailer_obj, $min_pdf_version];
     }
 
-    public static function get_xref(&$_buffer, $xref_pos, $depth = null) {
-        
+    public static function get_xref(string &$_buffer, ?int $xref_pos, ?int $depth = null): array
+    {
         // Each xref is immediately followed by a trailer
-        $trailer_pos = strpos($_buffer, "trailer", $xref_pos);
+        $trailer_pos = strpos($_buffer, 'trailer', $xref_pos);
         if ($trailer_pos === false) {
-            [ $xref_table, $trailer_obj, $min_pdf_version ] = PDFUtilFnc::get_xref_1_5($_buffer, $xref_pos, $depth);
-        } else
-            [ $xref_table, $trailer_obj, $min_pdf_version ] = PDFUtilFnc::get_xref_1_4($_buffer, $xref_pos, $depth);
-        return [ $xref_table, $trailer_obj, $min_pdf_version ];
+            [$xref_table, $trailer_obj, $min_pdf_version] = self::get_xref_1_5($_buffer, $xref_pos, $depth);
+        } else {
+            [$xref_table, $trailer_obj, $min_pdf_version] = self::get_xref_1_4($_buffer, $xref_pos, $depth);
+        }
+
+        return [$xref_table, $trailer_obj, $min_pdf_version];
     }
 
-    public static function acquire_structure(&$_buffer, $depth = null) {
+    public static function acquire_structure(string &$_buffer, ?int $depth = null): false|array
+    {
         // Get the first line and acquire the PDF version of the document
         $separator = "\r\n";
         $pdf_version = strtok($_buffer, $separator);
-        if ($pdf_version === false)
+        if ($pdf_version === false) {
             return false;
+        }
 
-        if (preg_match('/^%PDF-[0-9]+\.[0-9]+$/', $pdf_version, $matches) !== 1)
-            return p_error("PDF version string not found");
+        if (preg_match('/^%PDF-\d+\.\d+$/', $pdf_version, $matches) !== 1) {
+            throw new PDFException('PDF version string not found');
+        }
 
-        if (preg_match_all('/startxref\s*([0-9]+)\s*%%EOF($|[\r\n])/ms', $_buffer, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) === false)
-            return p_error("failed to get structure");
+        if (preg_match_all('/startxref\s*([0-9]+)\s*%%EOF($|[\r\n])/ms', $_buffer, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE) === false) {
+            throw new PDFException('failed to get structure');
+        }
 
-        $_versions=[];
+        $_versions = [];
         /*
         print_r($matches);
         exit();
         */
         foreach ($matches as $match) {
-            array_push($_versions, $match[2][1] + strlen($match[2][0]));
+            $_versions[] = $match[2][1] + strlen($match[2][0]);
         }
 
         // Now get the trailing part and make sure that it has the proper form
-        $startxref_pos = strrpos($_buffer, "startxref");
-        if ($startxref_pos === false)
-            return p_error("startxref not found");
+        $startxref_pos = strrpos($_buffer, 'startxref');
+        if ($startxref_pos === false) {
+            throw new PDFException('startxref not found');
+        }
 
-        if (preg_match('/startxref\s*([0-9]+)\s*%%EOF\s*$/ms', $_buffer, $matches, 0, $startxref_pos) !== 1)
-            return p_error("startxref and %%EOF not found");
+        if (preg_match('/startxref\s*([0-9]+)\s*%%EOF\s*$/ms', $_buffer, $matches, 0, $startxref_pos) !== 1) {
+            throw new PDFException('startxref and %%EOF not found');
+        }
 
-        $xref_pos = intval($matches[1]);
+        $xref_pos = (int) $matches[1];
 
         if ($xref_pos === 0) {
             // This is a dummy xref position from linearized documents
             return [
-                "trailer" => false,
-                "version" => substr($pdf_version, 1),
-                "xref" => [],
-                "xrefposition" => 0,
-                "xrefversion" => substr($pdf_version, 1),
-                "revisions" => $_versions
-            ];    
+                'trailer' => false,
+                'version' => substr($pdf_version, 1),
+                'xref' => [],
+                'xrefposition' => 0,
+                'xrefversion' => substr($pdf_version, 1),
+                'revisions' => $_versions,
+            ];
         }
 
-        [ $xref_table, $trailer_object, $min_pdf_version ] = PDFUtilFnc::get_xref($_buffer, $xref_pos, $depth);
+        [$xref_table, $trailer_object, $min_pdf_version] = self::get_xref($_buffer, $xref_pos, $depth);
 
         // We are providing a lot of information to be able to inspect the problems of a PDF file
         if ($xref_table === false) {
             // TODO: Maybe we could include a "recovery" method for this: if xref is not at pos $xref_pos, we could search for xref by hand
-            return p_error("could not find the xref table");
+            throw new PDFException('could not find the xref table');
         }
 
-        if ($trailer_object === false)
-            return p_error("could not find the trailer object");
+        if ($trailer_object === false) {
+            throw new PDFException('could not find the trailer object');
+        }
 
         return [
-            "trailer" => $trailer_object,
-            "version" => substr($pdf_version, 1),
-            "xref" => $xref_table,
-            "xrefposition" => $xref_pos,
-            "xrefversion" => $min_pdf_version,
-            "revisions" => $_versions
+            'trailer' => $trailer_object,
+            'version' => substr($pdf_version, 1),
+            'xref' => $xref_table,
+            'xrefposition' => $xref_pos,
+            'xrefversion' => $min_pdf_version,
+            'revisions' => $_versions,
         ];
     }
 
     /**
      * Function that finds a the object at the specific position in the buffer
+     *
      * @param buffer the buffer from which to read the document
      * @param oid the target object id to read (if null, will return the first object, if found)
      * @param offset the offset at which the object is expected to be
      * @param xref_table the xref table, to be able to find indirect objects
+     *
      * @return obj the PDFObject obtained from the file or false if could not be found
      */
-    public static function find_object_at_pos(&$_buffer, $oid, $object_offset, $xref_table) {
+    public static function find_object_at_pos(&$_buffer, ?int $oid, int $object_offset, $xref_table): false|PDFObject
+    {
+        $object = self::object_from_string($_buffer, $oid, $object_offset, $offset_end);
 
-        $object = PDFUtilFnc::object_from_string($_buffer, $oid, $object_offset, $offset_end);
-
-        if ($object === false) return false;
+        if ($object === false) {
+            return false;
+        }
 
         $_stream_pending = false;
 
         // The distinction is required, because we need to get the proper start for the stream, and if using CRLF instead of LF
-        //   - according to https://www.adobe.com/content/dam/acom/en/devnet/pdf/PDF32000_2008.pdf, stream is followed by CRLF 
+        //   - according to https://www.adobe.com/content/dam/acom/en/devnet/pdf/PDF32000_2008.pdf, stream is followed by CRLF
         //     or LF, but not single CR.
-        if (substr($_buffer, $offset_end - 7, 7) === "stream\n") {
+        if (substr((string) $_buffer, $offset_end - 7, 7) === "stream\n") {
             $_stream_pending = $offset_end;
         }
 
-        if (substr($_buffer, $offset_end - 7, 8) === "stream\r\n") {
+        if (substr((string) $_buffer, $offset_end - 7, 8) === "stream\r\n") {
             $_stream_pending = $offset_end + 1;
         }
 
@@ -478,20 +501,22 @@ class PDFUtilFnc {
             if ($length === false) {
                 $length_object_id = $object['Length']->get_object_referenced();
                 if ($length_object_id === false) {
-                    return p_error("could not get stream for object $obj_id");
+                    throw new PDFException('could not get stream for object ' . $oid);
                 }
-                $length_object = PDFUtilFnc::find_object($_buffer, $xref_table, $length_object_id);
-                if ($length_object === false)
-                    return p_error("could not get object $oid");
 
-                $length = $length_object->get_value()->get_int();
+                $length_object = self::find_object($_buffer, $xref_table, $length_object_id);
+                if ($length_object === false) {
+                    throw new PDFException('could not get object ' . $oid);
+                }
+
+                $length = $length_object->get_value()?->get_int();
             }
 
             if ($length === false) {
-                return p_error("could not get stream length for object $obj_id");
+                throw new PDFException('could not get stream length for object ' . $oid);
             }
 
-            $object->set_stream(substr($_buffer, $_stream_pending, $length), true);
+            $object->set_stream(substr((string) $_buffer, $_stream_pending, $length), true);
         }
 
         return $object;
@@ -499,103 +524,120 @@ class PDFUtilFnc {
 
     /**
      * Function that finds a specific object in the document, using the xref table as a base
+     *
      * @param buffer the buffer from which to read the document
      * @param xref_table the xref table
-     * @param oid the target object id to read 
+     * @param oid the target object id to read
+     *
      * @return obj the PDFObject obtained from the file or false if could not be found
      */
-    public static function find_object(&$_buffer, $xref_table, $oid) {
-        
-        if ($oid === 0) return false;
-        if (!isset($xref_table[$oid])) return false;
+    public static function find_object(&$_buffer, $xref_table, int $oid): false|PDFObject
+    {
+        if ($oid === 0) {
+            return false;
+        }
+
+        if (! isset($xref_table[$oid])) {
+            return false;
+        }
 
         // Find the object and get where it ends
         $object_offset = $xref_table[$oid];
 
-        if (!is_array($object_offset))
-            return PDFUtilFnc::find_object_at_pos($_buffer, $oid, $object_offset, $xref_table);
-        else {
-            $object = PDFUtilFnc::find_object_in_objstm($_buffer, $xref_table, $object_offset["stmoid"], $object_offset["pos"], $oid);
-            return $object;
-        }  
+        if (! is_array($object_offset)) {
+            return self::find_object_at_pos($_buffer, $oid, $object_offset, $xref_table);
+        }
+
+        return self::find_object_in_objstm($_buffer, $xref_table, $object_offset['stmoid'], $object_offset['pos'], $oid);
     }
 
     /**
      * Function that searches for an object in an object stream
      */
-    public static function find_object_in_objstm(&$_buffer, $xref_table, $objstm_oid, $objpos, $oid) {
-        $objstm = PDFUtilFnc::find_object($_buffer, $xref_table, $objstm_oid);
-        if ($objstm === false)
-            return p_error("could not get object stream $objstm_oid");
+    public static function find_object_in_objstm(&$_buffer, $xref_table, int $objstm_oid, $objpos, int $oid): PDFObject
+    {
+        $objstm = self::find_object($_buffer, $xref_table, $objstm_oid);
+        if ($objstm === false) {
+            throw new PDFException('could not get object stream ' . $objstm_oid);
+        }
 
-        if (($objstm["Extends"]??false !== false))
-            // TODO: support them
-            return p_error("not supporting extended object streams at this time");
+        if (($objstm['Extends'] ?? false) !== false) { // TODO: support them
+            throw new PDFException('not supporting extended object streams at this time');
+        }
 
-        $First = $objstm["First"]??false;
-        $N = $objstm["N"]??false;
-        $Type = $objstm["Type"]??false;
-        
-        if (($First === false) || ($N === false) || ($Type === false))
-            return p_error("invalid object stream $objstm_oid");
+        $First = $objstm['First'] ?? false;
+        $N = $objstm['N'] ?? false;
+        $Type = $objstm['Type'] ?? false;
 
-        if ($Type->val() !== "ObjStm")
-            return p_error("object $objstm_oid is not an object stream");
+        if ($First === false || $N === false || $Type === false) {
+            throw new PDFException('invalid object stream ' . $objstm_oid);
+        }
+
+        if ($Type->val() !== 'ObjStm') {
+            throw new PDFException(sprintf('object %d is not an object stream', $objstm_oid));
+        }
 
         $First = $First->get_int();
-        $N = $N->get_int();
+        assert($N instanceof PDFValue);
 
         $stream = $objstm->get_stream(false);
-        $index = substr($stream, 0, $First);
-        $index = explode(" ", trim($index));
-        $stream = substr($stream, $First);
+        $index = substr((string) $stream, 0, $First);
+        $index = explode(' ', trim($index));
 
-        if (count($index) % 2 !== 0)
-            return p_error("invalid index for object stream $objstm_oid");
+        $stream = substr((string) $stream, $First);
 
-        $objpos = $objpos * 2;
-        if ($objpos > count($index))
-            return p_error("object $oid not found in object stream $objstm_oid");
+        if (count($index) % 2 !== 0) {
+            throw new PDFException('invalid index for object stream ' . $objstm_oid);
+        }
 
-        $offset = intval($index[$objpos + 1]);
-        $next = 0;
+        $objpos *= 2;
+        if ($objpos > count($index)) {
+            throw new PDFException(sprintf('object %d not found in object stream %d', $oid, $objstm_oid));
+        }
+
+        $offset = (int) $index[$objpos + 1];
         $offsets = [];
-        for ($i = 1; ($i < count($index)); $i = $i + 2)
-            array_push($offsets, intval($index[$i]));
+        $counter = count($index);
+        for ($i = 1; $i < $counter; $i += 2) {
+            $offsets[] = (int) $index[$i];
+        }
 
-        array_push($offsets, strlen($stream));
+        $offsets[] = strlen($stream);
         sort($offsets);
-        for ($i = 0; ($i < count($offsets)) && ($offset >= $offsets[$i]); $i++);
+        for ($i = 0; $i < count($offsets) && $offset >= $offsets[$i]; $i++) {
+        }
 
         $next = $offsets[$i];
 
-        $object_def_str = "$oid 0 obj " . substr($stream, $offset, $next - $offset) . " endobj";
-        $object_def = PDFUtilFnc::object_from_string($object_def_str, $oid);
-        return $object_def;
+        $object_def_str = $oid . ' 0 obj ' . substr($stream, $offset, $next - $offset) . ' endobj';
+
+        return self::object_from_string($object_def_str, $oid);
     }
 
     /**
-     * Function that parses an object 
+     * Function that parses an object
      */
-    public static function object_from_string(&$buffer, $expected_obj_id, $offset = 0, &$offset_end = 0) {
+    public static function object_from_string(string $buffer, ?int $expected_obj_id, int $offset = 0, ?int &$offset_end = 0): PDFObject
+    {
         if (preg_match('/([0-9]+)\s+([0-9+])\s+obj(\s+)/ms', $buffer, $matches, 0, $offset) !== 1) {
             // p_debug_var(substr($buffer))
-            return p_error("object is not valid: $expected_obj_id");
+            throw new PDFException('object is not valid: ' . $expected_obj_id);
         }
 
         $found_obj_header = $matches[0];
-        $found_obj_id = intval($matches[1]);
-        $found_obj_generation = intval($matches[2]);
+        $found_obj_id = (int) $matches[1];
+        $found_obj_generation = (int) $matches[2];
 
-        if ($expected_obj_id === null)
+        if ($expected_obj_id === null) {
             $expected_obj_id = $found_obj_id;
+        }
 
         if ($found_obj_id !== $expected_obj_id) {
-            return p_error("pdf structure is corrupt: found obj $found_obj_id while searching for obj $expected_obj_id (at $offset)");
+            throw new PDFException(sprintf('pdf structure is corrupt: found obj %d while searching for obj %d (at %d)', $found_obj_id, $expected_obj_id, $offset));
         }
 
         // The object starts after the header
-        $offset = $offset + strlen($found_obj_header);
+        $offset += strlen($found_obj_header);
 
         // Parse the object
         $parser = new PDFObjectParser();
@@ -603,8 +645,9 @@ class PDFUtilFnc {
         $stream = new StreamReader($buffer, $offset);
 
         $obj_parsed = $parser->parse($stream);
-        if ($obj_parsed === false)
-            return p_error("object $expected_obj_id could not be parsed");
+        if ($obj_parsed === false) {
+            throw new PDFException(sprintf('object %d could not be parsed', $expected_obj_id));
+        }
 
         switch ($parser->current_token()) {
             case PDFObjectParser::T_OBJECT_END:
@@ -614,43 +657,53 @@ class PDFUtilFnc {
                 // There is an stream
                 break;
             default:
-                return p_error("malformed object");
+                throw new PDFException('malformed object');
         }
 
         $offset_end = $stream->getpos();
+
         return new PDFObject($found_obj_id, $obj_parsed, $found_obj_generation);
     }
 
     /**
      * Builds the xref for the document, using the list of objects
+     *
      * @param offsets an array indexed by the oid of the objects, with the offset of each
      *  object in the document.
+     *
      * @return xref_string a string that contains the xref table, ready to be inserted in the document
      */
-    public static function build_xref($offsets) {
+    public static function build_xref(array $offsets): string
+    {
         $k = array_keys($offsets);
         sort($k);
 
         $i_k = 0;
         $c_k = 0;
         $count = 1;
-        $result = "";
+        $result = '';
         $references = "0000000000 65535 f \n";
-        for ($i = 0; $i < count($k); $i++) {
-            if ($k[$i] === 0) continue;
+        for ($i = 0, $iMax = count($k); $i < $iMax; $i++) {
+            if ($k[$i] === 0) {
+                continue;
+            }
+
             if ($k[$i] === $c_k + 1) {
                 $count++;
             } else {
-                $result = $result . "$i_k {$count}\n$references";
+                $result .= sprintf('%s %d%s%s', $i_k, $count, PHP_EOL, $references);
                 $count = 1;
                 $i_k = $k[$i];
-                $references = "";
+                $references = '';
             }
+
             $references .= sprintf("%010d 00000 n \n", $offsets[$k[$i]]);
             $c_k = $k[$i];
         }
-        $result = $result . "$i_k {$count}\n$references";
 
-        return "xref\n$result";            
-    }    
+        $result .= sprintf('%s %d%s%s', $i_k, $count, PHP_EOL, $references);
+
+        return 'xref
+' . $result;
+    }
 }
