@@ -23,7 +23,6 @@ namespace ddn\sapp;
 
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueString;
-use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
 // This is an special object that has a set of fields
@@ -80,8 +79,7 @@ class PDFSignatureObject extends PDFObject
 
     public function set_signature_ltv($signature_ltv_data): void
     {
-        p_error(get_debug_type($signature_ltv_data));
-
+        throw new PDFException(get_debug_type($signature_ltv_data));
         $this->_signature_ltv_data = $signature_ltv_data;
     }
 

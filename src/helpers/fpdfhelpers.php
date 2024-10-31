@@ -35,15 +35,17 @@
 
 namespace ddn\sapp\helpers;
 
-function _parsejpg($filecontent)
+use ddn\sapp\PDFException;
+
+function _parsejpg($filecontent): array
 {
     // Extract info from a JPEG file
     $a = getimagesizefromstring($filecontent);
     if (! $a) {
-        return p_error('Missing or incorrect image');
+        throw new PDFException('Missing or incorrect image');
     }
     if ($a[2] != 2) {
-        return p_error('Not a JPEG image');
+        throw new PDFException('Not a JPEG image');
     }
     if (! isset($a['channels']) || $a['channels'] == 3) {
         $colspace = 'DeviceRGB';
@@ -65,7 +67,7 @@ function _parsejpg($filecontent)
     ];
 }
 
-function _parsepng($filecontent)
+function _parsepng($filecontent): array
 {
     // Extract info from a PNG file
     $f = new StreamReader($filecontent);
@@ -73,23 +75,23 @@ function _parsepng($filecontent)
     return _parsepngstream($f);
 }
 
-function _parsepngstream(&$f)
+function _parsepngstream(&$f): array
 {
     // Check signature
     if (($res = _readstream($f, 8)) != chr(137) . 'PNG' . chr(13) . chr(10) . chr(26) . chr(10)) {
-        return p_error("Not a PNG image {$res}");
+        throw new PDFException("Not a PNG image {$res}");
     }
 
     // Read header chunk
     _readstream($f, 4);
     if (_readstream($f, 4) !== 'IHDR') {
-        return p_error('Incorrect PNG image');
+        throw new PDFException('Incorrect PNG image');
     }
     $w = _readint($f);
     $h = _readint($f);
     $bpc = ord(_readstream($f, 1));
     if ($bpc > 8) {
-        return p_error('16-bit depth not supported');
+        throw new PDFException('16-bit depth not supported');
     }
     $ct = ord(_readstream($f, 1));
     if ($ct == 0 || $ct == 4) {
@@ -99,16 +101,16 @@ function _parsepngstream(&$f)
     } elseif ($ct == 3) {
         $colspace = 'Indexed';
     } else {
-        return p_error('Unknown color type');
+        throw new PDFException('Unknown color type');
     }
     if (ord(_readstream($f, 1)) != 0) {
-        return p_error('Unknown compression method');
+        throw new PDFException('Unknown compression method');
     }
     if (ord(_readstream($f, 1)) != 0) {
-        return p_error('Unknown filter method');
+        throw new PDFException('Unknown filter method');
     }
     if (ord(_readstream($f, 1)) != 0) {
-        return p_error('Interlacing not supported');
+        throw new PDFException('Interlacing not supported');
     }
     _readstream($f, 4);
     $dp = '/Predictor 15 /Colors ' . ($colspace === 'DeviceRGB' ? 3 : 1) . ' /BitsPerComponent ' . $bpc . ' /Columns ' . $w;
@@ -150,7 +152,7 @@ function _parsepngstream(&$f)
     } while ($n);
 
     if ($colspace === 'Indexed' && empty($pal)) {
-        return p_error('Missing palette in image');
+        throw new PDFException('Missing palette in image');
     }
     $info = [
         'w' => $w,
@@ -165,11 +167,11 @@ function _parsepngstream(&$f)
     if ($ct >= 4) {
         // Extract alpha channel
         if (! function_exists('gzuncompress')) {
-            return p_error('Zlib not available, can\'t handle alpha channel');
+            throw new PDFException('Zlib not available, can\'t handle alpha channel');
         }
         $data = gzuncompress($data);
         if ($data === false) {
-            return p_error('failed to uncompress the image');
+            throw new PDFException('failed to uncompress the image');
         }
         $color = '';
         $alpha = '';
@@ -210,21 +212,21 @@ function _parsepngstream(&$f)
     return $info;
 }
 
-function _readstream($f, $n)
+function _readstream($f, $n): string
 {
     $res = '';
 
     while ($n > 0 && ! $f->eos()) {
         $s = $f->nextchars($n);
         if ($s === false) {
-            return p_error('Error while reading the stream');
+            throw new PDFException('Error while reading the stream');
         }
         $n -= strlen((string) $s);
         $res .= $s;
     }
 
     if ($n > 0) {
-        return p_error('Unexpected end of stream');
+        throw new PDFException('Unexpected end of stream');
     }
 
     return $res;
@@ -247,12 +249,12 @@ function _readstream($f, $n)
     {
         $s = fread($f,$n);
         if($s===false)
-            return p_error('Error while reading stream');
+            throw new PDFException('Error while reading stream');
         $n -= strlen($s);
         $res .= $s;
     }
     if($n>0)
-        return p_error('Unexpected end of stream');
+        throw new PDFException('Unexpected end of stream');
     return $res;
 }
 

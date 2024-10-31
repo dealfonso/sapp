@@ -174,10 +174,10 @@ function is_base64($string): bool
  *                  "alpha": true if the image has alpha
  *                  "command": pdf command to draw the image
  */
-function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, $angle = 0, $keep_proportions = true)
+function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, $angle = 0, $keep_proportions = true): array
 {
     if (empty($filename)) {
-        return p_error('invalid image name or stream');
+        throw new PDFException('invalid image name or stream');
     }
 
     if ($filename[0] === '@') {
@@ -189,7 +189,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
             $filecontent = @file_get_contents($filename);
 
             if ($filecontent === false) {
-                return p_error('failed to get the image');
+                throw new PDFException('failed to get the image');
             }
         }
     }
@@ -211,7 +211,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
             $info = _parsepng($filecontent);
             break;
         default:
-            return p_error('unsupported mime type');
+            throw new PDFException('unsupported mime type');
     }
 
     // Generate a new identifier for the image

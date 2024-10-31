@@ -10,6 +10,8 @@ namespace ddn\sapp\helpers;
 // License     : GNU GPLv3
 */
 
+use ddn\sapp\PDFException;
+
 /**
  * @class cms
  * Manage CMS(Cryptographic Message Syntax) Signature for SAPP PDF
@@ -54,9 +56,7 @@ class CMS
                 }
             }
             if ($code != '200') {
-                p_error("      response error! Code=\"{$code}\", Status=\"" . trim($status ?? '') . '"');
-
-                return false;
+                throw new PDFException(sprintf('response error! Code="{$code}", Status="%s"', trim($status ?? '')));
             }
             $contentTypeHeader = '';
             $headers = explode("\n", $header);
@@ -68,12 +68,10 @@ class CMS
                 }
             }
             if ($contentTypeHeader != $reqData['resp_contentType']) {
-                p_error("      response content type not {$reqData['resp_contentType']}, but: \"{$contentTypeHeader}\"");
-
-                return false;
+                throw new PDFException("response content type not {$reqData['resp_contentType']}, but: \"{$contentTypeHeader}\"");
             }
             if (empty($body)) {
-                p_error('         error empty response!');
+                throw new PDFException('error empty response!');
             }
 
             return $body; // binary response
@@ -102,14 +100,12 @@ class CMS
         ];
         $hashAlgorithm = $this->signature_data['hashAlgorithm'];
         if (! array_key_exists($hashAlgorithm, $hexOidHashAlgos)) {
-            p_error('not support hash algorithm!');
-
-            return false;
+            throw new PDFException('not support hash algorithm!');
         }
         p_debug("hash algorithm is \"{$hashAlgorithm}\"");
         $x509 = new x509();
         if (! $certParse = $x509::readcert($this->signature_data['signcert'])) {
-            p_error('certificate error! check certificate');
+            throw new PDFException('certificate error! check certificate');
         }
         $hexEmbedCerts[] = bin2hex($x509::get_cert($this->signature_data['signcert']));
         $appendLTV = '';
@@ -218,9 +214,7 @@ class CMS
         );
         $pkey = $this->signature_data['privkey'];
         if (! openssl_private_encrypt(hex2bin($toencrypt), $encryptedDigest, $pkey, OPENSSL_PKCS1_PADDING)) {
-            p_error("openssl_private_encrypt error! can't encrypt");
-
-            return false;
+            throw new PDFException("openssl_private_encrypt error! can't encrypt");
         }
         $hexencryptedDigest = bin2hex($encryptedDigest);
         $timeStamp = '';
@@ -288,16 +282,16 @@ class CMS
 
         p_debug('    sending TSA query to "' . $tsaData['host'] . '"...');
         if (! $binaryTsaResp = $this->sendReq($reqData)) {
-            p_error('      TSA query send FAILED!');
-        } else {
-            p_debug('      TSA query send OK');
-            p_debug('    Parsing Timestamp response...');
-            if (! $tsaResp = $this->tsa_parseResp($binaryTsaResp)) {
-                p_error('    parsing FAILED!');
-            }
-            p_debug('    parsing OK');
-            $TSTInfo = $tsaResp['TimeStampResp']['timeStampToken']['hexdump'];
+            throw new PDFException('TSA query send FAILED!');
         }
+
+        p_debug('      TSA query send OK');
+        p_debug('    Parsing Timestamp response...');
+        if (! $tsaResp = $this->tsa_parseResp($binaryTsaResp)) {
+            throw new PDFException('parsing FAILED!');
+        }
+        p_debug('    parsing OK');
+        $TSTInfo = $tsaResp['TimeStampResp']['timeStampToken']['hexdump'];
 
         return $TSTInfo;
     }
@@ -335,58 +329,59 @@ class CMS
             p_debug("        OK got address:\"{$crlURIorFILE}\"");
         }
         if (empty($ocspURI) && empty($crlURIorFILE)) {
-            p_error("    can't get OCSP/CRL address! Process terminated.");
-        } else { // Perform if either ocspURI/crlURIorFILE exists
-            p_debug('    getting Issuer...');
-            p_debug('      looking for issuer address from AIA attribute...');
-            $issuerURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.2'][0];
-            $issuerURIorFILE = trim($issuerURIorFILE ?? '');
-            if (empty($issuerURIorFILE)) {
-                p_debug('        Failed!');
-            } else {
-                p_debug("        OK got address \"{$issuerURIorFILE}\"...");
-                p_debug("      load issuer from \"{$issuerURIorFILE}\"...");
-                if ($issuerCert = @file_get_contents($issuerURIorFILE)) {
-                    p_debug('        OK. size ' . round(strlen($issuerCert) / 1024, 2) . 'Kb');
-                    p_debug('      reading issuer certificate...');
-                    if ($issuer_certDER = x509::get_cert($issuerCert)) {
-                        p_debug('        OK');
-                        p_debug('      check if issuer is cert issuer...');
-                        $certIssuer_parse = x509::readcert($issuer_certDER, 'oid'); // Parsing Issuer cert
-                        $certSigner_signatureField = $certSigner_parse['signatureValue'];
-                        if (openssl_public_decrypt(hex2bin((string) $certSigner_signatureField), $decrypted, x509::x509_der2pem($issuer_certDER), OPENSSL_PKCS1_PADDING)) {
-                            p_debug('        OK issuer is cert issuer.');
-                            $ltvResult['issuer'] = $issuer_certDER;
-                        } else {
-                            p_warning('        FAILED! issuer is not cert issuer.');
-                        }
-                    } else {
-                        p_warning('        FAILED!');
-                    }
-                } else {
-                    p_warning('        FAILED!.');
-                }
-            }
+            throw new PDFException("can't get OCSP/CRL address! Process terminated.");
+        }
 
-            if (! $ltvResult['issuer']) {
-                p_debug('      search for issuer in extracerts.....');
-                if (array_key_exists('extracerts', $this->signature_data) && ($this->signature_data['extracerts'] !== null) && (count($this->signature_data['extracerts']) > 0)) {
-                    $i = 0;
-                    foreach ($this->signature_data['extracerts'] as $extracert) {
-                        p_debug("        extracerts[{$i}] ...");
-                        $certSigner_signatureField = $certSigner_parse['signatureValue'];
-                        if (openssl_public_decrypt(hex2bin((string) $certSigner_signatureField), $decrypted, $extracert, OPENSSL_PKCS1_PADDING)) {
-                            p_debug('          OK got issuer.');
-                            $certIssuer_parse = x509::readcert($extracert, 'oid'); // Parsing Issuer cert
-                            $ltvResult['issuer'] = x509::get_cert($extracert);
-                        } else {
-                            p_debug('          FAIL!');
-                        }
-                        $i++;
+        // Perform if either ocspURI/crlURIorFILE exists
+        p_debug('    getting Issuer...');
+        p_debug('      looking for issuer address from AIA attribute...');
+        $issuerURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.2'][0];
+        $issuerURIorFILE = trim($issuerURIorFILE ?? '');
+        if (empty($issuerURIorFILE)) {
+            p_debug('        Failed!');
+        } else {
+            p_debug("        OK got address \"{$issuerURIorFILE}\"...");
+            p_debug("      load issuer from \"{$issuerURIorFILE}\"...");
+            if ($issuerCert = @file_get_contents($issuerURIorFILE)) {
+                p_debug('        OK. size ' . round(strlen($issuerCert) / 1024, 2) . 'Kb');
+                p_debug('      reading issuer certificate...');
+                if ($issuer_certDER = x509::get_cert($issuerCert)) {
+                    p_debug('        OK');
+                    p_debug('      check if issuer is cert issuer...');
+                    $certIssuer_parse = x509::readcert($issuer_certDER, 'oid'); // Parsing Issuer cert
+                    $certSigner_signatureField = $certSigner_parse['signatureValue'];
+                    if (openssl_public_decrypt(hex2bin((string) $certSigner_signatureField), $decrypted, x509::x509_der2pem($issuer_certDER), OPENSSL_PKCS1_PADDING)) {
+                        p_debug('        OK issuer is cert issuer.');
+                        $ltvResult['issuer'] = $issuer_certDER;
+                    } else {
+                        p_warning('        FAILED! issuer is not cert issuer.');
                     }
                 } else {
-                    p_error('        FAILED! no extracerts available');
+                    p_warning('        FAILED!');
                 }
+            } else {
+                p_warning('        FAILED!.');
+            }
+        }
+
+        if (! $ltvResult['issuer']) {
+            p_debug('      search for issuer in extracerts.....');
+            if (array_key_exists('extracerts', $this->signature_data) && ($this->signature_data['extracerts'] !== null) && (count($this->signature_data['extracerts']) > 0)) {
+                $i = 0;
+                foreach ($this->signature_data['extracerts'] as $extracert) {
+                    p_debug("        extracerts[{$i}] ...");
+                    $certSigner_signatureField = $certSigner_parse['signatureValue'];
+                    if (openssl_public_decrypt(hex2bin((string) $certSigner_signatureField), $decrypted, $extracert, OPENSSL_PKCS1_PADDING)) {
+                        p_debug('          OK got issuer.');
+                        $certIssuer_parse = x509::readcert($extracert, 'oid'); // Parsing Issuer cert
+                        $ltvResult['issuer'] = x509::get_cert($extracert);
+                    } else {
+                        p_debug('          FAIL!');
+                    }
+                    $i++;
+                }
+            } else {
+                throw new PDFException('FAILED! no extracerts available');
             }
         }
 
@@ -453,34 +448,33 @@ class CMS
                                 $nextUpdateTime = strtotime($nextUpdate);
                                 $nowz = time();
                                 if (($nowz - $thisUpdateTime) < 0) { // 0 sec after valid
-                                    p_error('        FAILED! not yet valid! valid at ' . date('d/m/Y H:i:s', $thisUpdateTime));
-                                } elseif (($nextUpdateTime - $nowz) < 1) { // not accept if crl 1 sec remain to expired
-                                    p_error('        FAILED! Expired crl at ' . date('d/m/Y H:i:s', $nextUpdateTime) . ' and now ' . date('d/m/Y H:i:s', $nowz) . '!');
-                                } else {
-                                    p_debug('        OK CRL still valid until ' . date('d/m/Y H:i:s', $nextUpdateTime));
-                                    $crlCertValid = true;
-                                    p_debug('      check if cert not revoked...');
-                                    if (array_key_exists('revokedCertificates', $crl_parse['TBSCertList'])) {
-                                        $certSigner_serialNumber = $certSigner_parse['tbsCertificate']['serialNumber'];
-                                        if (array_key_exists($certSigner_serialNumber, $crl_parse['TBSCertList']['revokedCertificates']['lists'])) {
-                                            $crlCertValid = false;
-                                            p_error('        FAILED! Certificate Revoked!');
-                                        }
-                                    }
-                                    if ($crlCertValid == true) {
-                                        p_debug('        OK. VALID');
-                                        $crlHex = current(unpack('H*', (string) $crlread['der']));
-                                        $ltvResult['crl'] = $crlHex;
+                                    throw new PDFException('FAILED! not yet valid! valid at ' . date('d/m/Y H:i:s', $thisUpdateTime));
+                                }
+                                if (($nextUpdateTime - $nowz) < 1) { // not accept if crl 1 sec remain to expired
+                                    throw new PDFException('        FAILED! Expired crl at ' . date('d/m/Y H:i:s', $nextUpdateTime) . ' and now ' . date('d/m/Y H:i:s', $nowz) . '!');
+                                }
+                                p_debug('        OK CRL still valid until ' . date('d/m/Y H:i:s', $nextUpdateTime));
+                                $crlCertValid = true;
+                                p_debug('      check if cert not revoked...');
+                                if (array_key_exists('revokedCertificates', $crl_parse['TBSCertList'])) {
+                                    $certSigner_serialNumber = $certSigner_parse['tbsCertificate']['serialNumber'];
+                                    if (array_key_exists($certSigner_serialNumber, $crl_parse['TBSCertList']['revokedCertificates']['lists'])) {
+                                        throw new PDFException('        FAILED! Certificate Revoked!');
                                     }
                                 }
+                                if ($crlCertValid == true) {
+                                    p_debug('        OK. VALID');
+                                    $crlHex = current(unpack('H*', (string) $crlread['der']));
+                                    $ltvResult['crl'] = $crlHex;
+                                }
                             } else {
-                                p_error('        FAILED! Wrong CRL.');
+                                throw new PDFException('        FAILED! Wrong CRL.');
                             }
                         } else {
-                            p_error("        FAILED! can't read crl");
+                            throw new PDFException("        FAILED! can't read crl");
                         }
                     } else {
-                        p_error("        FAILED! can't get crl");
+                        throw new PDFException("        FAILED! can't get crl");
                     }
                 }
             }
@@ -505,9 +499,7 @@ class CMS
     private function tsa_parseResp($binaryTsaRespData)
     {
         if (! @$ar = asn1::parse(bin2hex($binaryTsaRespData), 3)) {
-            p_error("      can't parse invalid tsa Response.");
-
-            return false;
+            throw new PDFException("      can't parse invalid tsa Response.");
         }
         $curr = $ar;
         foreach ($curr as $key => $value) {
@@ -559,7 +551,7 @@ class CMS
         if (@$ar['TimeStampResp']['timeStampToken']['content']['hexdump'] != '') {
             return $ar;
         }
-        return false;
 
+        return false;
     }
 }

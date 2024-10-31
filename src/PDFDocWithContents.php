@@ -26,7 +26,6 @@ use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueReference;
 use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\get_random_string;
-use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\p_warning;
 
 class PDFDocWithContents extends PDFDoc
@@ -59,7 +58,7 @@ class PDFDocWithContents extends PDFDoc
      * @param params an array of values [ "font" => <fontname>, "size" => <size in pt>,
      *               "color" => <#hexcolor>, "angle" => <rotation angle>]
      */
-    public function add_text(int $page_to_appear, $text, $x, $y, $params = [])
+    public function add_text(int $page_to_appear, $text, $x, $y, $params = []): void
     {
         // TODO: maybe we can create a function that "adds content to a page", and that
         //       function will search for the content field and merge the resources, if
@@ -77,13 +76,13 @@ class PDFDocWithContents extends PDFDoc
 
         $page_obj = $this->get_page($page_to_appear);
         if ($page_obj === false) {
-            return p_error('invalid page');
+            throw new PDFException('invalid page');
         }
 
         $resources_obj = $this->get_indirect_object($page_obj['Resources']);
 
         if (! in_array($params['font'], self::T_STANDARD_FONTS, true)) {
-            return p_error('only standard fonts are allowed Times-Roman, Helvetica, Courier, Symbol, ZapfDingbats');
+            throw new PDFException('only standard fonts are allowed Times-Roman, Helvetica, Courier, Symbol, ZapfDingbats');
         }
 
         $font_id = 'F' . get_random_string(4);
@@ -98,7 +97,7 @@ class PDFDocWithContents extends PDFDoc
 
         $data = $contents_obj->get_stream(false);
         if ($data === false) {
-            return p_error('could not interpret the contents of the page');
+            throw new PDFException('could not interpret the contents of the page');
         }
 
         // Get the page height, to change the coordinates system (up to down)
@@ -134,13 +133,13 @@ class PDFDocWithContents extends PDFDoc
                     [$r, $g, $b] = sscanf($color, '#%02x%02x%02x');
                     break;
                 default:
-                    p_error('please use html-like colors (e.g. #ffbbaa)');
+                    throw new PDFException('please use html-like colors (e.g. #ffbbaa)');
             }
             if ($r !== null) {
                 $text_command = " q {$r} {$g} {$b} rg {$text_command} Q";
             } // Color RGB
         } else {
-            p_error('please use html-like colors (e.g. #ffbbaa)');
+            throw new PDFException('please use html-like colors (e.g. #ffbbaa)');
         }
 
         if ($angle !== 0) {
@@ -169,7 +168,7 @@ class PDFDocWithContents extends PDFDoc
      * @param w the width of the image
      * @param w the height of the image
      */
-    public function add_image($page_obj, $filename, $x = 0, $y = 0, $w = 0, $h = 0)
+    public function add_image($page_obj, $filename, $x = 0, $y = 0, $w = 0, $h = 0): bool
     {
         // TODO: maybe we can create a function that "adds content to a page", and that
         //       function will search for the content field and merge the resources, if
@@ -182,7 +181,7 @@ class PDFDocWithContents extends PDFDoc
         }
 
         if ($page_obj === false) {
-            return p_error('invalid page');
+            throw new PDFException('invalid page');
         }
 
         // Get the page height, to change the coordinates system (up to down)
@@ -191,8 +190,7 @@ class PDFDocWithContents extends PDFDoc
 
         $result = _add_image($filename, $x, $pagesize_h - $y, $w, $h);
 
-        return p_error('this function still needs work');
-
+        throw new PDFException('this function still needs work');
         // Get the resources for the page
         $resources_obj = $this->get_indirect_object($page_obj['Resources']);
         if (! isset($resources_obj['ProcSet'])) {
@@ -211,7 +209,7 @@ class PDFDocWithContents extends PDFDoc
 
         $data = $contents_obj->get_stream(false);
         if ($data === false) {
-            return p_error('could not interpret the contents of the page');
+            throw new PDFException('could not interpret the contents of the page');
         }
 
         // Append the command to draw the image

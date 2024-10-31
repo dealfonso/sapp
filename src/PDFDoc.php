@@ -37,7 +37,6 @@ use Throwable;
 use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\get_random_string;
 use function ddn\sapp\helpers\p_debug;
-use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\p_warning;
 use function ddn\sapp\helpers\references_in_object;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
@@ -175,7 +174,7 @@ class PDFDoc extends Buffer
 
         if ($trailer !== false) {
             if ($trailer['Encrypt'] !== false) { // TODO: include encryption (maybe borrowing some code: http://www.fpdf.org/en/script/script37.php)
-                p_error('encrypted documents are not fully supported; maybe you cannot get the expected results');
+                throw new PDFException('encrypted documents are not fully supported; maybe you cannot get the expected results');
             }
         }
 
@@ -343,7 +342,7 @@ class PDFDoc extends Buffer
      *
      * @return valid true if the certificate can be used to sign the document, false otherwise
      */
-    public function set_signature_certificate($certfile, ?string $certpass = null)
+    public function set_signature_certificate($certfile, ?string $certpass = null): bool
     {
         // First we read the certificate
         if (is_array($certfile)) {
@@ -352,10 +351,10 @@ class PDFDoc extends Buffer
 
             // If a password is provided, we'll try to decode the private key
             if (openssl_pkey_get_private($certificate['pkey']) === false) {
-                return p_error('invalid private key');
+                throw new PDFException('invalid private key');
             }
             if (! openssl_x509_check_private_key($certificate['cert'], $certificate['pkey'])) {
-                return p_error("private key doesn't corresponds to certificate");
+                throw new PDFException("private key doesn't corresponds to certificate");
             }
 
             if (is_string($certificate['extracerts'] ?? null)) {
@@ -367,10 +366,10 @@ class PDFDoc extends Buffer
         } else {
             $certfilecontent = file_get_contents($certfile);
             if ($certfilecontent === false) {
-                return p_error("could not read file {$certfile}");
+                throw new PDFException("could not read file {$certfile}");
             }
             if (openssl_pkcs12_read($certfilecontent, $certificate, $certpass) === false) {
-                return p_error("could not get the certificates from file {$certfile}");
+                throw new PDFException("could not get the certificates from file {$certfile}");
             }
         }
 
@@ -538,7 +537,7 @@ class PDFDoc extends Buffer
             if ($_signature === false) {
                 $this->pop_state();
 
-                return p_error('could not generate the signed document');
+                throw new PDFException('could not generate the signed document');
             }
         }
 
@@ -689,18 +688,18 @@ class PDFDoc extends Buffer
      *
      * @return written true if the file has been correcly written to the file; false otherwise
      */
-    public function to_pdf_file($filename, bool $rebuild = false)
+    public function to_pdf_file($filename, bool $rebuild = false): bool
     {
         $pdf_content = $this->to_pdf_file_b($rebuild);
 
         $file = fopen($filename, 'wb');
         if ($file === false) {
-            return p_error('failed to create the file');
+            throw new PDFException('failed to create the file');
         }
         if (fwrite($file, $pdf_content->get_raw()) !== $pdf_content->size()) {
             fclose($file);
 
-            return p_error('failed to write to file');
+            throw new PDFException('failed to write to file');
         }
         fclose($file);
 
@@ -957,11 +956,11 @@ class PDFDoc extends Buffer
                 return p_warning("failed to open the image {$imagesize}");
             }
             if (($page_to_appear < 0) || ($page_to_appear > $this->get_page_count() - 1)) {
-                return p_error('invalid page number');
+                throw new PDFException('invalid page number');
             }
             $pagesize = $this->get_page_size($page_to_appear);
             if ($pagesize === false) {
-                return p_error('failed to get page size');
+                throw new PDFException('failed to get page size');
             }
 
             $pagesize = explode(' ', (string) $pagesize[0]->val());
@@ -979,7 +978,7 @@ class PDFDoc extends Buffer
 
             if (is_array($size)) {
                 if (count($size) != 2) {
-                    return p_error('invalid size');
+                    throw new PDFException('invalid size');
                 }
                 $width = $size[0];
                 $height = $size[1];
@@ -992,7 +991,7 @@ class PDFDoc extends Buffer
                         $width = $i_w * $size;
                         $height = $i_h * $size;
                     } else {
-                        return p_error('invalid size format');
+                        throw new PDFException('invalid size format');
                     }
                 }
             }
@@ -1005,12 +1004,12 @@ class PDFDoc extends Buffer
         }
 
         if (! $this->set_signature_certificate($certfile, $password)) {
-            return p_error('the certificate or the signature is not valid');
+            throw new PDFException('the certificate or the signature is not valid');
         }
 
         $docsigned = $this->to_pdf_file_s();
         if ($docsigned === false) {
-            return p_error('failed to sign the document');
+            throw new PDFException('failed to sign the document');
         }
 
         return self::from_string($docsigned);
@@ -1057,18 +1056,18 @@ class PDFDoc extends Buffer
         $root = $this->_pdf_trailer_object['Root'];
 
         if (($root === false) || (($root = $root->get_object_referenced()) === false)) {
-            return p_error('could not find the root object from the trailer');
+            throw new PDFException('could not find the root object from the trailer');
         }
 
         $root_obj = $this->get_object($root);
         if ($root_obj === false) {
-            return p_error('invalid root object');
+            throw new PDFException('invalid root object');
         }
 
         // Now the object corresponding to the page number in which to appear
         $page_obj = $this->get_page($pagetoappear);
         if ($page_obj === false) {
-            return p_error('invalid page');
+            throw new PDFException('invalid page');
         }
 
         // The objects to update
@@ -1197,7 +1196,7 @@ class PDFDoc extends Buffer
 
             $result = _add_image($this->create_object(...), $imagefilename, $bbox[0], $bbox[1], $bbox[2], $bbox[3], $page_rotation->val());
             if ($result === false) {
-                return p_error('could not add the image');
+                throw new PDFException('could not add the image');
             }
 
             $layer_n2['Resources'] = $result['resources'];
@@ -1221,7 +1220,7 @@ class PDFDoc extends Buffer
         }
 
         if (! $newannots->push(new PDFValueReference($annotation_object->get_oid()))) {
-            return p_error('Could not update the page where the signature has to appear');
+            throw new PDFException('Could not update the page where the signature has to appear');
         }
 
         $page_obj['Annots'] = new PDFValueReference($newannots->get_oid());
@@ -1248,7 +1247,7 @@ class PDFDoc extends Buffer
 
         // Add the annotation object to the interactive form
         if (! $acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
-            return p_error('could not create the signature field');
+            throw new PDFException('could not create the signature field');
         }
 
         // Store the objects
@@ -1267,18 +1266,18 @@ class PDFDoc extends Buffer
      *
      * @return ok true if the date could be set; false otherwise
      */
-    protected function update_mod_date(DateTime $date = null)
+    protected function update_mod_date(DateTime $date = null): bool
     {
         // First of all, we are searching for the root object (which should be in the trailer)
         $root = $this->_pdf_trailer_object['Root'];
 
         if (($root === false) || (($root = $root->get_object_referenced()) === false)) {
-            return p_error('could not find the root object from the trailer');
+            throw new PDFException('could not find the root object from the trailer');
         }
 
         $root_obj = $this->get_object($root);
         if ($root_obj === false) {
-            return p_error('invalid root object');
+            throw new PDFException('invalid root object');
         }
 
         if ($date === null) {
@@ -1302,12 +1301,12 @@ class PDFDoc extends Buffer
         // Update the information object (not really needed)
         $info = $this->_pdf_trailer_object['Info'];
         if (($info === false) || (($info = $info->get_object_referenced()) === false)) {
-            return p_error('could not find the info object from the trailer');
+            throw new PDFException('could not find the info object from the trailer');
         }
 
         $info_obj = $this->get_object($info);
         if ($info_obj === false) {
-            return p_error('invalid info object');
+            throw new PDFException('invalid info object');
         }
 
         $info_obj['ModDate'] = new PDFValueString(timestamp_to_pdfdatestring($date));
@@ -1374,7 +1373,7 @@ class PDFDoc extends Buffer
     {
         $object = $this->get_object($oid);
         if ($object === false) {
-            return p_error('could not get information about the page');
+            throw new PDFException('could not get information about the page');
         }
 
         $page_ids = [];
@@ -1395,7 +1394,7 @@ class PDFDoc extends Buffer
                         array_push($page_ids, ...$ids);
                     }
                 } else {
-                    return p_error('could not get the pages');
+                    throw new PDFException('could not get the pages');
                 }
                 break;
             case 'Page':
@@ -1426,14 +1425,14 @@ class PDFDoc extends Buffer
     {
         $root = $this->_pdf_trailer_object['Root'];
         if (($root === false) || (($root = $root->get_object_referenced()) === false)) {
-            return p_error('could not find the root object from the trailer');
+            throw new PDFException('could not find the root object from the trailer');
         }
 
         $root = $this->get_object($root);
         if ($root !== false) {
             $pages = $root['Pages'];
             if (($pages === false) || (($pages = $pages->get_object_referenced()) === false)) {
-                return p_error('could not find the pages for the document');
+                throw new PDFException('could not find the pages for the document');
             }
 
             $this->_pages_info = $this->_get_page_info($pages);

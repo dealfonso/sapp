@@ -27,7 +27,6 @@ use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ReturnTypeWillChange;
 use Stringable;
-use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\p_warning;
 
 // Loading the functions
@@ -174,7 +173,7 @@ class PDFObject implements ArrayAccess, Stringable
 
                     return self::FlateDecode(gzuncompress($this->_stream), $params);
                 default:
-                    return p_error('unknown compression method ' . $this->_value['Filter']);
+                    throw new PDFException('unknown compression method ' . $this->_value['Filter']);
             }
         }
 
@@ -194,13 +193,10 @@ class PDFObject implements ArrayAccess, Stringable
             return;
         }
         if (isset($this->_value['Filter'])) {
-            switch ($this->_value['Filter']) {
-                case '/FlateDecode':
-                    $stream = gzcompress((string) $stream);
-                    break;
-                default:
-                    p_error('unknown compression method ' . $this->_value['Filter']);
-            }
+            $stream = match ($this->_value['Filter']) {
+                '/FlateDecode' => gzcompress((string) $stream),
+                default => throw new PDFException('unknown compression method ' . $this->_value['Filter']),
+            };
         }
         $this->_value['Length'] = strlen((string) $stream);
         $this->_stream = $stream;
@@ -278,21 +274,21 @@ class PDFObject implements ArrayAccess, Stringable
             case 15:
                 break;
             default:
-                return p_error('other predictor than PNG is not supported in this version');
+                throw new PDFException('other predictor than PNG is not supported in this version');
         }
 
         switch ($params['Colors']->get_int()) {
             case 1:
                 break;
             default:
-                return p_error('other color count than 1 is not supported in this version');
+                throw new PDFException('other color count than 1 is not supported in this version');
         }
 
         switch ($params['BitsPerComponent']->get_int()) {
             case 8:
                 break;
             default:
-                return p_error('other bit count than 8 is not supported in this version');
+                throw new PDFException('other bit count than 8 is not supported in this version');
         }
 
         $decoded = new Buffer();
@@ -331,7 +327,7 @@ class PDFObject implements ArrayAccess, Stringable
                     }
                     break;
                 default:
-                    return p_error('Unsupported stream');
+                    throw new PDFException('Unsupported stream');
             }
 
             // Store and prepare the previous row

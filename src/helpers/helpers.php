@@ -162,23 +162,6 @@ function p_warning(string $e, mixed $retval = false)
 }
 
 /**
- * Function that writes a string to stderr and returns a value (to ease coding like return p_error(...))
- *
- * @param e the error message
- * @param retval the value to return (default: false)
- *
- */
-function p_error(string $e, mixed $retval = false)
-{
-    // If the debug level is less than 1, suppress error messages
-    if (_DEBUG_LEVEL >= 1) {
-        p_stderr($e, 'Error');
-    }
-
-    return $retval;
-}
-
-/**
  * Obtains a random string from a printable character set: alphanumeric, extended with
  *   common symbols, an extended with less common symbols.
  * Note: does not consider space (0x20) nor delete (0x7f) for the alphabet. All the
