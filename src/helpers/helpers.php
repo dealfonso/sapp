@@ -22,6 +22,7 @@
 namespace ddn\sapp\helpers;
 
 use DateTime;
+use DateTimeInterface;
 
 if (! defined('_DEBUG_LEVEL')) {
     define('_DEBUG_LEVEL', 3);
@@ -42,9 +43,8 @@ function var_dump_to_string($var): string|false
 {
     ob_start();
     var_dump($var);
-    $result = ob_get_clean();
 
-    return $result;
+    return ob_get_clean();
 }
 
 /**
@@ -54,16 +54,16 @@ function var_dump_to_string($var): string|false
  *
  * @return str the var_dump output of the variables
  */
-function debug_var(...$vars)
+function debug_var(...$vars): ?string
 {
     // If the debug level is less than 3, suppress debug messages
     if (_DEBUG_LEVEL < 3) {
-        return;
+        return null;
     }
 
     $result = [];
     foreach ($vars as $var) {
-        array_push($result, var_dump_to_string($var));
+        $result[] = var_dump_to_string($var);
     }
 
     return implode("\n", $result);
@@ -103,7 +103,7 @@ function varval($e)
         $a = [];
         foreach ($e as $k => $v) {
             $v = varval($v);
-            array_push($a, "{$k} => {$v}");
+            $a[] = "{$k} => {$v}";
         }
         $retval = '[ ' . implode(', ', $a) . ' ]';
     }
@@ -119,7 +119,7 @@ function varval($e)
  * @param level the depth level to output (0 will refer to the function that called p_stderr
  *              call itself, 1 to the function that called to the function that called p_stderr)
  */
-function p_stderr(&$e, $tag = 'Error', $level = 1): void
+function p_stderr(string &$e, string $tag = 'Error', int $level = 1): void
 {
     $dinfo = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT);
     $dinfo = $dinfo[$level];
@@ -133,9 +133,8 @@ function p_stderr(&$e, $tag = 'Error', $level = 1): void
  * @param e the debug message
  * @param retval the value to return (default: false)
  *
- * @return retval
  */
-function p_debug($e, $retval = false)
+function p_debug(string $e, mixed $retval = false)
 {
     // If the debug level is less than 3, suppress debug messages
     if (_DEBUG_LEVEL >= 3) {
@@ -151,9 +150,8 @@ function p_debug($e, $retval = false)
  * @param e the debug message
  * @param retval the value to return (default: false)
  *
- * @return retval
  */
-function p_warning($e, $retval = false)
+function p_warning(string $e, mixed $retval = false)
 {
     // If the debug level is less than 2, suppress warning messages
     if (_DEBUG_LEVEL >= 2) {
@@ -169,9 +167,8 @@ function p_warning($e, $retval = false)
  * @param e the error message
  * @param retval the value to return (default: false)
  *
- * @return retval
  */
-function p_error($e, $retval = false)
+function p_error(string $e, mixed $retval = false)
 {
     // If the debug level is less than 1, suppress error messages
     if (_DEBUG_LEVEL >= 1) {
@@ -218,16 +215,16 @@ function get_memory_limit(): int
 {
     $memory_limit = ini_get('memory_limit');
     if (preg_match('/^(\d+)(.)$/', $memory_limit, $matches) === 1) {
-        $memory_limit = intval($matches[1]);
+        $memory_limit = (int) $matches[1];
         switch ($matches[2]) {
             case 'G':
-                $memory_limit = $memory_limit * 1024;
+                $memory_limit *= 1024;
                 // no break
             case 'M':
-                $memory_limit = $memory_limit * 1024;
+                $memory_limit *= 1024;
                 // no break
             case 'K':
-                $memory_limit = $memory_limit * 1024;
+                $memory_limit *= 1024;
                 break;
             default:
                 $memory_limit = 0;
@@ -246,7 +243,7 @@ function show_bytes($str, $columns = null): string
         $columns = strlen((string) $str);
     }
     $c = $columns;
-    for ($i = 0; $i < strlen((string) $str); $i++) {
+    for ($i = 0, $iMax = strlen((string) $str); $i < $iMax; $i++) {
         $result .= sprintf('%02x ', ord($str[$i]));
         $c--;
         if ($c === 0) {
@@ -265,7 +262,7 @@ function show_bytes($str, $columns = null): string
  *
  * @return date_string the date string in PDF format
  */
-function timestamp_to_pdfdatestring($date = null): string
+function timestamp_to_pdfdatestring(?DateTimeInterface $date = null): string
 {
     if ($date === null) {
         $date = new DateTime();
@@ -284,7 +281,7 @@ function timestamp_to_pdfdatestring($date = null): string
  * @return string escaped date string.
  * @since 5.9.152 (2012-03-23)
  */
-function get_pdf_formatted_date($time)
+function get_pdf_formatted_date(int $time)
 {
-    return substr_replace(date('YmdHisO', intval($time)), '\'', (0 - 2), 0) . '\'';
+    return substr_replace(date('YmdHisO', $time), '\'', (0 - 2), 0) . '\'';
 }

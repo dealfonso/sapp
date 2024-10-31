@@ -43,7 +43,7 @@ class PDFValueObject extends PDFValue
         foreach ($this->value as $k => $v) {
             $v = '' . $v;
             if ($v === '') {
-                array_push($result, "/{$k}");
+                $result[] = "/{$k}";
                 continue;
             }
             match ($v[0]) {
@@ -55,7 +55,7 @@ class PDFValueObject extends PDFValue
         return '<<' . implode('', $result) . '>>';
     }
 
-    public function diff($other): false|null|self
+    public function diff(object $other): mixed
     {
         $different = parent::diff($other);
         if (($different === false) || ($different === null)) {
@@ -67,7 +67,7 @@ class PDFValueObject extends PDFValue
 
         foreach ($this->value as $k => $v) {
             if (isset($other->value[$k])) {
-                if (is_a($this->value[$k], "ddn\sapp\pdfvalue\PDFValue")) {
+                if (is_a($this->value[$k], PDFValue::class)) {
                     $different = $this->value[$k]->diff($other->value[$k]);
                     if ($different === false) {
                         $result[$k] = $v;
@@ -91,7 +91,7 @@ class PDFValueObject extends PDFValue
         return $result;
     }
 
-    public static function fromarray($parts): false|self
+    public static function fromarray(array $parts): false|self
     {
         $k = array_keys($parts);
         $intkeys = false;
@@ -105,8 +105,8 @@ class PDFValueObject extends PDFValue
         if ($intkeys) {
             return false;
         }
-        foreach ($parts as $k => $v) {
-            $result[$k] = self::_convert($v);
+        foreach ($parts as $k2 => $v) {
+            $result[$k2] = self::_convert($v);
         }
 
         return new self($result);
@@ -118,7 +118,7 @@ class PDFValueObject extends PDFValue
         $field = null;
         $value = null;
         $parts = explode(' ', (string) $str);
-        for ($i = 0; $i < count($parts); $i++) {
+        for ($i = 0, $iMax = count($parts); $i < $iMax; $i++) {
             if ($field === null) {
                 $field = $parts[$i];
                 if ($field === '') {

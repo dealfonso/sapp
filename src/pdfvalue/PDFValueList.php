@@ -33,7 +33,7 @@ class PDFValueList extends PDFValue
         return '[' . implode(' ', $this->value) . ']';
     }
 
-    public function diff($other): false|null|self
+    public function diff(object $other): mixed
     {
         $different = parent::diff($other);
         if (($different === false) || ($different === null)) {
@@ -58,7 +58,7 @@ class PDFValueList extends PDFValue
         if ($list === true) {
             $result = [];
             foreach ($this->value as $v) {
-                if (is_a($v, 'ddn\\sapp\\pdfvalue\\PDFValueSimple')) {
+                if (is_a($v, PDFValueSimple::class)) {
                     $v = explode(' ', (string) $v->val());
                 } else {
                     $v = [$v->val()];
@@ -87,7 +87,7 @@ class PDFValueList extends PDFValue
                 if ($plain_text_val === $rebuilt) {
                     // Any content is a reference
                     foreach ($matches[2] as $id) {
-                        array_push($ids, intval($id));
+                        $ids[] = (int) $id;
                     }
                 }
             } else {
@@ -104,7 +104,7 @@ class PDFValueList extends PDFValue
      *  - if it is a list object, the lists are merged;
      *  - otherwise the object is converted to a PDFValue* object and it is appended to the list
      */
-    public function push($v): bool
+    public function push(mixed $v): bool
     {
         if (is_object($v) && ($v::class === static::class)) {
             // If a list is pushed to another list, the elements are merged
@@ -115,7 +115,7 @@ class PDFValueList extends PDFValue
         }
         foreach ($v as $e) {
             $e = self::_convert($e);
-            array_push($this->value, $e);
+            $this->value[] = $e;
         }
 
         return true;

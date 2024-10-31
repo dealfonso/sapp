@@ -21,6 +21,7 @@
 
 namespace ddn\sapp\helpers;
 
+use Exception;
 use Stringable;
 
 if (! defined('__CONVENIENT_MAX_BUFFER_DUMP')) {
@@ -151,9 +152,7 @@ class Buffer implements Stringable
      */
     public function clone(): self
     {
-        $buffer = new self($this->_buffer);
-
-        return $buffer;
+        return new self($this->_buffer);
     }
 
     public function show_bytes($columns, $offset = 0, $length = null): string

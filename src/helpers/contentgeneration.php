@@ -86,7 +86,7 @@ function _create_image_objects($info, $object_factory): array
                 (strlen((string) $info['pal']) / 3) - 1,
                 new PDFValueReference($streamobject->get_oid()),
             ]);
-            array_push($objects, $streamobject);
+            $objects[] = $streamobject;
             break;
         case 'DeviceCMYK':
             $image['Decode'] = new PDFValueList([1, 0, 1, 0, 1, 0, 1, 0]);
@@ -122,7 +122,7 @@ function _create_image_objects($info, $object_factory): array
         // In principle, it may return multiple objects
         $smasks = _create_image_objects($smaskinfo, $object_factory);
         foreach ($smasks as $smask) {
-            array_push($objects, $smask);
+            $objects[] = $smask;
         }
         $image['SMask'] = new PDFValueReference($smask->get_oid());
     }
@@ -240,7 +240,6 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
     $images_objects = _create_image_objects($info, $object_factory);
 
     // Generate the command to translate and scale the image
-    $data = 'q ';
 
     if ($keep_proportions) {
         $angleRads = deg2rad($angle);

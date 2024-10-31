@@ -22,69 +22,80 @@
 
 use ddn\sapp\PDFDoc;
 
+use function ddn\sapp\helpers\p_error;
+
 require_once('vendor/autoload.php');
 
-if ($argc !== 4)
+if ($argc !== 4) {
     fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));
-else {
-    if (!file_exists($argv[1]))
-        fwrite(STDERR, "failed to open file " . $argv[1]);
-    else {
-        // Silently prompt for the password
-        fwrite(STDERR, "Password: ");
-        system('stty -echo');
-        $password = trim(fgets(STDIN));
-        system('stty echo');
-        fwrite(STDERR, "\n");
+    exit(1);
+}
+if (!file_exists($argv[1])) {
+    fwrite(STDERR, "failed to open file " . $argv[1]);
+    exit(1);
+}
 
-        $file_content = file_get_contents($argv[1]);
-        $obj = PDFDoc::from_string($file_content);
+// Silently prompt for the password
+//fwrite(STDERR, "Password: ");
+//system('stty -echo');
+//$password = trim(fgets(STDIN));
+//system('stty echo');
+//fwrite(STDERR, "\n");
 
-        if ($obj === false)
-            fwrite(STDERR, "failed to parse file " . $argv[1]);
-        else {
-            $position = [ ];
-            $image = $argv[2];
-            $imagesize = @getimagesize($image);
-            if ($imagesize === false) {
-                fwrite(STDERR, "failed to open the image $image");
-                return;
-            }
-            $pagesize = $obj->get_page_size(0);
-            if ($pagesize === false)
-                return p_error("failed to get page size");
+$password='';
 
-            $pagesize = explode(" ", $pagesize[0]->val());
-            // Calculate the position of the image according to its size and the size of the page;
-            //   the idea is to keep the aspect ratio and center the image in the page with a size
-            //   of 1/3 of the size of the page.
-            $p_x = intval("". $pagesize[0]);
-            $p_y = intval("". $pagesize[1]);
-            $p_w = intval("". $pagesize[2]) - $p_x;
-            $p_h = intval("". $pagesize[3]) - $p_y;
-            $i_w = $imagesize[0];
-            $i_h = $imagesize[1];
+$file_content = file_get_contents($argv[1]);
+$obj = PDFDoc::from_string($file_content);
 
-            $ratio_x = $p_w / $i_w;
-            $ratio_y = $p_h / $i_h;
-            $ratio = min($ratio_x, $ratio_y);
+if ($obj === false) {
+    fwrite(STDERR, "failed to parse file " . $argv[1]);
 
-            $i_w = ($i_w * $ratio) / 3;
-            $i_h = ($i_h * $ratio) / 3;
-            $p_x = $p_w / 3;
-            $p_y = $p_h / 3;
+    exit(1);
+}
 
-            // Set the image appearance and the certificate file
-            $obj->set_signature_appearance(0, [ $p_x, $p_y, $p_x + $i_w, $p_y + $i_h ], $image);
-            if (!$obj->set_signature_certificate($argv[3], $password)) {
-                fwrite(STDERR, "the certificate is not valid");
-            } else {
-                $docsigned = $obj->to_pdf_file_s();
-                if ($docsigned === false)
-                    fwrite(STDERR, "could not sign the document");
-                else
-                    echo $docsigned;
-            }
-        }
+$position = [];
+$image = $argv[2];
+$imagesize = @getimagesize($image);
+if ($imagesize === false) {
+    fwrite(STDERR, "failed to open the image $image");
+
+    exit(1);
+}
+
+
+$pagesize = $obj->get_page_size(0);
+if ($pagesize === false) {
+    return p_error("failed to get page size");
+}
+
+$pagesize = explode(" ", $pagesize[0]->val());
+// Calculate the position of the image according to its size and the size of the page;
+//   the idea is to keep the aspect ratio and center the image in the page with a size
+//   of 1/3 of the size of the page.
+$p_x = (int)("" . $pagesize[0]);
+$p_y = (int)("" . $pagesize[1]);
+$p_w = (int)("" . $pagesize[2]) - $p_x;
+$p_h = (int)("" . $pagesize[3]) - $p_y;
+$i_w = $imagesize[0];
+$i_h = $imagesize[1];
+
+$ratio_x = $p_w / $i_w;
+$ratio_y = $p_h / $i_h;
+$ratio = min($ratio_x, $ratio_y);
+
+$i_w = ($i_w * $ratio) / 3;
+$i_h = ($i_h * $ratio) / 3;
+$p_x = $p_w / 3;
+$p_y = $p_h / 3;
+// Set the image appearance and the certificate file
+$obj->set_signature_appearance(0, [$p_x, $p_y, $p_x + $i_w, $p_y + $i_h], $image);
+if (!$obj->set_signature_certificate($argv[3], $password)) {
+    fwrite(STDERR, "the certificate is not valid");
+} else {
+    $docsigned = $obj->to_pdf_file_s();
+    if ($docsigned === false) {
+        fwrite(STDERR, "could not sign the document");
+    } else {
+        echo $docsigned;
     }
 }

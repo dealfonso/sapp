@@ -26,11 +26,8 @@ class CMS
      * @return string response body
      * @public
      */
-    public function sendReq($reqData)
+    public function sendReq(array $reqData)
     {
-        if (! function_exists('curl_init')) {
-            p_error('         Please enable cURL PHP extension!');
-        }
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $reqData['uri']);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -50,7 +47,7 @@ class CMS
             $body = substr($tsResponse, $header_size);
             // Get the HTTP response code
             $headers = explode("\n", $header);
-            foreach ($headers as $key => $r) {
+            foreach ($headers as $r) {
                 if (stripos($r, 'HTTP/') === 0) {
                     [, $code, $status] = explode(' ', $r, 3);
                     break;
@@ -63,10 +60,10 @@ class CMS
             }
             $contentTypeHeader = '';
             $headers = explode("\n", $header);
-            foreach ($headers as $key => $r) {
+            foreach ($headers as $r) {
                 // Match the header name up to ':', compare lower case
                 if (stripos($r, 'Content-Type' . ':') === 0) {
-                    [$headername, $headervalue] = explode(':', $r, 2);
+                    [, $headervalue] = explode(':', $r, 2);
                     $contentTypeHeader = trim($headervalue);
                 }
             }
@@ -111,23 +108,21 @@ class CMS
         }
         p_debug("hash algorithm is \"{$hashAlgorithm}\"");
         $x509 = new x509();
-        if (! $certParse = $x509->readcert($this->signature_data['signcert'])) {
+        if (! $certParse = $x509::readcert($this->signature_data['signcert'])) {
             p_error('certificate error! check certificate');
         }
-        $hexEmbedCerts[] = bin2hex($x509->get_cert($this->signature_data['signcert']));
+        $hexEmbedCerts[] = bin2hex($x509::get_cert($this->signature_data['signcert']));
         $appendLTV = '';
         $ltvData = $this->signature_data['ltv'];
         if (! empty($ltvData)) {
             p_debug('  LTV Validation start...');
-            $appendLTV = '';
             $LTVvalidation_ocsp = '';
             $LTVvalidation_crl = '';
-            $LTVvalidation_issuer = '';
             $LTVvalidationEnd = false;
 
             $isRootCA = false;
             if ($certParse['tbsCertificate']['issuer']['hexdump'] == $certParse['tbsCertificate']['subject']['hexdump']) { // check whether root ca
-                if (openssl_public_decrypt(hex2bin((string) $certParse['signatureValue']), $decrypted, x509::x509_der2pem($x509->get_cert($this->signature_data['signcert'])), OPENSSL_PKCS1_PADDING)) {
+                if (openssl_public_decrypt(hex2bin((string) $certParse['signatureValue']), $decrypted, x509::x509_der2pem($x509::get_cert($this->signature_data['signcert'])), OPENSSL_PKCS1_PADDING)) {
                     p_debug("***** \"{$certParse['tbsCertificate']['subject']['2.5.4.3'][0]}\" is a ROOT CA. No validation performed ***");
                     $isRootCA = true;
                 }
@@ -138,11 +133,11 @@ class CMS
                 $certtoCheck = $certParse;
                 while ($LTVvalidation !== false) {
                     p_debug("========= {$i} checking \"{$certtoCheck['tbsCertificate']['subject']['2.5.4.3'][0]}\"===============");
-                    $LTVvalidation = self::LTVvalidation($certtoCheck);
+                    $LTVvalidation = $this->LTVvalidation($certtoCheck);
                     $i++;
                     if ($LTVvalidation) {
                         $curr_issuer = $LTVvalidation['issuer'];
-                        $certtoCheck = $x509->readcert($curr_issuer, 'oid');
+                        $certtoCheck = $x509::readcert($curr_issuer, 'oid');
                         if (@$LTVvalidation['ocsp'] || @$LTVvalidation['crl']) {
                             $LTVvalidation_ocsp .= $LTVvalidation['ocsp'];
                             $LTVvalidation_crl .= $LTVvalidation['crl'];
@@ -150,7 +145,7 @@ class CMS
                         }
 
                         if ($certtoCheck['tbsCertificate']['issuer']['hexdump'] == $certtoCheck['tbsCertificate']['subject']['hexdump']) { // check whether root ca
-                            if (openssl_public_decrypt(hex2bin((string) $certtoCheck['signatureValue']), $decrypted, $x509->x509_der2pem($curr_issuer), OPENSSL_PKCS1_PADDING)) {
+                            if (openssl_public_decrypt(hex2bin((string) $certtoCheck['signatureValue']), $decrypted, $x509::x509_der2pem($curr_issuer), OPENSSL_PKCS1_PADDING)) {
                                 p_debug("========= FINISH Reached ROOT CA \"{$certtoCheck['tbsCertificate']['subject']['2.5.4.3'][0]}\"===============");
                                 $LTVvalidationEnd = true;
                                 break;
@@ -193,8 +188,8 @@ class CMS
                 }
             }
             foreach ($this->signature_data['extracerts'] ?? [] as $extracert) {
-                $hex_extracert = bin2hex($x509->x509_pem2der($extracert));
-                if (! in_array($hex_extracert, $hexEmbedCerts)) {
+                $hex_extracert = bin2hex($x509::x509_pem2der($extracert));
+                if (! in_array($hex_extracert, $hexEmbedCerts, true)) {
                     $hexEmbedCerts[] = $hex_extracert;
                 }
             }
@@ -227,11 +222,11 @@ class CMS
 
             return false;
         }
-        $hexencryptedDigest = bin2hex((string) $encryptedDigest);
+        $hexencryptedDigest = bin2hex($encryptedDigest);
         $timeStamp = '';
         if (! empty($this->signature_data['tsa'])) {
             p_debug('  Timestamping process start...');
-            if ($TSTInfo = self::createTimestamp($encryptedDigest, $hashAlgorithm)) {
+            if ($TSTInfo = $this->createTimestamp($encryptedDigest, $hashAlgorithm)) {
                 p_debug('  Timestamping SUCCESS.');
                 $TimeStampToken = asn1::seq(
                     '060B2A864886F70D010910020E' . // OBJ_id_smime_aa_timeStampToken 1.2.840.113549.1.9.16.2.14
@@ -264,12 +259,11 @@ class CMS
             $certs .
             asn1::set($signerinfos)
         );
-        $pkcs7ContentInfo = asn1::seq(
+
+        return asn1::seq(
             '06092A864886F70D010702' . // Hexadecimal form of pkcs7-signedData
             asn1::expl(0, $pkcs7contentSignedData)
         );
-
-        return $pkcs7ContentInfo;
     }
 
     /**
@@ -280,7 +274,7 @@ class CMS
      *
      * @return string hex TSTinfo.
      */
-    protected function createTimestamp($data, $hashAlg = 'sha1')
+    protected function createTimestamp($data, string $hashAlg = 'sha1')
     {
         $TSTInfo = false;
         $tsaQuery = x509::tsa_query($data, $hashAlg);
@@ -293,7 +287,7 @@ class CMS
         ] + $tsaData;
 
         p_debug('    sending TSA query to "' . $tsaData['host'] . '"...');
-        if (! $binaryTsaResp = self::sendReq($reqData)) {
+        if (! $binaryTsaResp = $this->sendReq($reqData)) {
             p_error('      TSA query send FAILED!');
         } else {
             p_debug('      TSA query send OK');
@@ -402,7 +396,6 @@ class CMS
                 $ocspReq_serialNumber = $certSigner_parse['tbsCertificate']['serialNumber'];
                 $ocspReq_issuerNameHash = $certIssuer_parse['tbsCertificate']['subject']['sha1'];
                 $ocspReq_issuerKeyHash = $certIssuer_parse['tbsCertificate']['subjectPublicKeyInfo']['sha1'];
-                $ocspRequestorSubjName = $certSigner_parse['tbsCertificate']['subject']['hexdump'];
                 p_debug('      OCSP create request...');
                 if ($ocspReq = x509::ocsp_request($ocspReq_serialNumber, $ocspReq_issuerNameHash, $ocspReq_issuerKeyHash)) {
                     p_debug('        OK.');
@@ -414,14 +407,14 @@ class CMS
                         'resp_contentType' => 'application/ocsp-response',
                     ];
                     p_debug("      OCSP send request to \"{$ocspURI}\"...");
-                    if ($ocspResp = self::sendReq($reqData)) {
+                    if ($ocspResp = $this->sendReq($reqData)) {
                         p_debug('        OK.');
                         p_debug('      OCSP parsing response...');
                         if ($ocsp_parse = x509::ocsp_response_parse($ocspResp, $return)) {
                             p_debug('        OK.');
                             p_debug('      OCSP check cert validity...');
                             $certStatus = $ocsp_parse['responseBytes']['response']['BasicOCSPResponse']['tbsResponseData']['responses'][0]['certStatus'];
-                            if ($certStatus == 'valid') {
+                            if ($certStatus === 'valid') {
                                 p_debug('        OK. VALID.');
                                 $ocspRespHex = $ocsp_parse['hexdump'];
                                 $ltvResult['ocsp'] = $ocspRespHex;
@@ -464,7 +457,7 @@ class CMS
                                 } elseif (($nextUpdateTime - $nowz) < 1) { // not accept if crl 1 sec remain to expired
                                     p_error('        FAILED! Expired crl at ' . date('d/m/Y H:i:s', $nextUpdateTime) . ' and now ' . date('d/m/Y H:i:s', $nowz) . '!');
                                 } else {
-                                    p_debug('        OK CRL still valid until ' . date('d/m/Y H:i:s', $nextUpdateTime) . '');
+                                    p_debug('        OK CRL still valid until ' . date('d/m/Y H:i:s', $nextUpdateTime));
                                     $crlCertValid = true;
                                     p_debug('      check if cert not revoked...');
                                     if (array_key_exists('revokedCertificates', $crl_parse['TBSCertList'])) {
@@ -546,7 +539,7 @@ class CMS
                     $curr['contentType'] = $curr[$key];
                     unset($curr[$key]);
                 }
-                if ($value['type'] == 'a0') {
+                if ($value['type'] === 'a0') {
                     $curr['content'] = $curr[$key];
                     unset($curr[$key]);
                 }

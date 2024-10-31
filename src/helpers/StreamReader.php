@@ -32,13 +32,13 @@ namespace ddn\sapp\helpers;
  */
 class StreamReader
 {
-    protected $_buffer = '';
+    protected ?string $_buffer;
 
     protected int $_bufferlen;
 
     protected $_pos = 0;
 
-    public function __construct($string = null, $offset = 0)
+    public function __construct(?string $string = null, int $offset = 0)
     {
         if ($string === null) {
             $string = '';
@@ -54,7 +54,7 @@ class StreamReader
      *
      * @return char the next char in the buffer
      */
-    public function nextchar()
+    public function nextchar(): string|false
     {
         $this->_pos = min($this->_pos + 1, $this->_bufferlen);
 
@@ -82,7 +82,7 @@ class StreamReader
      *
      * @return char the current char
      */
-    public function currentchar()
+    public function currentchar(): string|false
     {
         if ($this->_pos >= $this->_bufferlen) {
             return false;
@@ -123,8 +123,8 @@ class StreamReader
         if ($length > 0) {
             return substr((string) $this->_buffer, $this->_pos, $length);
         }
-        return substr((string) $this->_buffer, $this->_pos);
 
+        return substr((string) $this->_buffer, $this->_pos);
     }
 
     /**

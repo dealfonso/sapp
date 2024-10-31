@@ -46,7 +46,7 @@ class PDFValueSimple extends PDFValue
             return false;
         }
 
-        return intval($matches[1]);
+        return (int) $matches[1];
     }
 
     public function get_int(): false|int
@@ -55,6 +55,6 @@ class PDFValueSimple extends PDFValue
             return false;
         }
 
-        return intval($this->value);
+        return (int) $this->value;
     }
 }

@@ -69,9 +69,8 @@ function _parsepng($filecontent)
 {
     // Extract info from a PNG file
     $f = new StreamReader($filecontent);
-    $info = _parsepngstream($f);
 
-    return $info;
+    return _parsepngstream($f);
 }
 
 function _parsepngstream(&$f)
@@ -83,7 +82,7 @@ function _parsepngstream(&$f)
 
     // Read header chunk
     _readstream($f, 4);
-    if (_readstream($f, 4) != 'IHDR') {
+    if (_readstream($f, 4) !== 'IHDR') {
         return p_error('Incorrect PNG image');
     }
     $w = _readint($f);
@@ -112,7 +111,7 @@ function _parsepngstream(&$f)
         return p_error('Interlacing not supported');
     }
     _readstream($f, 4);
-    $dp = '/Predictor 15 /Colors ' . ($colspace == 'DeviceRGB' ? 3 : 1) . ' /BitsPerComponent ' . $bpc . ' /Columns ' . $w;
+    $dp = '/Predictor 15 /Colors ' . ($colspace === 'DeviceRGB' ? 3 : 1) . ' /BitsPerComponent ' . $bpc . ' /Columns ' . $w;
 
     // Scan chunks looking for palette, transparency and image data
     $pal = '';
@@ -121,11 +120,11 @@ function _parsepngstream(&$f)
     do {
         $n = _readint($f);
         $type = _readstream($f, 4);
-        if ($type == 'PLTE') {
+        if ($type === 'PLTE') {
             // Read palette
             $pal = _readstream($f, $n);
             _readstream($f, 4);
-        } elseif ($type == 'tRNS') {
+        } elseif ($type === 'tRNS') {
             // Read transparency info
             $t = _readstream($f, $n);
             if ($ct == 0) {
@@ -139,18 +138,18 @@ function _parsepngstream(&$f)
                 }
             }
             _readstream($f, 4);
-        } elseif ($type == 'IDAT') {
+        } elseif ($type === 'IDAT') {
             // Read image data block
             $data .= _readstream($f, $n);
             _readstream($f, 4);
-        } elseif ($type == 'IEND') {
+        } elseif ($type === 'IEND') {
             break;
         } else {
             _readstream($f, $n + 4);
         }
     } while ($n);
 
-    if ($colspace == 'Indexed' && empty($pal)) {
+    if ($colspace === 'Indexed' && empty($pal)) {
         return p_error('Missing palette in image');
     }
     $info = [
@@ -211,7 +210,7 @@ function _parsepngstream(&$f)
     return $info;
 }
 
-function _readstream(&$f, $n)
+function _readstream($f, $n)
 {
     $res = '';
 

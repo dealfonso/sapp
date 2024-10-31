@@ -22,6 +22,7 @@
 namespace ddn\sapp\pdfvalue;
 
 use ArrayAccess;
+use Exception;
 use ReturnTypeWillChange;
 use Stringable;
 
@@ -80,7 +81,7 @@ class PDFValue implements ArrayAccess, Stringable
         unset($this->value[$offset]);
     }
 
-    public function push($v): bool
+    public function push(mixed $v): bool
     {
         /*if (get_class($v) !== get_class($this))
             throw new Exception('invalid object to concat to this one');*/
@@ -105,11 +106,8 @@ class PDFValue implements ArrayAccess, Stringable
     /**
      * Returns the difference between this and other object (false means "cannot compare", null means "equal" and any value means "different": things in this object that are different from the other)
      */
-    public function diff($other)
+    public function diff(object $other): mixed
     {
-        if (! is_a($other, static::class)) {
-            return false;
-        }
         if ($this->value === $other->value) {
             return null;
         }
@@ -129,7 +127,7 @@ class PDFValue implements ArrayAccess, Stringable
      *
      * @return pdfvalue an object of type PDFValue*, depending on the
      */
-    protected static function _convert($value)
+    protected static function _convert($value): self
     {
         switch (gettype($value)) {
             case 'integer':
@@ -160,7 +158,7 @@ class PDFValue implements ArrayAccess, Stringable
                         // If not an object, it is a list
                         $list = [];
                         foreach ($value as $v) {
-                            array_push($list, self::_convert($v));
+                            $list[] = self::_convert($v);
                         }
                         $value = new PDFValueList($list);
                     }

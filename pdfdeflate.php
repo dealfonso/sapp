@@ -33,7 +33,7 @@ else {
 
         $toid = null;
         if ($argc === 3)
-            $toid = intval($argv[2]);
+            $toid = (int)$argv[2];
 
         if ($doc === false)
             fwrite(STDERR, "failed to parse file " . $argv[1]);

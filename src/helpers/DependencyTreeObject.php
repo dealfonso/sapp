@@ -21,6 +21,8 @@
 
 namespace ddn\sapp\helpers;
 
+use ddn\sapp\PDFObject;
+use ddn\sapp\pdfvalue\PDFValueObject;
 use Generator;
 use Stringable;
 
@@ -29,31 +31,30 @@ use Stringable;
  */
 class DependencyTreeObject implements Stringable
 {
-    private int $is_child;
+    public int $is_child;
+
+    private array $children = [];
 
     public function __construct(
         private int $oid,
-        private mixed $info = null,
+        public mixed $info = null,
     ) {
         $this->is_child = 0;
     }
 
     public function __toString(): string
     {
-        return (string) $this->_getstr(null, isset($this->children) ? count($this->children) : 0);
+        return $this->_getstr(null, isset($this->children) ? count($this->children) : 0);
     }
 
     /**
      * Function that links one object to its parent (i.e. adds the object to the list of children of this object)
      *  - the function increases the amount of times that one object has been added to a parent object, to detect problems in building the tree
      */
-    public function addchild($oid, $o): void
+    public function addchild(int $oid, self $o): void
     {
-        if (! isset($this->children)) {
-            $this->children = [];
-        }
         $this->children[$oid] = $o;
-        if ($o->is_child != 0) {
+        if ($o->is_child !== 0) {
             p_warning("object {$o->oid} is already a child of other object");
         }
 
@@ -75,41 +76,28 @@ class DependencyTreeObject implements Stringable
     /**
      * Gets a string that represents the object, prepending a number of spaces, proportional to the depth in the tree
      */
-    protected function _getstr(?string $spaces = '', $mychcount = 0): string
+    protected function _getstr(?string $spaces = '', int $mychcount = 0): string
     {
         // $info = $this->oid . ($this->info?" ($this->info)":"") . (($this->is_child > 1)?" $this->is_child":"");
-        $info = $this->oid . ($this->info ? " ({$this->info})" : '');
+        $info = $this->oid . ($this->info !== null ? " ({$this->info})" : '');
         if ($spaces === null) {
-            $lines = ["{$spaces}  " . json_decode('"\u2501"') . " {$info}"];
+            $lines = ["{$spaces}  " . json_decode('"\u2501"', false, 512, JSON_THROW_ON_ERROR) . " {$info}"];
         } else {
-            if ($mychcount == 0) {
-                $lines = ["{$spaces}  " . json_decode('"\u2514\u2500"') . " {$info}"];
+            if ($mychcount === 0) {
+                $lines = ["{$spaces}  " . json_decode('"\u2514\u2500"', false, 512, JSON_THROW_ON_ERROR) . " {$info}"];
             } else {
-                $lines = ["{$spaces}  " . json_decode('"\u251c\u2500"') . " {$info}"];
+                $lines = ["{$spaces}  " . json_decode('"\u251c\u2500"', false, 512, JSON_THROW_ON_ERROR) . " {$info}"];
             }
         }
         if (isset($this->children)) {
             $chcount = count($this->children);
-            foreach ($this->children as $oid => $child) {
+            foreach ($this->children as $child) {
                 $chcount--;
-                if (($spaces === null) || ($mychcount == 0)) {
-                    array_push($lines, $child->_getstr($spaces . '   ', $chcount));
+                if (($spaces === null) || ($mychcount === 0)) {
+                    $lines[] = $child->_getstr($spaces . '   ', $chcount);
                 } else {
-                    array_push($lines, $child->_getstr($spaces . '  ' . json_decode('"\u2502"'), $chcount));
+                    $lines[] = $child->_getstr($spaces . '  ' . json_decode('"\u2502"', false, 512, JSON_THROW_ON_ERROR), $chcount);
                 }
-            }
-        }
-
-        return implode("\n", $lines);
-    }
-
-    protected function _old_getstr($depth = 0): string
-    {
-        $spaces = str_repeat('   ' . json_decode('"\u2502"'), $depth);
-        $lines = ["{$spaces}   " . json_decode('"\u251c\u2500"') . ' ' . $this->oid . ($this->info ? " ({$this->info})" : '') . (($this->is_child > 1) ? " {$this->is_child}" : '')];
-        if (isset($this->children)) {
-            foreach ($this->children as $oid => $child) {
-                array_push($lines, $child->_getstr($depth + 1));
             }
         }
 
@@ -130,9 +118,9 @@ const BLACKLIST = [
 ];
 
 /**
- * @return mixed[]
+ * @return array
  */
-function references_in_object(array $object, $oid = false): array
+function references_in_object(PDFObject $object): array
 {
     $type = $object['Type'];
     if ($type !== false) {
@@ -144,21 +132,18 @@ function references_in_object(array $object, $oid = false): array
     $references = [];
 
     foreach ($object->get_keys() as $key) {
-        $valid = true;
-
         // We'll skip those blacklisted fields
-        if (in_array($key, BLACKLIST['*'])) {
+        if (in_array($key, BLACKLIST['*'], true)) {
             continue;
         }
 
         if (array_key_exists($type, BLACKLIST)) {
-            if (in_array($key, BLACKLIST[$type])) {
+            if (in_array($key, BLACKLIST[$type], true)) {
                 continue;
             }
         }
 
-        $r_objects = [];
-        if (is_a($object[$key], 'ddn\\sapp\\pdfvalue\\PDFValueObject')) {
+        if (is_a($object[$key], PDFValueObject::class)) {
             $r_objects = references_in_object($object[$key]);
         } else {
             // Function get_object_referenced checks whether the value (or values in a list) have the form of object references, and if they have the form

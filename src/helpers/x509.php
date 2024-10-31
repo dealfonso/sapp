@@ -71,11 +71,11 @@ class x509
         }
         foreach ($ocsp as $key => $value) {
             if (is_numeric($key)) {
-                if ($value['type'] == '0a') {
+                if ($value['type'] === '0a') {
                     $ocsp['responseStatus'] = $value['value_hex'];
                     unset($ocsp[$key]);
                 }
-                if ($value['type'] == 'a0') {
+                if ($value['type'] === 'a0') {
                     $ocsp['responseBytes'] = $value;
                     unset($ocsp[$key]);
                 }
@@ -152,7 +152,7 @@ class x509
                     $curr['signature'] = substr((string) $value['value_hex'], 2);
                     unset($curr[$key]);
                 }
-                if ($value['type'] == 'a0') {
+                if ($value['type'] === 'a0') {
                     foreach ($value[0] as $certsK => $certsV) {
                         if (is_numeric($certsK)) {
                             $certs[$certsK] = $certsV['value_hex'];
@@ -171,15 +171,15 @@ class x509
         $curr = $ocsp['responseBytes']['response']['BasicOCSPResponse']['tbsResponseData'];
         foreach ($curr as $key => $value) {
             if (is_numeric($key)) {
-                if ($value['type'] == 'a0') {
+                if ($value['type'] === 'a0') {
                     $curr['version'] = $value[0]['value'];
                     unset($curr[$key]);
                 }
-                if ($value['type'] == 'a1' && ! array_key_exists('responderID', $curr)) {
+                if ($value['type'] === 'a1' && ! array_key_exists('responderID', $curr)) {
                     $curr['responderID'] = $value;
                     unset($curr[$key]);
                 }
-                if ($value['type'] == 'a2') {
+                if ($value['type'] === 'a2') {
                     $curr['responderID'] = $value;
                     unset($curr[$key]);
                 }
@@ -191,7 +191,7 @@ class x509
                     $curr['responses'] = $value;
                     unset($curr[$key]);
                 }
-                if ($value['type'] == 'a1') {
+                if ($value['type'] === 'a1') {
                     $curr['responseExtensions'] = $value;
                     unset($curr[$key]);
                 }
@@ -220,7 +220,7 @@ class x509
         foreach ($curr as $key => $value) {
             if (is_numeric($key)) {
                 if ($value['type'] == '30') {
-                    if ($value[0]['value_hex'] == '2b0601050507300102') { // nonce
+                    if ($value[0]['value_hex'] === '2b0601050507300102') { // nonce
                         $curr['nonce'] = $value[0]['value_hex'];
                     } else {
                         $curr[$value[0]['value_hex']] = $value[1];
@@ -362,14 +362,13 @@ class x509
                 '06092A864886F70D010105' . // OBJ_sha1WithRSAEncryption.
                 '0500'
             );
-            $signature = asn1::bit('00' . bin2hex((string) $signature_value));
+            $signature = asn1::bit('00' . bin2hex($signature_value));
             $signer_cert = self::x509_pem2der($signer_cert);
             $certs = asn1::expl('0', asn1::seq(bin2hex($signer_cert)));
             $optionalSignature = asn1::expl('0', asn1::seq($signatureAlgorithm . $signature . $certs));
         }
-        $OCSPRequest = asn1::seq($TBSRequest . $optionalSignature);
 
-        return $OCSPRequest;
+        return asn1::seq($TBSRequest . $optionalSignature);
     }
 
     /**
@@ -393,11 +392,9 @@ class x509
             return false;
         }
         $crl = substr($crl, 0, $endPos);
-        $crl = str_replace("\n", '', $crl);
-        $crl = str_replace("\r", '', $crl);
-        $dercrl = base64_decode($crl, true);
+        $crl = str_replace(["\n", "\r"], '', $crl);
 
-        return $dercrl;
+        return base64_decode($crl, true);
     }
 
     /**
@@ -433,7 +430,7 @@ class x509
         $x509_der = false;
         if ($x509_res = @openssl_x509_read($pem)) {
             openssl_x509_export($x509_res, $x509_pem);
-            $arr_x509_pem = explode("\n", (string) $x509_pem);
+            $arr_x509_pem = explode("\n", $x509_pem);
             $numarr = count($arr_x509_pem);
             $i = 0;
             $cert_pem = false;
@@ -536,7 +533,7 @@ class x509
         $i = 0;
         foreach ($curr as $key => $value) {
             if (is_numeric($key)) {
-                if ($value['type'] == 'a0') {
+                if ($value['type'] === 'a0') {
                     $curr['version'] = $value[0]['value'];
                     unset($curr[$key]);
                 }
@@ -553,9 +550,9 @@ class x509
                     foreach ($value as $issuerK => $issuerV) {
                         if (is_numeric($issuerK)) {
                             $issuerOID = $issuerV[0][0]['value_hex'];
-                            if ($oidprint == 'oid') {
+                            if ($oidprint === 'oid') {
                                 $issuerOID = self::oidfromhex($issuerOID);
-                            } elseif ($oidprint == 'hex') {
+                            } elseif ($oidprint === 'hex') {
                             } else {
                                 $issuerOID = self::oidfromhex($issuerOID);
                             }
@@ -581,9 +578,9 @@ class x509
                     foreach ($value as $subjectK => $subjectV) {
                         if (is_numeric($subjectK)) {
                             $subjectOID = $subjectV[0][0]['value_hex'];
-                            if ($oidprint == 'oid') {
+                            if ($oidprint === 'oid') {
                                 $subjectOID = self::oidfromhex($subjectOID);
-                            } elseif ($oidprint == 'hex') {
+                            } elseif ($oidprint === 'hex') {
                             } else {
                                 $subjectOID = self::oidfromhex($subjectOID);
                             }
@@ -619,7 +616,7 @@ class x509
                     unset($curr[$key]);
                     continue;
                 }
-                if ($value['type'] == 'a3') {
+                if ($value['type'] === 'a3') {
                     $curr['attributes'] = $value[0];
                     unset($curr[$key]);
                 }
@@ -638,20 +635,20 @@ class x509
                         $extvalue = $value[1];
                         $name_hex = $value[0]['value_hex'];
                         $value_hex = $value[1]['hexdump'];
-                        if ($value[1]['type'] == '01' && $value[1]['value_hex'] == 'ff') {
+                        if ($value[1]['type'] == '01' && $value[1]['value_hex'] === 'ff') {
                             $critical = 1;
                             $extvalue = $value[2];
                         }
-                        if ($name_hex == '551d0e') { // OBJ_subject_key_identifier
+                        if ($name_hex === '551d0e') { // OBJ_subject_key_identifier
                             $extvalue = $value[1][0]['value_hex'];
                         }
-                        if ($name_hex == '551d23') { // OBJ_authority_key_identifier
+                        if ($name_hex === '551d23') { // OBJ_authority_key_identifier
                             foreach ($value[1][0] as $OBJ_authority_key_identifierKey => $OBJ_authority_key_identifierVal) {
                                 if (is_numeric($OBJ_authority_key_identifierKey)) {
                                     if ($OBJ_authority_key_identifierVal['type'] == '80') {
                                         $OBJ_authority_key_identifier['keyid'] = $OBJ_authority_key_identifierVal['value_hex'];
                                     }
-                                    if ($OBJ_authority_key_identifierVal['type'] == 'a1') {
+                                    if ($OBJ_authority_key_identifierVal['type'] === 'a1') {
                                         $OBJ_authority_key_identifier['issuerName'] = $OBJ_authority_key_identifierVal['value_hex'];
                                     }
                                     if ($OBJ_authority_key_identifierVal['type'] == '82') {
@@ -661,7 +658,7 @@ class x509
                             }
                             $extvalue = $OBJ_authority_key_identifier;
                         }
-                        if ($name_hex == '2b06010505070101') { // OBJ_info_access
+                        if ($name_hex === '2b06010505070101') { // OBJ_info_access
                             foreach ($value[1][0] as $OBJ_info_accessK => $OBJ_info_accessV) {
                                 if (is_numeric($OBJ_info_accessK)) {
                                     $OBJ_info_accessHEX = $OBJ_info_accessV[0]['value_hex'];
@@ -672,7 +669,7 @@ class x509
                             }
                             $extvalue = $OBJ_info_access;
                         }
-                        if ($name_hex == '551d1f') { // OBJ_crl_distribution_points 551d1f
+                        if ($name_hex === '551d1f') { // OBJ_crl_distribution_points 551d1f
                             foreach ($value[1][0] as $OBJ_crl_distribution_pointsK => $OBJ_crl_distribution_pointsV) {
                                 if (is_numeric($OBJ_crl_distribution_pointsK)) {
                                     $OBJ_crl_distribution_points[] = hex2bin((string) $OBJ_crl_distribution_pointsV[0][0][0]['value_hex']);
@@ -680,16 +677,16 @@ class x509
                             }
                             $extvalue = $OBJ_crl_distribution_points;
                         }
-                        if ($name_hex == '551d0f') { // OBJ_key_usage
+                        if ($name_hex === '551d0f') { // OBJ_key_usage
                             // $extvalue = self::parse_keyUsage($extvalue[0]['value']);
                         }
-                        if ($name_hex == '551d13') { // OBJ_basic_constraints
+                        if ($name_hex === '551d13') { // OBJ_basic_constraints
                             $bc['ca'] = '0';
                             $bc['pathLength'] = '';
                             foreach ($extvalue[0] as $bck => $bcv) {
                                 if (is_numeric($bck)) {
                                     if ($bcv['type'] == '01') {
-                                        if ($bcv['value_hex'] == 'ff') {
+                                        if ($bcv['value_hex'] === 'ff') {
                                             $bc['ca'] = '1';
                                         }
                                     }
@@ -700,7 +697,7 @@ class x509
                             }
                             $extvalue = $bc;
                         }
-                        if ($name_hex == '551d25') { // OBJ_ext_key_usage 551d1f
+                        if ($name_hex === '551d25') { // OBJ_ext_key_usage 551d1f
                             foreach ($extvalue[0] as $OBJ_ext_key_usageK => $OBJ_ext_key_usageV) {
                                 if (is_numeric($OBJ_ext_key_usageK)) {
                                     $OBJ_ext_key_usageHEX = $OBJ_ext_key_usageV['value_hex'];
@@ -719,9 +716,9 @@ class x509
                             'value' => $extvalue,
                         ];
                         $extNameOID = $value[0]['value_hex'];
-                        if ($oidprint == 'oid') {
+                        if ($oidprint === 'oid') {
                             $extNameOID = self::oidfromhex($extNameOID);
-                        } elseif ($oidprint == 'hex') {
+                        } elseif ($oidprint === 'hex') {
                         } else {
                             $extNameOID = self::oidfromhex($extNameOID);
                         }
@@ -786,7 +783,7 @@ class x509
      *
      * @return array parsed crl
      */
-    private static function parsecrl(array $crl, $oidprint = false)
+    private static function parsecrl(array $crl, bool $oidprint = false): false|array
     {
         if ($derCrl = self::crl_pem2der($crl)) {
             $derCrl = bin2hex($derCrl);
@@ -856,7 +853,7 @@ class x509
                     unset($curr[$key]);
                     continue;
                 }
-                if ($value['type'] == 'a0') {
+                if ($value['type'] === 'a0') {
                     $curr['crlExtensions'] = $curr[$key];
                     unset($curr[$key]);
                 }
@@ -890,25 +887,25 @@ class x509
             foreach ($curr as $key => $value) {
                 if (is_numeric($key)) {
                     $attributes_name = self::oidfromhex($value[0]['value_hex']);
-                    if ($oidprint == 'oid') {
+                    if ($oidprint === 'oid') {
                         $attributes_name = self::oidfromhex($value[0]['value_hex']);
                     }
-                    if ($oidprint == 'hex') {
+                    if ($oidprint === 'hex') {
                         $attributes_name = $value[0]['value_hex'];
                     }
                     $attributes_oid = self::oidfromhex($value[0]['value_hex']);
                     if ($value['type'] == '30') {
                         $crlExtensionsValue = $value[1][0];
-                        if ($attributes_oid == '2.5.29.20') { // OBJ_crl_number
+                        if ($attributes_oid === '2.5.29.20') { // OBJ_crl_number
                             $crlExtensionsValue = $crlExtensionsValue['value'];
                         }
-                        if ($attributes_oid == '2.5.29.35') { // OBJ_authority_key_identifier
+                        if ($attributes_oid === '2.5.29.35') { // OBJ_authority_key_identifier
                             foreach ($crlExtensionsValue as $authority_key_identifierValueK => $authority_key_identifierV) {
                                 if (is_numeric($authority_key_identifierValueK)) {
                                     if ($authority_key_identifierV['type'] == '80') {
                                         $authority_key_identifier['keyIdentifier'] = $authority_key_identifierV['value_hex'];
                                     }
-                                    if ($authority_key_identifierV['type'] == 'a1') {
+                                    if ($authority_key_identifierV['type'] === 'a1') {
                                         $authority_key_identifier['authorityCertIssuer'] = $authority_key_identifierV['value_hex'];
                                     }
                                     if ($authority_key_identifierV['type'] == '82') {
@@ -928,9 +925,9 @@ class x509
         foreach ($curr as $key => $value) {
             if (is_numeric($key)) {
                 if ($value['type'] == '31') {
-                    if ($oidprint == 'oid') {
+                    if ($oidprint === 'oid') {
                         $subjOID = self::oidfromhex($curr[$key][0][0]['value_hex']);
-                    } elseif ($oidprint == 'hex') {
+                    } elseif ($oidprint === 'hex') {
                         $subjOID = $curr[$key][0][0]['value_hex'];
                     } else {
                         $subjOID = self::oidfromhex($curr[$key][0][0]['value_hex']);
@@ -942,7 +939,7 @@ class x509
                 unset($curr['depth']);
                 unset($curr['type']);
                 unset($curr['typeName']);
-                if ($key == 'hexdump') {
+                if ($key === 'hexdump') {
                     $curr['sha1'] = hash('sha1', pack('H*', $value));
                 }
             }
@@ -960,9 +957,6 @@ class x509
         if (count($differ) == 0) {
             $differ = array_diff_key($arrModel['TBSCertList'], $crl['TBSCertList']);
             if (count($differ) > 0) {
-                foreach ($differ as $key => $val) {
-                }
-
                 return false;
             }
         } else {
@@ -996,7 +990,7 @@ class x509
         $result = false;
         foreach ($split as $val) {
             $dec = hexdec($val);
-            if ($i == 0) {
+            if ($i === 0) {
                 if ($dec >= 128) {
                     $nex = (128 * ($dec - 128)) - 80;
                     if ($dec > 129) {
@@ -1013,7 +1007,7 @@ class x509
                     $result = "1.{$first}.";
                 }
                 if ($dec < 40) {
-                    $first = $dec - 0;
+                    $first = $dec;
                     $result = "0.{$first}.";
                 }
             } else {

@@ -27,32 +27,31 @@ class asn1
             if (in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61'])) { // ($string)
                 $val = bin2hex((string) $hex);
             }
-            if ($func == 'int') {
-                $val = (strlen((string) $val) % 2 != 0) ? "0{$val}" : "{$val}";
+            if ($func === 'int') {
+                $val = (strlen((string) $val) % 2 !== 0) ? "0{$val}" : (string) ($val);
             }
-            if ($func == 'expl') { //expl($num, $hex)
+            if ($func === 'expl') { //expl($num, $hex)
                 $num = $num . $params[0];
                 $val = $params[1];
             }
-            if ($func == 'impl') { //impl($num="0")
+            if ($func === 'impl') { //impl($num="0")
                 $val = (! $val) ? '00' : $val;
-                $val = (strlen((string) $val) % 2 != 0) ? "0{$val}" : $val;
+                $val = (strlen((string) $val) % 2 !== 0) ? "0{$val}" : $val;
 
                 return $num . $val;
             }
-            if ($func == 'other') { //OTHER($id, $hex, $chr = false)
+            if ($func === 'other') { //OTHER($id, $hex, $chr = false)
                 $id = $params[0];
                 $hex = $params[1];
                 $chr = @$params[2];
                 $str = $hex;
-                if ($chr != false) {
+                if ($chr) {
                     $str = bin2hex((string) $hex);
                 }
-                $ret = "{$id}" . self::asn1_header($str) . $str;
 
-                return $ret;
+                return ($id) . self::asn1_header($str) . $str;
             }
-            if ($func == 'utime') {
+            if ($func === 'utime') {
                 $time = $params[0]; //yymmddhhiiss
                 $oldTz = date_default_timezone_get();
                 date_default_timezone_set('UTC');
@@ -60,7 +59,7 @@ class asn1
                 date_default_timezone_set($oldTz);
                 $val = bin2hex($time . 'Z');
             }
-            if ($func == 'gtime') {
+            if ($func === 'gtime') {
                 if (! $time = strtotime((string) $params[0])) {
                     // echo "asn1::GTIME function strtotime cant recognize time!! please check at input=\"{$params[0]}\"";
                     return false;
@@ -103,12 +102,11 @@ class asn1
                 $info['typeName'] = self::type($k);
                 $info['value_hex'] = $v;
                 if (($currentDepth <= $maxDepth)) {
-                    if ($k == '06') {
-                    } else {
-                        if (in_array($k, ['13', '18'])) {
+                    if ($k !== '06') {
+                        if (in_array($k, ['13', '18'], true)) {
                             $info['value'] = hex2bin((string) $info['value_hex']);
                         } else {
-                            if (in_array($k, ['03', '02', 'a04'])) {
+                            if (in_array($k, ['03', '02', 'a04'], true)) {
                                 $info['value'] = $v;
                             } else {
                                 $currentDepth++;
@@ -179,12 +177,12 @@ class asn1
      *
      * @return array asn.1 structure
      */
-    protected static function oneParse($hex)
+    protected static function oneParse($hex): array|false
     {
-        if ($hex == '') {
+        if ($hex === '') {
             return false;
         }
-        if (! @ctype_xdigit($hex) || @strlen($hex) % 2 != 0) {
+        if (! @ctype_xdigit($hex) || @strlen($hex) % 2 !== 0) {
             echo "input:\"{$hex}\" not hex string!.\n";
 
             return false;
@@ -205,12 +203,11 @@ class asn1
             }
             $tlv_valueLength = hexdec($tlv_valueLength);
             $totalTlLength = 2 + 2 + ($tlv_lengthLength * 2);
-            $reduction = 2 + 2 + ($tlv_lengthLength * 2) + ($tlv_valueLength * 2);
             $tlv_value = substr($hex, $totalTlLength, $tlv_valueLength * 2);
             $remain = substr($hex, $totalTlLength + ($tlv_valueLength * 2));
             $newhexdump = substr($hex, 0, $totalTlLength + ($tlv_valueLength * 2));
             $result[] = [
-                'tlv_tagLength' => strlen(dechex($tlv_tagLength)) % 2 == 0 ? dechex($tlv_tagLength) : '0' . dechex($tlv_tagLength),
+                'tlv_tagLength' => strlen(dechex($tlv_tagLength)) % 2 === 0 ? dechex($tlv_tagLength) : '0' . dechex($tlv_tagLength),
                 'tlv_lengthLength' => $tlv_lengthLength,
                 'tlv_valueLength' => $tlv_valueLength,
                 'newhexdump' => $newhexdump,
@@ -241,7 +238,7 @@ class asn1
     {
         $len = strlen($str) / 2;
         $ret = dechex($len);
-        if (strlen($ret) % 2 != 0) {
+        if (strlen($ret) % 2 !== 0) {
             $ret = "0{$ret}";
         }
         $headerLength = strlen($ret) / 2;

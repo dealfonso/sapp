@@ -23,7 +23,6 @@ namespace ddn\sapp;
 
 use ArrayAccess;
 use ddn\sapp\helpers\Buffer;
-use ddn\sapp\helpers\LoadHelpers;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ReturnTypeWillChange;
@@ -32,10 +31,6 @@ use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\p_warning;
 
 // Loading the functions
-
-if (! defined('ddn\\sapp\\helpers\\LoadHelpers')) {
-    new LoadHelpers();
-}
 
 // The character used to end lines
 if (! defined('__EOL')) {
@@ -56,7 +51,7 @@ class PDFObject implements ArrayAccess, Stringable
 
     protected $_value = null;
 
-    protected $_generation;
+    protected int $_generation;
 
     public function __construct(
         protected int $_oid,
@@ -102,12 +97,12 @@ class PDFObject implements ArrayAccess, Stringable
         return $this->_value->get_keys();
     }
 
-    public function set_oid($oid): void
+    public function set_oid(int $oid): void
     {
         $this->_oid = $oid;
     }
 
-    public function get_generation()
+    public function get_generation(): int
     {
         return $this->_generation;
     }
@@ -126,7 +121,7 @@ class PDFObject implements ArrayAccess, Stringable
     public function to_pdf_entry(): string
     {
         return "{$this->_oid} 0 obj" . __EOL .
-            "{$this->_value}" . __EOL .
+            $this->_value . __EOL .
             (
                 $this->_stream === null ? '' :
                 "stream\r\n" .
@@ -178,8 +173,6 @@ class PDFObject implements ArrayAccess, Stringable
                     ];
 
                     return self::FlateDecode(gzuncompress($this->_stream), $params);
-
-                    break;
                 default:
                     return p_error('unknown compression method ' . $this->_value['Filter']);
             }
@@ -226,9 +219,9 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @return void
      */
-    public function offsetSet($field, $value): void
+    public function offsetSet($offset, $value): void
     {
-        $this->_value[$field] = $value;
+        $this->_value[$offset] = $value;
     }
 
     /**
@@ -239,9 +232,9 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @return exists true if the field exists; false otherwise
      */
-    public function offsetExists($field): bool
+    public function offsetExists($offset): bool
     {
-        return $this->_value->offsetExists($field);
+        return $this->_value->offsetExists($offset);
     }
 
     /**
@@ -252,9 +245,9 @@ class PDFObject implements ArrayAccess, Stringable
      * @return value the value of the field
      */
     #[ReturnTypeWillChange]
-    public function offsetGet($field)
+    public function offsetGet($offset)
     {
-        return $this->_value[$field];
+        return $this->_value[$offset];
     }
 
     /**
@@ -262,9 +255,9 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @param field the field to unset the value
      */
-    public function offsetUnset($field): void
+    public function offsetUnset($offset): void
     {
-        $this->_value->offsetUnset($field);
+        $this->_value->offsetUnset($offset);
     }
 
     public function push($v)

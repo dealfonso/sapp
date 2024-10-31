@@ -24,6 +24,7 @@ namespace ddn\sapp;
 use ddn\sapp\pdfvalue\PDFValueList;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueReference;
+use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\get_random_string;
 use function ddn\sapp\helpers\p_error;
 use function ddn\sapp\helpers\p_warning;
@@ -58,7 +59,7 @@ class PDFDocWithContents extends PDFDoc
      * @param params an array of values [ "font" => <fontname>, "size" => <size in pt>,
      *               "color" => <#hexcolor>, "angle" => <rotation angle>]
      */
-    public function add_text($page_to_appear, $text, $x, $y, $params = [])
+    public function add_text(int $page_to_appear, $text, $x, $y, $params = [])
     {
         // TODO: maybe we can create a function that "adds content to a page", and that
         //       function will search for the content field and merge the resources, if
@@ -81,7 +82,7 @@ class PDFDocWithContents extends PDFDoc
 
         $resources_obj = $this->get_indirect_object($page_obj['Resources']);
 
-        if (array_search($params['font'], self::T_STANDARD_FONTS) === false) {
+        if (! in_array($params['font'], self::T_STANDARD_FONTS, true)) {
             return p_error('only standard fonts are allowed Times-Roman, Helvetica, Courier, Symbol, ZapfDingbats');
         }
 
@@ -102,7 +103,7 @@ class PDFDocWithContents extends PDFDoc
 
         // Get the page height, to change the coordinates system (up to down)
         $pagesize = $this->get_page_size($page_to_appear);
-        $pagesize_h = floatval('' . $pagesize[3]) - floatval('' . $pagesize[1]);
+        $pagesize_h = (float) ('' . $pagesize[3]) - (float) ('' . $pagesize[1]);
 
         $angle = $params['angle'];
         $angle *= M_PI / 180;
@@ -186,9 +187,9 @@ class PDFDocWithContents extends PDFDoc
 
         // Get the page height, to change the coordinates system (up to down)
         $pagesize = $this->get_page_size($page_obj);
-        $pagesize_h = floatval('' . $pagesize[3]) - floatval('' . $pagesize[1]);
+        $pagesize_h = (float) ('' . $pagesize[3]) - (float) ('' . $pagesize[1]);
 
-        $result = $this->_add_image($filename, $x, $pagesize_h - $y, $w, $h);
+        $result = _add_image($filename, $x, $pagesize_h - $y, $w, $h);
 
         return p_error('this function still needs work');
 
