@@ -38,7 +38,7 @@ class asn1
             }
 
             if ($func === 'impl') { //impl($num="0")
-                $val = $val ?: '00';
+                $val ??= '00';
                 $val = strlen((string) $val) % 2 !== 0 ? '0' . $val : $val;
 
                 return $num . $val;

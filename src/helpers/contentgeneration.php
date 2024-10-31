@@ -122,6 +122,7 @@ function _create_image_objects($info, $object_factory): array
 
         // In principle, it may return multiple objects
         $smasks = _create_image_objects($smaskinfo, $object_factory);
+        assert($smasks !== []);
         foreach ($smasks as $smask) {
             $objects[] = $smask;
         }
