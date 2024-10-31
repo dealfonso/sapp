@@ -21,8 +21,10 @@
 
 namespace ddn\sapp\pdfvalue;
 
-class PDFValueHexString extends PDFValueString {
-    public function __toString(): string {
+class PDFValueHexString extends PDFValueString
+{
+    public function __toString(): string
+    {
         return "<" . trim((string) $this->value) . ">";
     }
 }

@@ -21,8 +21,10 @@
 
 namespace ddn\sapp\pdfvalue;
 
-class PDFValueString extends PDFValue {
-    public function __toString(): string {
+class PDFValueString extends PDFValue
+{
+    public function __toString(): string
+    {
         return "(" . $this->value . ")";
     }
 }

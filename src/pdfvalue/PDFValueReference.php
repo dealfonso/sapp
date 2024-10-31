@@ -24,8 +24,10 @@ namespace ddn\sapp\pdfvalue;
 /**
  * Class to create a reference to an object
  */
-class PDFValueReference extends PDFValueSimple {
-    public function __construct($oid) {
+class PDFValueReference extends PDFValueSimple
+{
+    public function __construct($oid)
+    {
         parent::__construct(sprintf("%d 0 R", $oid));
     }
-};
+}

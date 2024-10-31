@@ -21,8 +21,10 @@
 
 namespace ddn\sapp\pdfvalue;
 
-class PDFValueType extends PDFValue {
-    public function __toString(): string {
+class PDFValueType extends PDFValue
+{
+    public function __toString(): string
+    {
         return "/" . trim((string) $this->value);
     }
 }

@@ -21,17 +21,19 @@
 
 namespace ddn\sapp\helpers;
 
+use Generator;
 use Stringable;
 
 /**
  * A class for the PDFObjects in the dependency tree
  */
-class DependencyTreeObject implements Stringable {
+class DependencyTreeObject implements Stringable
+{
     private int $is_child;
 
     function __construct(
         private int $oid,
-        private mixed $info = null
+        private mixed $info = null,
     ) {
         $this->is_child = 0;
     }
@@ -40,11 +42,15 @@ class DependencyTreeObject implements Stringable {
      * Function that links one object to its parent (i.e. adds the object to the list of children of this object)
      *  - the function increases the amount of times that one object has been added to a parent object, to detect problems in building the tree
      */
-    function addchild($oid, $o): void {
-        if (! isset($this->children)) $this->children = [];
+    function addchild($oid, $o): void
+    {
+        if (! isset($this->children)) {
+            $this->children = [];
+        }
         $this->children[$oid] = $o;
-        if ($o->is_child != 0)
+        if ($o->is_child != 0) {
             p_warning("object $o->oid is already a child of other object");
+        }
 
         $o->is_child = $o->is_child + 1;
     }
@@ -52,40 +58,48 @@ class DependencyTreeObject implements Stringable {
     /**
      * This is an iterator for the children of this object
      */
-    function children(): \Generator {
-        if (isset($this->children))
+    function children(): Generator
+    {
+        if (isset($this->children)) {
             foreach ($this->children as $oid => $object) {
                 yield $oid;
             }
+        }
     }
 
     /**
      * Gets a string that represents the object, prepending a number of spaces, proportional to the depth in the tree
      */
-    protected function _getstr(?string $spaces = "", $mychcount = 0): string {
+    protected function _getstr(?string $spaces = "", $mychcount = 0): string
+    {
         // $info = $this->oid . ($this->info?" ($this->info)":"") . (($this->is_child > 1)?" $this->is_child":"");
         $info = $this->oid . ($this->info ? " ($this->info)" : "");
         if ($spaces === null) {
             $lines = ["{$spaces}  " . json_decode('"\u2501"') . " $info"];
-        } else
-            if ($mychcount == 0)
+        } else {
+            if ($mychcount == 0) {
                 $lines = ["{$spaces}  " . json_decode('"\u2514\u2500"') . " $info"];
-            else
+            } else {
                 $lines = ["{$spaces}  " . json_decode('"\u251c\u2500"') . " $info"];
+            }
+        }
         if (isset($this->children)) {
             $chcount = count($this->children);
             foreach ($this->children as $oid => $child) {
                 $chcount--;
                 if (($spaces === null) || ($mychcount == 0)) {
                     array_push($lines, $child->_getstr($spaces . "   ", $chcount));
-                } else
+                } else {
                     array_push($lines, $child->_getstr($spaces . "  " . json_decode('"\u2502"'), $chcount));
+                }
             }
         }
+
         return implode("\n", $lines);
     }
 
-    protected function _old_getstr($depth = 0): string {
+    protected function _old_getstr($depth = 0): string
+    {
         $spaces = str_repeat("   " . json_decode('"\u2502"'), $depth);
         $lines = ["{$spaces}   " . json_decode('"\u251c\u2500"') . " " . $this->oid . ($this->info ? " ($this->info)" : "") . (($this->is_child > 1) ? " $this->is_child" : "")];
         if (isset($this->children)) {
@@ -93,10 +107,12 @@ class DependencyTreeObject implements Stringable {
                 array_push($lines, $child->_getstr($depth + 1));
             }
         }
+
         return implode("\n", $lines);
     }
 
-    public function __toString(): string {
+    public function __toString(): string
+    {
         return (string) $this->_getstr(null, isset($this->children) ? count($this->children) : 0);
     }
 }
@@ -104,7 +120,6 @@ class DependencyTreeObject implements Stringable {
 /**
  *  Fields that are blacklisted for referencing the fields;
  *      i.e. a if a reference to a object appears in a fields in the blacklist, it won't be considered as a reference to other object to build the tree
- *
  *  The blacklist is indexed by the type of the node; * means "any type" (including the others in the blacklist)
  */
 const BLACKLIST = [
@@ -117,12 +132,14 @@ const BLACKLIST = [
 /**
  * @return mixed[]
  */
-function references_in_object(array $object, $oid = false): array {
+function references_in_object(array $object, $oid = false): array
+{
     $type = $object["Type"];
-    if ($type !== false)
+    if ($type !== false) {
         $type = $type->val();
-    else
+    } else {
         $type = "";
+    }
 
     $references = [];
 
@@ -130,12 +147,15 @@ function references_in_object(array $object, $oid = false): array {
         $valid = true;
 
         // We'll skip those blacklisted fields
-        if (in_array($key, BLACKLIST["*"]))
+        if (in_array($key, BLACKLIST["*"])) {
             continue;
+        }
 
-        if (array_key_exists($type, BLACKLIST))
-            if (in_array($key, BLACKLIST[$type]))
+        if (array_key_exists($type, BLACKLIST)) {
+            if (in_array($key, BLACKLIST[$type])) {
                 continue;
+            }
+        }
 
         $r_objects = [];
         if (is_a($object[$key], "ddn\\sapp\\pdfvalue\\PDFValueObject")) {
@@ -146,10 +166,13 @@ function references_in_object(array $object, $oid = false): array {
             $r_objects = $object[$key]->get_object_referenced();
 
             // If the value does not have the form of a reference, it returns false
-            if ($r_objects === false)
+            if ($r_objects === false) {
                 continue;
+            }
 
-            if (! is_array($r_objects)) $r_objects = [$r_objects];
+            if (! is_array($r_objects)) {
+                $r_objects = [$r_objects];
+            }
         }
         // p_debug($key . "=>" . implode(",",$r_objects));
 

@@ -21,29 +21,40 @@
 
 namespace ddn\sapp\pdfvalue;
 
-class PDFValueSimple extends PDFValue {
-    public function __construct($v) {
+class PDFValueSimple extends PDFValue
+{
+    public function __construct($v)
+    {
         parent::__construct($v);
     }
 
-    public function push($v): bool {
+    public function push($v): bool
+    {
         if ($v::class === static::class) {
             // Can push
             $this->value = $this->value . ' ' . $v->val();
+
             return true;
         }
+
         return false;
     }
 
-    public function get_object_referenced(): false|int {
+    public function get_object_referenced(): false|int
+    {
         if (! preg_match('/^\s*([0-9]+)\s+([0-9]+)\s+R\s*$/ms', (string) $this->value, $matches)) {
             return false;
         }
+
         return intval($matches[1]);
     }
 
-    public function get_int(): false|int {
-        if (! is_numeric($this->value)) return false;
+    public function get_int(): false|int
+    {
+        if (! is_numeric($this->value)) {
+            return false;
+        }
+
         return intval($this->value);
     }
 }

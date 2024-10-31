@@ -21,7 +21,8 @@
 
 namespace ddn\sapp\helpers;
 
-function mime_to_ext($mime): string|false {
+function mime_to_ext($mime): string|false
+{
     $mime_map = [
         'video/3gpp2' => '3g2',
         'video/3gp' => '3gp',
@@ -203,5 +204,6 @@ function mime_to_ext($mime): string|false {
         'multipart/x-zip' => 'zip',
         'text/x-scriptzsh' => 'zsh',
     ];
+
     return $mime_map[$mime] ?? false;
-}    
+}

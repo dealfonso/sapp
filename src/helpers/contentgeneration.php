@@ -27,17 +27,25 @@ use ddn\sapp\pdfvalue\PDFValueReference;
 use ddn\sapp\pdfvalue\PDFValueType;
 use finfo;
 
-function tx($x, $y): string {
+function tx($x, $y): string
+{
     return sprintf(" 1 0 0 1 %.2F %.2F cm", $x, $y);
 }
-function sx($w, $h): string {
+
+function sx($w, $h): string
+{
     return sprintf(" %.2F 0 0 %.2F 0 0 cm", $w, $h);
 }
-function deg2rad($angle): float {
+
+function deg2rad($angle): float
+{
     return $angle * pi() / 180;
 }
-function rx($angle): string {
+
+function rx($angle): string
+{
     $angle = deg2rad($angle);
+
     return sprintf(" %.2F %.2F %.2F %.2F 0 0 cm", cos($angle), sin($angle), -sin($angle), cos($angle));
 }
 
@@ -46,7 +54,8 @@ function rx($angle): string {
  *   NOTE: the image inclusion is taken from http://www.fpdf.org/; this is a translation
  *         of function _putimage
  */
-function _create_image_objects($info, $object_factory): array {
+function _create_image_objects($info, $object_factory): array
+{
     $objects = [];
 
     $image = call_user_func(
@@ -72,25 +81,31 @@ function _create_image_objects($info, $object_factory): array {
             $streamobject->set_stream($data);
 
             $image['ColorSpace']->push([
-                '/Indexed', '/DeviceRGB', (strlen((string) $info['pal']) / 3) - 1, new PDFValueReference($streamobject->get_oid()),
+                '/Indexed',
+                '/DeviceRGB',
+                (strlen((string) $info['pal']) / 3) - 1,
+                new PDFValueReference($streamobject->get_oid()),
             ]);
             array_push($objects, $streamobject);
             break;
         case 'DeviceCMYK':
             $image["Decode"] = new PDFValueList([1, 0, 1, 0, 1, 0, 1, 0]);
         default:
-            $image['ColorSpace'] = new PDFValueType( $info['cs'] );
+            $image['ColorSpace'] = new PDFValueType($info['cs']);
             break;
     }
 
-    if (isset($info['f']))
+    if (isset($info['f'])) {
         $image['Filter'] = new PDFValueType($info['f']);
+    }
 
-    if(isset($info['dp']))
+    if (isset($info['dp'])) {
         $image['DecodeParms'] = PDFValueObject::fromstring($info['dp']);
+    }
 
-    if (isset($info['trns']) && is_array($info['trns']))
+    if (isset($info['trns']) && is_array($info['trns'])) {
         $image['Mask'] = new PDFValueList($info['trns']);
+    }
 
     if (isset($info['smask'])) {
         $smaskinfo = [
@@ -105,8 +120,9 @@ function _create_image_objects($info, $object_factory): array {
 
         // In principle, it may return multiple objects
         $smasks = _create_image_objects($smaskinfo, $object_factory);
-        foreach ($smasks as $smask)
+        foreach ($smasks as $smask) {
             array_push($objects, $smask);
+        }
         $image['SMask'] = new PDFValueReference($smask->get_oid());
     }
 
@@ -116,16 +132,23 @@ function _create_image_objects($info, $object_factory): array {
     return $objects;
 }
 
-function is_base64($string): bool{
+function is_base64($string): bool
+{
     // Check if there are valid base64 characters
-    if (! preg_match('/^[a-zA-Z0-9\/\r\n+]*={0,2}$/', (string) $string)) return false;
+    if (! preg_match('/^[a-zA-Z0-9\/\r\n+]*={0,2}$/', (string) $string)) {
+        return false;
+    }
 
     // Decode the string in strict mode and check the results
     $decoded = base64_decode((string) $string, true);
-    if(false === $decoded) return false;
+    if (false === $decoded) {
+        return false;
+    }
 
     // Encode the string again
-    if(base64_encode($decoded) != $string) return false;
+    if (base64_encode($decoded) != $string) {
+        return false;
+    }
 
     return true;
 }
@@ -134,6 +157,7 @@ function is_base64($string): bool{
  * This function creates the objects needed to add an image to the document, at a specific position and size.
  *   The function is agnostic from the place in which the image is to be created, and just creates the objects
  *   with its contents and prepares the PDF command to place the image
+ *
  * @param filename the file name that contains the image, or a string that contains the image (with character '@'
  *                 prepended)
  * @param x points from left in which to appear the image (the units are "content-defined" (i.e. depending on the size of the page))
@@ -142,26 +166,31 @@ function is_base64($string): bool{
  * @param h height of the rectangle in which to appear the image (image will be scaled, and the units are "content-defined" (i.e. depending on the size of the page))
  * @param angle the rotation angle in degrees; the image will be rotated using the center
  * @param keep_proportions if true, the image will keep the proportions when rotated, then the image will not occupy the full
+ *
  * @return result an array with the next fields:
  *                  "images": objects of the corresponding images (i.e. position [0] is the image, the rest elements are masks, if needed)
  *                  "resources": PDFValueObject with keys that needs to be incorporated to the resources of the object in which the images will appear
  *                  "alpha": true if the image has alpha
  *                  "command": pdf command to draw the image
  */
-function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, $angle = 0, $keep_proportions = true) {
-
-    if (empty($filename))
+function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, $angle = 0, $keep_proportions = true)
+{
+    if (empty($filename)) {
         return p_error('invalid image name or stream');
+    }
 
     if ($filename[0] === '@') {
         $filecontent = substr((string) $filename, 1);
-    } else if (is_base64($filename)) {
-        $filecontent = base64_decode((string) $filename, true);
     } else {
-        $filecontent = @file_get_contents($filename);
+        if (is_base64($filename)) {
+            $filecontent = base64_decode((string) $filename, true);
+        } else {
+            $filecontent = @file_get_contents($filename);
 
-        if ($filecontent === false)
-            return p_error("failed to get the image");
+            if ($filecontent === false) {
+                return p_error("failed to get the image");
+            }
+        }
     }
 
     $finfo = new finfo();
@@ -187,19 +216,25 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
     // Generate a new identifier for the image
     $info['i'] = "Im" . get_random_string(4);
 
-    if ($w === null)
+    if ($w === null) {
         $w = -96;
-    if ($h === null)
+    }
+    if ($h === null) {
         $h = -96;
+    }
 
-    if($w < 0)
+    if ($w < 0) {
         $w = -$info['w'] * 72 / $w;
-    if($h < 0)
+    }
+    if ($h < 0) {
         $h = -$info['h'] * 72 / $h;
-    if($w == 0)
+    }
+    if ($w == 0) {
         $w = $h * $info['w'] / $info['h'];
-    if($h == 0)
+    }
+    if ($h == 0) {
         $h = $w * $info['h'] / $info['w'];
+    }
 
     $images_objects = _create_image_objects($info, $object_factory);
 
@@ -249,7 +284,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
     }
     $data .= sprintf(" /%s Do Q", $info['i']);
 
-    $resources = new PDFValueObject( [
+    $resources = new PDFValueObject([
         'ProcSet' => ['/PDF', '/Text', '/ImageB', '/ImageC', '/ImageI'],
         'XObject' => new PDFValueObject ([
             $info['i'] => new PDFValueReference($images_objects[0]->get_oid()),

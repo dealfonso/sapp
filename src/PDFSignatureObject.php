@@ -26,7 +26,8 @@ use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueString;
 
 // This is an special object that has a set of fields
-class PDFSignatureObject extends PDFObject {
+class PDFSignatureObject extends PDFObject
+{
     // The maximum signature length, needed to create a placeholder to calculate the range of bytes
     // that will cover the signature.
     public static $__SIGNATURE_MAX_LENGTH = 27742;
@@ -48,42 +49,52 @@ class PDFSignatureObject extends PDFObject {
 
     /**
      * Sets the certificate to use to sign
+     *
      * @param cert the pem-formatted certificate and private to use to sign as
      *             [ 'cert' => ..., 'pkey' => ... ]
      */
-    public function set_certificate($certificate): void {
+    public function set_certificate($certificate): void
+    {
         $this->_certificate = $certificate;
     }
 
-    public function set_signature_ltv($signature_ltv_data): void {
+    public function set_signature_ltv($signature_ltv_data): void
+    {
         $this->_signature_ltv_data = $signature_ltv_data;
     }
 
-    public function set_signature_tsa($signature_tsa): void {
+    public function set_signature_tsa($signature_tsa): void
+    {
         $this->_signature_tsa = $signature_tsa;
     }
 
     /**
      * Obtains the certificate set with function set_certificate
+     *
      * @return cert the certificate
      */
-    public function get_certificate() {
+    public function get_certificate()
+    {
         return $this->_certificate;
     }
 
-    public function get_tsa() {
+    public function get_tsa()
+    {
         return $this->_signature_tsa;
     }
 
-    public function get_ltv() {
+    public function get_ltv()
+    {
         return $this->_signature_ltv_data;
     }
 
     /**
      * Constructs the object and sets the default values needed to sign
+     *
      * @param oid the oid for the object
      */
-    public function __construct($oid) {
+    public function __construct($oid)
+    {
         $this->_prev_content_size = 0;
         $this->_post_content_size = null;
         parent::__construct($oid, [
@@ -98,12 +109,14 @@ class PDFSignatureObject extends PDFObject {
 
     /**
      * Function used to add some metadata fields to the signature: name, reason of signature, etc.
+     *
      * @param name the name of the signer
      * @param reason the reason for the signature
      * @param location the location of signature
      * @param contact the contact info
      */
-    public function set_metadata($name = null, $reason = null, $location = null, $contact = null): void {
+    public function set_metadata($name = null, $reason = null, $location = null, $contact = null): void
+    {
         if ($name !== null) {
             $this->_value["Name"] = new PDFValueString($name);
         }
@@ -123,7 +136,8 @@ class PDFSignatureObject extends PDFObject {
      *   and the content that will be included after. This is needed to get the range of bytes of the
      *   signature.
      */
-    public function set_sizes(int $prev_content_size, $post_content_size = null): void {
+    public function set_sizes(int $prev_content_size, $post_content_size = null): void
+    {
         $this->_prev_content_size = $prev_content_size;
         $this->_post_content_size = $post_content_size;
     }
@@ -131,21 +145,26 @@ class PDFSignatureObject extends PDFObject {
     /**
      * This function gets the offset of the marker, relative to this object. To make correct, the offset of the object
      *   shall have properly been set. It makes use of the parent "to_pdf_entry" function to avoid recursivity.
+     *
      * @return position the position of the <0000 marker
      */
-    public function get_signature_marker_offset(): int {
+    public function get_signature_marker_offset(): int
+    {
         $tmp_output = parent::to_pdf_entry();
         $marker = "/Contents";
         $position = strpos($tmp_output, $marker);
+
         return $position + strlen($marker);
     }
 
     /**
      * Overrides the parent function to calculate the proper range of bytes, according to the sizes provided and the
      *   string representation of this object
+     *
      * @return str the string representation of this object
      */
-    public function to_pdf_entry(): string {
+    public function to_pdf_entry(): string
+    {
         $signature_size = strlen(parent::to_pdf_entry());
         $offset = $this->get_signature_marker_offset();
         $starting_second_part = $this->_prev_content_size + $offset + self::$__SIGNATURE_MAX_LENGTH + 2;
