@@ -44,9 +44,11 @@ function _parsejpg($filecontent): array
     if (! $a) {
         throw new PDFException('Missing or incorrect image');
     }
+
     if ($a[2] != 2) {
         throw new PDFException('Not a JPEG image');
     }
+
     if (! isset($a['channels']) || $a['channels'] == 3) {
         $colspace = 'DeviceRGB';
     } elseif ($a['channels'] == 4) {
@@ -54,6 +56,7 @@ function _parsejpg($filecontent): array
     } else {
         $colspace = 'DeviceGray';
     }
+
     $bpc = $a['bits'] ?? 8;
     $data = $filecontent;
 
@@ -78,8 +81,8 @@ function _parsepng($filecontent): array
 function _parsepngstream(&$f): array
 {
     // Check signature
-    if (($res = _readstream($f, 8)) != chr(137) . 'PNG' . chr(13) . chr(10) . chr(26) . chr(10)) {
-        throw new PDFException("Not a PNG image {$res}");
+    if (($res = _readstream($f, 8)) !== chr(137) . 'PNG' . chr(13) . chr(10) . chr(26) . chr(10)) {
+        throw new PDFException('Not a PNG image ' . $res);
     }
 
     // Read header chunk
@@ -87,12 +90,14 @@ function _parsepngstream(&$f): array
     if (_readstream($f, 4) !== 'IHDR') {
         throw new PDFException('Incorrect PNG image');
     }
+
     $w = _readint($f);
     $h = _readint($f);
     $bpc = ord(_readstream($f, 1));
     if ($bpc > 8) {
         throw new PDFException('16-bit depth not supported');
     }
+
     $ct = ord(_readstream($f, 1));
     if ($ct == 0 || $ct == 4) {
         $colspace = 'DeviceGray';
@@ -103,15 +108,19 @@ function _parsepngstream(&$f): array
     } else {
         throw new PDFException('Unknown color type');
     }
+
     if (ord(_readstream($f, 1)) != 0) {
         throw new PDFException('Unknown compression method');
     }
-    if (ord(_readstream($f, 1)) != 0) {
+
+    if (ord(_readstream($f, 1)) !== 0) {
         throw new PDFException('Unknown filter method');
     }
-    if (ord(_readstream($f, 1)) != 0) {
+
+    if (ord(_readstream($f, 1)) !== 0) {
         throw new PDFException('Interlacing not supported');
     }
+
     _readstream($f, 4);
     $dp = '/Predictor 15 /Colors ' . ($colspace === 'DeviceRGB' ? 3 : 1) . ' /BitsPerComponent ' . $bpc . ' /Columns ' . $w;
 
@@ -139,6 +148,7 @@ function _parsepngstream(&$f): array
                     $trns = [$pos];
                 }
             }
+
             _readstream($f, 4);
         } elseif ($type === 'IDAT') {
             // Read image data block
@@ -151,9 +161,10 @@ function _parsepngstream(&$f): array
         }
     } while ($n);
 
-    if ($colspace === 'Indexed' && empty($pal)) {
+    if ($colspace === 'Indexed' && ($pal === '' || $pal === '0')) {
         throw new PDFException('Missing palette in image');
     }
+
     $info = [
         'w' => $w,
         'h' => $h,
@@ -167,12 +178,14 @@ function _parsepngstream(&$f): array
     if ($ct >= 4) {
         // Extract alpha channel
         if (! function_exists('gzuncompress')) {
-            throw new PDFException('Zlib not available, can\'t handle alpha channel');
+            throw new PDFException("Zlib not available, can't handle alpha channel");
         }
+
         $data = gzuncompress($data);
         if ($data === false) {
             throw new PDFException('failed to uncompress the image');
         }
+
         $color = '';
         $alpha = '';
         if ($ct == 4) {
@@ -198,6 +211,7 @@ function _parsepngstream(&$f): array
                 $alpha .= preg_replace('/.{3}(.)/s', '$1', $line);
             }
         }
+
         unset($data);
         $data = gzcompress($color);
         $info['smask'] = gzcompress($alpha);
@@ -207,6 +221,7 @@ function _parsepngstream(&$f): array
             $this->PDFVersion = '1.4';
             */
     }
+
     $info['data'] = $data;
 
     return $info;
@@ -221,6 +236,7 @@ function _readstream($f, $n): string
         if ($s === false) {
             throw new PDFException('Error while reading the stream');
         }
+
         $n -= strlen((string) $s);
         $res .= $s;
     }

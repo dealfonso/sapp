@@ -24,7 +24,7 @@ use ddn\sapp\PDFDoc;
 
 use function ddn\sapp\helpers\p_error;
 
-require_once('vendor/autoload.php');
+require_once 'vendor/autoload.php';
 
 if ($argc !== 4) {
     fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));
@@ -83,8 +83,8 @@ $ratio_x = $p_w / $i_w;
 $ratio_y = $p_h / $i_h;
 $ratio = min($ratio_x, $ratio_y);
 
-$i_w = ($i_w * $ratio) / 3;
-$i_h = ($i_h * $ratio) / 3;
+$i_w = $i_w * $ratio / 3;
+$i_h = $i_h * $ratio / 3;
 $p_x = $p_w / 3;
 $p_y = $p_h / 3;
 // Set the image appearance and the certificate file

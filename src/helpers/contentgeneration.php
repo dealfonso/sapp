@@ -21,6 +21,7 @@
 
 namespace ddn\sapp\helpers;
 
+use ddn\sapp\PDFException;
 use ddn\sapp\pdfvalue\PDFValueList;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueReference;
@@ -83,7 +84,7 @@ function _create_image_objects($info, $object_factory): array
             $image['ColorSpace']->push([
                 '/Indexed',
                 '/DeviceRGB',
-                (strlen((string) $info['pal']) / 3) - 1,
+                strlen((string) $info['pal']) / 3 - 1,
                 new PDFValueReference($streamobject->get_oid()),
             ]);
             $objects[] = $streamobject;
@@ -124,6 +125,7 @@ function _create_image_objects($info, $object_factory): array
         foreach ($smasks as $smask) {
             $objects[] = $smask;
         }
+
         $image['SMask'] = new PDFValueReference($smask->get_oid());
     }
 
@@ -147,11 +149,7 @@ function is_base64($string): bool
     }
 
     // Encode the string again
-    if (base64_encode($decoded) != $string) {
-        return false;
-    }
-
-    return true;
+    return base64_encode($decoded) == $string;
 }
 
 /**
@@ -182,15 +180,13 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
 
     if ($filename[0] === '@') {
         $filecontent = substr((string) $filename, 1);
+    } elseif (is_base64($filename)) {
+        $filecontent = base64_decode((string) $filename, true);
     } else {
-        if (is_base64($filename)) {
-            $filecontent = base64_decode((string) $filename, true);
-        } else {
-            $filecontent = @file_get_contents($filename);
+        $filecontent = @file_get_contents($filename);
 
-            if ($filecontent === false) {
-                throw new PDFException('failed to get the image');
-            }
+        if ($filecontent === false) {
+            throw new PDFException('failed to get the image');
         }
     }
 
@@ -220,6 +216,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
     if ($w === null) {
         $w = -96;
     }
+
     if ($h === null) {
         $h = -96;
     }
@@ -227,12 +224,15 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
     if ($w < 0) {
         $w = -$info['w'] * 72 / $w;
     }
+
     if ($h < 0) {
         $h = -$info['h'] * 72 / $h;
     }
+
     if ($w == 0) {
         $w = $h * $info['w'] / $info['h'];
     }
+
     if ($h == 0) {
         $h = $w * $info['h'] / $info['w'];
     }
@@ -282,6 +282,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
         $data .= rx($angle);
         $data .= tx(-0.5, -0.5);
     }
+
     $data .= sprintf(' /%s Do Q', $info['i']);
 
     $resources = new PDFValueObject([

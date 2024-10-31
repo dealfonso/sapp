@@ -16,4 +16,6 @@ return RectorConfig::configure()
 //    ->withDeadCodeLevel(1)
 //    ->withPreparedSets(deadCode: true, codeQuality: true, codingStyle: true, typeDeclarations: true)
     ->withPreparedSets(typeDeclarations: true)
+    ->withPreparedSets(codeQuality: true)
+    ->withPreparedSets(codingStyle: true)
     ;

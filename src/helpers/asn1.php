@@ -24,22 +24,26 @@ class asn1
             $num = $asn1Tag; //value of array
             $hex = $params[0];
             $val = $hex;
-            if (in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61'])) { // ($string)
+            if (in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61'], true)) { // ($string)
                 $val = bin2hex((string) $hex);
             }
+
             if ($func === 'int') {
-                $val = (strlen((string) $val) % 2 !== 0) ? "0{$val}" : (string) ($val);
+                $val = strlen((string) $val) % 2 !== 0 ? '0' . $val : (string) $val;
             }
+
             if ($func === 'expl') { //expl($num, $hex)
                 $num .= $params[0];
                 $val = $params[1];
             }
+
             if ($func === 'impl') { //impl($num="0")
-                $val = (! $val) ? '00' : $val;
-                $val = (strlen((string) $val) % 2 !== 0) ? "0{$val}" : $val;
+                $val = $val ?: '00';
+                $val = strlen((string) $val) % 2 !== 0 ? '0' . $val : $val;
 
                 return $num . $val;
             }
+
             if ($func === 'other') { //OTHER($id, $hex, $chr = false)
                 $id = $params[0];
                 $hex = $params[1];
@@ -49,8 +53,9 @@ class asn1
                     $str = bin2hex((string) $hex);
                 }
 
-                return ($id) . self::asn1_header($str) . $str;
+                return $id . self::asn1_header($str) . $str;
             }
+
             if ($func === 'utime') {
                 $time = $params[0]; //yymmddhhiiss
                 $oldTz = date_default_timezone_get();
@@ -59,22 +64,27 @@ class asn1
                 date_default_timezone_set($oldTz);
                 $val = bin2hex($time . 'Z');
             }
+
             if ($func === 'gtime') {
                 if (! $time = strtotime((string) $params[0])) {
                     // echo "asn1::GTIME function strtotime cant recognize time!! please check at input=\"{$params[0]}\"";
                     return false;
                 }
+
                 $oldTz = date_default_timezone_get();
                 // date_default_timezone_set("UTC");
                 $time = date('YmdHis', $time);
                 date_default_timezone_set($oldTz);
                 $val = bin2hex($time . 'Z');
             }
+
             $hdr = self::asn1_header($val);
 
             return $num . $hdr . $val;
         }
+
         // echo "asn1 \"$func\" not exists!";
+        return null;
 
     }
 
@@ -101,25 +111,20 @@ class asn1
                 $info['type'] = $k;
                 $info['typeName'] = self::type($k);
                 $info['value_hex'] = $v;
-                if (($currentDepth <= $maxDepth)) {
+                if ($currentDepth <= $maxDepth) {
                     if ($k !== '06') {
                         if (in_array($k, ['13', '18'], true)) {
                             $info['value'] = hex2bin((string) $info['value_hex']);
+                        } elseif (in_array($k, ['03', '02', 'a04'], true)) {
+                            $info['value'] = $v;
                         } else {
-                            if (in_array($k, ['03', '02', 'a04'], true)) {
-                                $info['value'] = $v;
-                            } else {
-                                $currentDepth++;
-                                $parse_recursive = self::parse($v, $maxDepth);
-                                $currentDepth--;
-                            }
+                            $currentDepth++;
+                            $parse_recursive = self::parse($v, $maxDepth);
+                            $currentDepth--;
                         }
                     }
-                    if ($parse_recursive) {
-                        $result[] = array_merge($info, $parse_recursive);
-                    } else {
-                        $result[] = $info;
-                    }
+
+                    $result[] = $parse_recursive ? array_merge($info, $parse_recursive) : $info;
                 }
             }
         }
@@ -182,30 +187,34 @@ class asn1
         if ($hex === '') {
             return false;
         }
+
         if (! @ctype_xdigit($hex) || @strlen($hex) % 2 !== 0) {
             echo "input:\"{$hex}\" not hex string!.\n";
 
             return false;
         }
+
         $stop = false;
         while ($stop == false) {
             $asn1_type = substr($hex, 0, 2);
             $tlv_tagLength = hexdec(substr($hex, 2, 2));
             if ($tlv_tagLength > 127) {
                 $tlv_lengthLength = $tlv_tagLength - 128;
-                $tlv_valueLength = substr($hex, 4, ($tlv_lengthLength * 2));
+                $tlv_valueLength = substr($hex, 4, $tlv_lengthLength * 2);
             } else {
                 $tlv_lengthLength = 0;
-                $tlv_valueLength = substr($hex, 2, 2 + ($tlv_lengthLength * 2));
+                $tlv_valueLength = substr($hex, 2, 2 + $tlv_lengthLength * 2);
             }
+
             if ($tlv_lengthLength > 4) { // limit tlv_lengthLength to FFFF
                 return false;
             }
+
             $tlv_valueLength = hexdec($tlv_valueLength);
-            $totalTlLength = 2 + 2 + ($tlv_lengthLength * 2);
+            $totalTlLength = 2 + 2 + $tlv_lengthLength * 2;
             $tlv_value = substr($hex, $totalTlLength, $tlv_valueLength * 2);
-            $remain = substr($hex, $totalTlLength + ($tlv_valueLength * 2));
-            $newhexdump = substr($hex, 0, $totalTlLength + ($tlv_valueLength * 2));
+            $remain = substr($hex, $totalTlLength + $tlv_valueLength * 2);
+            $newhexdump = substr($hex, 0, $totalTlLength + $tlv_valueLength * 2);
             $result[] = [
                 'tlv_tagLength' => strlen(dechex($tlv_tagLength)) % 2 === 0 ? dechex($tlv_tagLength) : '0' . dechex($tlv_tagLength),
                 'tlv_lengthLength' => $tlv_lengthLength,
@@ -214,7 +223,7 @@ class asn1
                 'typ' => $asn1_type,
                 'tlv_value' => $tlv_value,
             ];
-            if ($remain == '') { // if remains string was empty & contents also empty, function return FALSE
+            if ($remain === '') { // if remains string was empty & contents also empty, function return FALSE
                 $stop = true;
             } else {
                 $hex = $remain;
@@ -223,6 +232,7 @@ class asn1
 
         return $result;
     }
+
     // =====End ASN.1 Parser section=====
 
     // =====Begin ASN.1 Builder section=====
@@ -239,8 +249,9 @@ class asn1
         $len = strlen($str) / 2;
         $ret = dechex($len);
         if (strlen($ret) % 2 !== 0) {
-            $ret = "0{$ret}";
+            $ret = '0' . $ret;
         }
+
         $headerLength = strlen($ret) / 2;
         if ($len > 127) {
             $ret = '8' . $headerLength . $ret;
@@ -275,9 +286,11 @@ class asn1
         if (array_key_exists($name, $functionList)) {
             return $functionList[$name];
         }
+
         // echo "func \"$name\" not available";
         return false;
 
     }
+
     // =====End ASN.1 Builder section=====
 }

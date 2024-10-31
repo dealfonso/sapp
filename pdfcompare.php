@@ -25,7 +25,7 @@ use function ddn\sapp\helpers\p_debug;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use function ddn\sapp\helpers\p_error;
 
-require_once('vendor/autoload.php');
+require_once 'vendor/autoload.php';
 
 if ($argc !== 3)
     fwrite(STDERR, sprintf("usage: %s <filename> <rev>", $argv[0]));

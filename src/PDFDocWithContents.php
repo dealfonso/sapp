@@ -109,14 +109,14 @@ class PDFDocWithContents extends PDFDoc
         $c = cos($angle);
         $s = sin($angle);
         $cx = $x;
-        $cy = ($pagesize_h - $y);
+        $cy = $pagesize_h - $y;
 
         if ($angle !== 0) {
             $rotate_command = sprintf('%.5F %.5F %.5F %.5F %.2F %.2F cm 1 0 0 1 %.2F %.2F cm', $c, $s, -$s, $c, $cx, $cy, -$cx, -$cy);
         }
 
         $text_command = 'BT ';
-        $text_command .= "/{$font_id} " . $params['size'] . ' Tf ';
+        $text_command .= sprintf('/%s ', $font_id) . $params['size'] . ' Tf ';
         $text_command .= sprintf('%.2f %.2f Td ', $x, $pagesize_h - $y); // Ubicar en x, y
         $text_command .= sprintf('(%s) Tj ', $text);
         $text_command .= 'ET ';
@@ -135,15 +135,16 @@ class PDFDocWithContents extends PDFDoc
                 default:
                     throw new PDFException('please use html-like colors (e.g. #ffbbaa)');
             }
+
             if ($r !== null) {
-                $text_command = " q {$r} {$g} {$b} rg {$text_command} Q";
+                $text_command = sprintf(' q %d %s %s rg %s Q', $r, $g, $b, $text_command);
             } // Color RGB
         } else {
             throw new PDFException('please use html-like colors (e.g. #ffbbaa)');
         }
 
         if ($angle !== 0) {
-            $text_command = " q {$rotate_command} {$text_command} Q";
+            $text_command = sprintf(' q %s %s Q', $rotate_command, $text_command);
         }
 
         $data .= $text_command;
@@ -196,10 +197,12 @@ class PDFDocWithContents extends PDFDoc
         if (! isset($resources_obj['ProcSet'])) {
             $resources_obj['ProcSet'] = new PDFValueList(['/PDF']);
         }
+
         $resources_obj['ProcSet']->push(['/ImageB', '/ImageC', '/ImageI']);
         if (! isset($resources_obj['XObject'])) {
             $resources_obj['XObject'] = new PDFValueObject();
         }
+
         $resources_obj['XObject'][$info['i']] = new PDFValueReference($images_objects[0]->get_oid());
 
         // TODO: get the contents object in which to add the image.

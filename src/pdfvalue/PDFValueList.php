@@ -36,7 +36,7 @@ class PDFValueList extends PDFValue
     public function diff(object $other): mixed
     {
         $different = parent::diff($other);
-        if (($different === false) || ($different === null)) {
+        if ($different === false || $different === null) {
             return $different;
         }
 
@@ -58,16 +58,14 @@ class PDFValueList extends PDFValue
         if ($list === true) {
             $result = [];
             foreach ($this->value as $v) {
-                if (is_a($v, PDFValueSimple::class)) {
-                    $v = explode(' ', (string) $v->val());
-                } else {
-                    $v = [$v->val()];
-                }
+                $v = is_a($v, PDFValueSimple::class) ? explode(' ', (string) $v->val()) : [$v->val()];
+
                 array_push($result, ...$v);
             }
 
             return $result;
         }
+
         return parent::val();
 
     }
@@ -106,13 +104,15 @@ class PDFValueList extends PDFValue
      */
     public function push(mixed $v): bool
     {
-        if (is_object($v) && ($v::class === static::class)) {
+        if (is_object($v) && $v::class === static::class) {
             // If a list is pushed to another list, the elements are merged
             $v = $v->val();
         }
+
         if (! is_array($v)) {
             $v = [$v];
         }
+
         foreach ($v as $e) {
             $e = self::_convert($e);
             $this->value[] = $e;

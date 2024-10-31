@@ -72,16 +72,19 @@ class PDFObject implements ArrayAccess, Stringable
             foreach ($value as $field => $v) {
                 $obj[$field] = $v;
             }
+
             $value = $obj;
         }
+
         $this->_value = $value;
         $this->_generation = $generation;
     }
 
     public function __toString(): string
     {
-        return "{$this->_oid} 0 obj\n" .
-            "{$this->_value}\n" .
+        return $this->_oid . ' 0 obj
+' .
+            $this->_value . PHP_EOL .
             (
                 $this->_stream === null ? '' :
                 "stream\n" .
@@ -119,7 +122,7 @@ class PDFObject implements ArrayAccess, Stringable
      */
     public function to_pdf_entry(): string
     {
-        return "{$this->_oid} 0 obj" . __EOL .
+        return $this->_oid . ' 0 obj' . __EOL .
             $this->_value . __EOL .
             (
                 $this->_stream === null ? '' :
@@ -160,6 +163,7 @@ class PDFObject implements ArrayAccess, Stringable
         if ($raw === true) {
             return $this->_stream;
         }
+
         if (isset($this->_value['Filter'])) {
             switch ($this->_value['Filter']) {
                 case '/FlateDecode':
@@ -192,12 +196,14 @@ class PDFObject implements ArrayAccess, Stringable
 
             return;
         }
+
         if (isset($this->_value['Filter'])) {
             $stream = match ($this->_value['Filter']) {
                 '/FlateDecode' => gzcompress((string) $stream),
                 default => throw new PDFException('unknown compression method ' . $this->_value['Filter']),
             };
         }
+
         $this->_value['Length'] = strlen((string) $stream);
         $this->_stream = $stream;
     }
@@ -317,11 +323,13 @@ class PDFObject implements ArrayAccess, Stringable
                     for ($i = 1; $i < $columns; $i++) {
                         $data[$i] = ($data[$i] + $data[$i - 1]) % 256;
                     }
+
                     break;
                 case 2:
                     for ($i = 0; $i < $columns; $i++) {
                         $data[$i] = chr((ord($data[$i]) + ord($data_prev[$i])) % 256);
                     }
+
                     break;
                 default:
                     throw new PDFException('Unsupported stream');

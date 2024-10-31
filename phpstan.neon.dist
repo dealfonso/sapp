@@ -12,7 +12,7 @@ parameters:
 
     ignoreErrors:
         - "#Implicit array creation is not allowed#"
-        - "#Call to an undefined static method .*asn1::#"
+#        - "#Call to an undefined static method .*asn1::#"
         - "#Construct empty\\(\\) is not allowed. Use more strict comparison.#"
 #        -
  #           identifier: missingType.iterableValue

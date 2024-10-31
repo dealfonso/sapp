@@ -58,6 +58,7 @@ class PDFValue implements ArrayAccess, Stringable
         if (! is_array($this->value)) {
             return false;
         }
+
         if (! isset($this->value[$offset])) {
             return false;
         }
@@ -70,14 +71,16 @@ class PDFValue implements ArrayAccess, Stringable
         if (! is_array($this->value)) {
             return;
         }
+
         $this->value[$offset] = $value;
     }
 
     public function offsetUnset($offset): void
     {
-        if ((! is_array($this->value)) || (! isset($this->value[$offset]))) {
+        if (! is_array($this->value) || ! isset($this->value[$offset])) {
             throw new Exception('invalid offset');
         }
+
         unset($this->value[$offset]);
     }
 
@@ -137,16 +140,15 @@ class PDFValue implements ArrayAccess, Stringable
             case 'string':
                 if ($value[0] === '/') {
                     $value = new PDFValueType(substr($value, 1));
+                } elseif (preg_match("/\s/ms", $value) === 1) {
+                    $value = new PDFValueString($value);
                 } else {
-                    if (preg_match("/\s/ms", $value) === 1) {
-                        $value = new PDFValueString($value);
-                    } else {
-                        $value = new PDFValueSimple($value);
-                    }
+                    $value = new PDFValueSimple($value);
                 }
+
                 break;
             case 'array':
-                if (count($value) === 0) {
+                if ($value === []) {
                     // An empty list is assumed to be a list
                     $value = new PDFValueList();
                 } else {
@@ -160,9 +162,11 @@ class PDFValue implements ArrayAccess, Stringable
                         foreach ($value as $v) {
                             $list[] = self::_convert($v);
                         }
+
                         $value = new PDFValueList($list);
                     }
                 }
+
                 break;
         }
 

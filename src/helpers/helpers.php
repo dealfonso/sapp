@@ -103,8 +103,9 @@ function varval($e)
         $a = [];
         foreach ($e as $k => $v) {
             $v = varval($v);
-            $a[] = "{$k} => {$v}";
+            $a[] = sprintf('%s => %s', $k, $v);
         }
+
         $retval = '[ ' . implode(', ', $a) . ' ]';
     }
 
@@ -123,8 +124,9 @@ function p_stderr(string &$e, string $tag = 'Error', int $level = 1): void
 {
     $dinfo = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT);
     $dinfo = $dinfo[$level];
-    $e = sprintf("{$tag} info at %s:%d: %s", $dinfo['file'], $dinfo['line'], varval($e));
-    fwrite(STDERR, "{$e}\n");
+
+    $e = sprintf('%s info at %s:%d: %s', $tag, $dinfo['file'], $dinfo['line'], varval($e));
+    fwrite(STDERR, $e . PHP_EOL);
 }
 
 /**
@@ -183,9 +185,11 @@ function get_random_string($length = 8, $extended = false, $hard = false): strin
     if ($extended === true) {
         $codeAlphabet .= "!\"#$%&'()*+,-./:;<=>?@[\\]_{}";
     }
+
     if ($hard === true) {
         $codeAlphabet .= '^`|~';
     }
+
     $max = strlen($codeAlphabet);
     for ($i = 0; $i < $length; $i++) {
         $token .= $codeAlphabet[random_int(0, $max - 1)];
@@ -225,6 +229,7 @@ function show_bytes($str, $columns = null): string
     if ($columns === null) {
         $columns = strlen((string) $str);
     }
+
     $c = $columns;
     for ($i = 0, $iMax = strlen((string) $str); $i < $iMax; $i++) {
         $result .= sprintf('%02x ', ord($str[$i]));
@@ -247,7 +252,7 @@ function show_bytes($str, $columns = null): string
  */
 function timestamp_to_pdfdatestring(?DateTimeInterface $date = null): string
 {
-    if ($date === null) {
+    if (! $date instanceof DateTimeInterface) {
         $date = new DateTime();
     }
 
@@ -266,5 +271,5 @@ function timestamp_to_pdfdatestring(?DateTimeInterface $date = null): string
  */
 function get_pdf_formatted_date(int $time)
 {
-    return substr_replace(date('YmdHisO', $time), '\'', (0 - 2), 0) . '\'';
+    return substr_replace(date('YmdHisO', $time), "'", 0 - 2, 0) . "'";
 }

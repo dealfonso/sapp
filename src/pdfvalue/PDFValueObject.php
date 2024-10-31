@@ -29,6 +29,7 @@ class PDFValueObject extends PDFValue
         foreach ($value as $k => $v) {
             $result[$k] = self::_convert($v);
         }
+
         parent::__construct($result);
     }
 
@@ -43,12 +44,13 @@ class PDFValueObject extends PDFValue
         foreach ($this->value as $k => $v) {
             $v = '' . $v;
             if ($v === '') {
-                $result[] = "/{$k}";
+                $result[] = '/' . $k;
                 continue;
             }
+
             match ($v[0]) {
-                '/', '[', '(', '<' => array_push($result, "/{$k}{$v}"),
-                default => array_push($result, "/{$k} {$v}"),
+                '/', '[', '(', '<' => array_push($result, sprintf('/%s%s', $k, $v)),
+                default => array_push($result, sprintf('/%s %s', $k, $v)),
             };
         }
 
@@ -58,7 +60,7 @@ class PDFValueObject extends PDFValue
     public function diff(object $other): mixed
     {
         $different = parent::diff($other);
-        if (($different === false) || ($different === null)) {
+        if ($different === false || $different === null) {
             return $different;
         }
 
@@ -72,11 +74,9 @@ class PDFValueObject extends PDFValue
                     if ($different === false) {
                         $result[$k] = $v;
                         $differences++;
-                    } else {
-                        if ($different !== null) {
-                            $result[$k] = $different;
-                            $differences++;
-                        }
+                    } elseif ($different !== null) {
+                        $result[$k] = $different;
+                        $differences++;
                     }
                 }
             } else {
@@ -84,6 +84,7 @@ class PDFValueObject extends PDFValue
                 $differences++;
             }
         }
+
         if ($differences === 0) {
             return null;
         }
@@ -102,9 +103,11 @@ class PDFValueObject extends PDFValue
                 break;
             }
         }
+
         if ($intkeys) {
             return false;
         }
+
         foreach ($parts as $k2 => $v) {
             $result[$k2] = self::_convert($v);
         }
@@ -123,19 +126,24 @@ class PDFValueObject extends PDFValue
                 if ($field === '') {
                     return false;
                 }
+
                 if ($field[0] !== '/') {
                     return false;
                 }
+
                 $field = substr($field, 1);
                 if ($field === '') {
                     return false;
                 }
+
                 continue;
             }
+
             $value = $parts[$i];
             $result[$field] = $value;
             $field = null;
         }
+
         // If there is no pair of values, there is no valid
         if ($field !== null) {
             return false;
@@ -164,8 +172,10 @@ class PDFValueObject extends PDFValue
             if (isset($this->value[$offset])) {
                 unset($this->value[$offset]);
             }
+
             // return null;
         }
+
         $this->value[$offset] = self::_convert($value);
         // return $this->value[$offset];
     }

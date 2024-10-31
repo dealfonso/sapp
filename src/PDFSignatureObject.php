@@ -36,7 +36,7 @@ class PDFSignatureObject extends PDFObject
     // is not known. 68 digits enable 20 digits for the size of the document
     public static $__BYTERANGE_SIZE = 68;
 
-    protected int $_prev_content_size;
+    protected int $_prev_content_size = 0;
 
     protected $_post_content_size = null;
 
@@ -54,8 +54,6 @@ class PDFSignatureObject extends PDFObject
      */
     public function __construct(int $oid)
     {
-        $this->_prev_content_size = 0;
-        $this->_post_content_size = null;
         parent::__construct($oid, [
             'Filter' => '/Adobe.PPKLite',
             'Type' => '/Sig',
@@ -120,12 +118,15 @@ class PDFSignatureObject extends PDFObject
         if ($name !== null) {
             $this->_value['Name'] = new PDFValueString($name);
         }
+
         if ($reason !== null) {
             $this->_value['Reason'] = new PDFValueString($reason);
         }
+
         if ($location !== null) {
             $this->_value['Location'] = new PDFValueString($location);
         }
+
         if ($contact !== null) {
             $this->_value['ContactInfo'] = new PDFValueString($contact);
         }
@@ -172,8 +173,8 @@ class PDFSignatureObject extends PDFObject
         $contents_size = strlen('' . $this->_value['Contents']);
 
         $byterange_str = '[ 0 ' .
-            ($this->_prev_content_size + $offset) . ' ' .
-            ($starting_second_part) . ' ' .
+            $this->_prev_content_size + $offset . ' ' .
+            $starting_second_part . ' ' .
             ($this->_post_content_size !== null ? $this->_post_content_size + ($signature_size - $contents_size - $offset) : 0) . ' ]';
 
         $this->_value['ByteRange'] =

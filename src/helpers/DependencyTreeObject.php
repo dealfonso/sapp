@@ -31,15 +31,14 @@ use Stringable;
  */
 class DependencyTreeObject implements Stringable
 {
-    public int $is_child;
+    public int $is_child = 0;
 
     private array $children = [];
 
     public function __construct(
         private int $oid,
-        public mixed $info = null,
+        public mixed $info = null
     ) {
-        $this->is_child = 0;
     }
 
     public function __toString(): string
@@ -55,7 +54,7 @@ class DependencyTreeObject implements Stringable
     {
         $this->children[$oid] = $o;
         if ($o->is_child !== 0) {
-            p_warning("object {$o->oid} is already a child of other object");
+            p_warning(sprintf('object %d is already a child of other object', $o->oid));
         }
 
         ++$o->is_child;
@@ -67,7 +66,7 @@ class DependencyTreeObject implements Stringable
     public function children(): Generator
     {
         if (isset($this->children)) {
-            foreach ($this->children as $oid => $object) {
+            foreach (array_keys($this->children) as $oid) {
                 yield $oid;
             }
         }
@@ -79,21 +78,20 @@ class DependencyTreeObject implements Stringable
     protected function _getstr(?string $spaces = '', int $mychcount = 0): string
     {
         // $info = $this->oid . ($this->info?" ($this->info)":"") . (($this->is_child > 1)?" $this->is_child":"");
-        $info = $this->oid . ($this->info !== null ? " ({$this->info})" : '');
+        $info = $this->oid . ($this->info !== null ? sprintf(' (%s)', $this->info) : '');
         if ($spaces === null) {
-            $lines = ["{$spaces}  " . json_decode('"\u2501"', false, 512, JSON_THROW_ON_ERROR) . " {$info}"];
+            $lines = [$spaces . '  ' . json_decode('"\u2501"', false, 512, JSON_THROW_ON_ERROR) . ' ' . $info];
+        } elseif ($mychcount === 0) {
+            $lines = [$spaces . '  ' . json_decode('"\u2514\u2500"', false, 512, JSON_THROW_ON_ERROR) . ' ' . $info];
         } else {
-            if ($mychcount === 0) {
-                $lines = ["{$spaces}  " . json_decode('"\u2514\u2500"', false, 512, JSON_THROW_ON_ERROR) . " {$info}"];
-            } else {
-                $lines = ["{$spaces}  " . json_decode('"\u251c\u2500"', false, 512, JSON_THROW_ON_ERROR) . " {$info}"];
-            }
+            $lines = [$spaces . '  ' . json_decode('"\u251c\u2500"', false, 512, JSON_THROW_ON_ERROR) . ' ' . $info];
         }
+
         if (isset($this->children)) {
             $chcount = count($this->children);
             foreach ($this->children as $child) {
                 $chcount--;
-                if (($spaces === null) || ($mychcount === 0)) {
+                if ($spaces === null || $mychcount === 0) {
                     $lines[] = $child->_getstr($spaces . '   ', $chcount);
                 } else {
                     $lines[] = $child->_getstr($spaces . '  ' . json_decode('"\u2502"', false, 512, JSON_THROW_ON_ERROR), $chcount);
@@ -123,11 +121,7 @@ const BLACKLIST = [
 function references_in_object(PDFObject $object): array
 {
     $type = $object['Type'];
-    if ($type !== false) {
-        $type = $type->val();
-    } else {
-        $type = '';
-    }
+    $type = $type !== false ? $type->val() : '';
 
     $references = [];
 
@@ -137,13 +131,11 @@ function references_in_object(PDFObject $object): array
             continue;
         }
 
-        if (array_key_exists($type, BLACKLIST)) {
-            if (in_array($key, BLACKLIST[$type], true)) {
-                continue;
-            }
+        if (array_key_exists($type, BLACKLIST) && in_array($key, BLACKLIST[$type], true)) {
+            continue;
         }
 
-        if (is_a($object[$key], PDFValueObject::class)) {
+        if ($object[$key] instanceof PDFValueObject) {
             $r_objects = references_in_object($object[$key]);
         } else {
             // Function get_object_referenced checks whether the value (or values in a list) have the form of object references, and if they have the form
@@ -159,6 +151,7 @@ function references_in_object(PDFObject $object): array
                 $r_objects = [$r_objects];
             }
         }
+
         // p_debug($key . "=>" . implode(",",$r_objects));
 
         array_push($references, ...$r_objects);

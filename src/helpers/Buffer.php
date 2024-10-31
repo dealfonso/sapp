@@ -57,7 +57,7 @@ class Buffer implements Stringable
      */
     public function __toString(): string
     {
-        if (strlen((string) $this->_buffer) < (__CONVENIENT_MAX_BUFFER_DUMP * 2)) {
+        if (strlen((string) $this->_buffer) < __CONVENIENT_MAX_BUFFER_DUMP * 2) {
             return (string) debug_var($this);
         }
 
@@ -164,9 +164,10 @@ class Buffer implements Stringable
         $result = '';
         $length = min($length, $this->_bufferlen);
         for ($i = $offset; $i < $length;) {
-            for ($j = 0; ($j < $columns) && ($i < $length); $i++, $j++) {
+            for ($j = 0; $j < $columns && $i < $length; $i++, $j++) {
                 $result .= sprintf('%02x ', ord($this->_buffer[$i]));
             }
+
             $result .= "\n";
         }
 

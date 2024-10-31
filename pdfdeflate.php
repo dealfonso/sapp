@@ -21,9 +21,9 @@
 
 use ddn\sapp\PDFDoc;
 
-require_once('vendor/autoload.php');
+require_once 'vendor/autoload.php';
 
-if (($argc < 2) or ($argc > 3))
+if ($argc < 2 or $argc > 3)
     fwrite(STDERR, sprintf("usage: %s <filename> [oid]", $argv[0]));
 else {
     if (!file_exists($argv[1]))

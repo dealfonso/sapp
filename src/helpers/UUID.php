@@ -35,12 +35,12 @@ class UUID
 
             // 16 bits for "time_hi_and_version",
             // four most significant bits holds version number 3
-            (hexdec(substr($hash, 12, 4)) & 0x0fff) | 0x3000,
+            hexdec(substr($hash, 12, 4)) & 0x0fff | 0x3000,
 
             // 16 bits, 8 bits for "clk_seq_hi_res",
             // 8 bits for "clk_seq_low",
             // two most significant bits holds zero and one for variant DCE1.1
-            (hexdec(substr($hash, 16, 4)) & 0x3fff) | 0x8000,
+            hexdec(substr($hash, 16, 4)) & 0x3fff | 0x8000,
 
             // 48 bits for "node"
             substr($hash, 20, 12)
@@ -106,12 +106,12 @@ class UUID
 
             // 16 bits for "time_hi_and_version",
             // four most significant bits holds version number 5
-            (hexdec(substr($hash, 12, 4)) & 0x0fff) | 0x5000,
+            hexdec(substr($hash, 12, 4)) & 0x0fff | 0x5000,
 
             // 16 bits, 8 bits for "clk_seq_hi_res",
             // 8 bits for "clk_seq_low",
             // two most significant bits holds zero and one for variant DCE1.1
-            (hexdec(substr($hash, 16, 4)) & 0x3fff) | 0x8000,
+            hexdec(substr($hash, 16, 4)) & 0x3fff | 0x8000,
 
             // 48 bits for "node"
             substr($hash, 20, 12)
@@ -121,8 +121,7 @@ class UUID
     public static function is_valid($uuid): bool
     {
         return preg_match(
-            '/^\{?[0-9a-f]{8}\-?[0-9a-f]{4}\-?[0-9a-f]{4}\-?' .
-                '[0-9a-f]{4}\-?[0-9a-f]{12}\}?$/i',
+            '/^\{?[0-9a-f]{8}\-?[0-9a-f]{4}\-?[0-9a-f]{4}\-?[0-9a-f]{4}\-?[0-9a-f]{12}\}?$/i',
             (string) $uuid
         ) === 1;
     }

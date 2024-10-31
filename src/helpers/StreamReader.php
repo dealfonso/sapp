@@ -45,7 +45,7 @@ class StreamReader
         }
 
         $this->_buffer = $string;
-        $this->_bufferlen = strlen((string) $string);
+        $this->_bufferlen = strlen($string);
         $this->goto($offset);
     }
 

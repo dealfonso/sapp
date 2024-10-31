@@ -109,7 +109,7 @@ class PDFObjectParser implements Stringable
 
     protected $_t = false;
 
-    protected $_tt = self::T_NOTOKEN;
+    protected int $_tt = self::T_NOTOKEN;
 
     /**
      * Simple output of the object
@@ -118,7 +118,7 @@ class PDFObjectParser implements Stringable
      */
     public function __toString(): string
     {
-        return 'pos: ' . $this->_buffer->getpos() . ", c: {$this->_c}, n: {$this->_n}, t: {$this->_t}, tt: " .
+        return 'pos: ' . $this->_buffer->getpos() . sprintf(', c: %s, n: %s, t: %s, tt: ', $this->_c, $this->_n, $this->_t) .
             self::T_NAMES[$this->_tt] . ', b: ' . $this->_buffer->substratpos(50) .
             "\n";
     }
@@ -126,9 +126,9 @@ class PDFObjectParser implements Stringable
     /**
      * Retrieves the current token type (one of T_* constants)
      *
-     * @return token the current token
+     * @return int the current token
      */
-    public function current_token()
+    public function current_token(): int
     {
         return $this->_tt;
     }
@@ -191,6 +191,7 @@ class PDFObjectParser implements Stringable
         if ($this->_buffer->size() === 0) {
             return false;
         }
+
         $this->_n = $this->_buffer->currentchar();
         $this->nextchar();
 
@@ -204,7 +205,7 @@ class PDFObjectParser implements Stringable
     {
         $DSEPS = ['<<', '>>'];
 
-        return (($this->_c === false) || (str_contains("%<>()[]{}/ \n\r\t", (string) $this->_c)) || (in_array($this->_c . $this->_n, $DSEPS) !== false));
+        return $this->_c === false || str_contains("%<>()[]{}/ \n\r\t", (string) $this->_c) || in_array($this->_c . $this->_n, $DSEPS, true);
     }
 
     /**
@@ -221,13 +222,14 @@ class PDFObjectParser implements Stringable
         }
 
         $this->nextchar();  // This char is "<"
-        while (($this->_c !== '>') && (str_contains("0123456789abcdefABCDEF \t\r\n\f", $this->_c))) {
+        while ($this->_c !== '>' && str_contains("0123456789abcdefABCDEF \t\r\n\f", $this->_c)) {
             $token .= $this->_c;
             if ($this->nextchar() === false) {
                 break;
             }
         }
-        if (($this->_c !== false) && (! str_contains(">0123456789abcdefABCDEF \t\r\n\f", $this->_c))) {
+
+        if ($this->_c !== false && ! str_contains(">0123456789abcdefABCDEF \t\r\n\f", $this->_c)) {
             throw new Exception('invalid hex string');
         }
 
@@ -251,15 +253,16 @@ class PDFObjectParser implements Stringable
         $n_parenthesis = 1;
         while ($this->_c !== false) {
             $this->nextchar();
-            if (($this->_c === ')') && (! strlen($token) || ($token[strlen($token) - 1] !== '\\'))) {
+            if ($this->_c === ')' && (! strlen($token) || $token[strlen($token) - 1] !== '\\')) {
                 $n_parenthesis--;
                 if ($n_parenthesis === 0) {
                     break;
                 }
             } else {
-                if (($this->_c === '(') && (! strlen($token) || ($token[strlen($token) - 1] !== '\\'))) {
+                if ($this->_c === '(' && (! strlen($token) || $token[strlen($token) - 1] !== '\\')) {
                     $n_parenthesis++;
                 }
+
                 $token .= $this->_c;
             }
         }
@@ -267,22 +270,23 @@ class PDFObjectParser implements Stringable
         if ($this->_c !== ')') {
             throw new Exception('Invalid string');
         }
+
         $this->nextchar();
 
         return $token;
     }
 
-    protected function token()
+    protected function token(): array
     {
         if ($this->_c === false) {
-            return [false, false];
+            return [false, 0];
         }
 
         $token = false;
 
         while ($this->_c !== false) {
             // Skip the spaces
-            while ((str_contains("\t\n\r ", (string) $this->_c)) && ($this->nextchar() !== false)) {
+            while (str_contains("\t\n\r ", (string) $this->_c) && $this->nextchar() !== false) {
             }
 
             $token_type = self::T_NOTOKEN;
@@ -296,6 +300,7 @@ class PDFObjectParser implements Stringable
                         $token .= $this->_c;
                         $this->nextchar();
                     }
+
                     $token_type = self::T_COMMENT;
                     break;
                 case '<':
@@ -308,6 +313,7 @@ class PDFObjectParser implements Stringable
                         $token = $this->_parse_hex_string();
                         $token_type = self::T_HEX_STRING;
                     }
+
                     break;
                 case '(':
                     $token = $this->_parse_string();
@@ -320,6 +326,7 @@ class PDFObjectParser implements Stringable
                         $token = '>>';
                         $token_type = self::T_DICT_END;
                     }
+
                     break;
                 case '[':
                     $token = $this->_c;
@@ -342,9 +349,11 @@ class PDFObjectParser implements Stringable
                             break;
                         }
                     }
+
                     $token_type = self::T_FIELD;
                     break;
             }
+
             if ($token === false) {
                 $token = '';
 
@@ -366,6 +375,8 @@ class PDFObjectParser implements Stringable
 
             return [$token, $token_type];
         }
+
+        return [false, 0];
     }
 
     protected function _parse_obj(): PDFValueObject|false
@@ -388,7 +399,7 @@ class PDFObjectParser implements Stringable
 
                     return new PDFValueObject($object);
                 default:
-                    throw new Exception("Invalid token: {$this}");
+                    throw new Exception('Invalid token: ' . $this);
             }
         }
 
@@ -420,6 +431,7 @@ class PDFObjectParser implements Stringable
                     if ($value !== false) {
                         $list[] = $value;
                     }
+
                     break;
             }
         }
@@ -463,7 +475,7 @@ class PDFObjectParser implements Stringable
                     $simple_value = $this->_t;
                     $this->nexttoken();
 
-                    while (($this->_t !== false) && ($this->_tt == self::T_SIMPLE)) {
+                    while ($this->_t !== false && $this->_tt === self::T_SIMPLE) {
                         $simple_value .= ' ' . $this->_t;
                         $this->nexttoken();
                     }
@@ -477,7 +489,7 @@ class PDFObjectParser implements Stringable
                     return new PDFValueSimple($simple_value);
 
                 default:
-                    throw new Exception("Invalid token: {$this}");
+                    throw new Exception('Invalid token: ' . $this);
             }
         }
 
