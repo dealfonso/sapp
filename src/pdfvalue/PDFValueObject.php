@@ -32,14 +32,37 @@ class PDFValueObject extends PDFValue
         parent::__construct($result);
     }
 
-    public function diff($other): false|null|PDFValueObject
+    /**
+     * Function to output the object using the PDF format, and trying to make it compact (by reducing spaces, depending on the values)
+     *
+     * @return pdfentry the PDF entry for the object
+     */
+    public function __toString(): string
+    {
+        $result = [];
+        foreach ($this->value as $k => $v) {
+            $v = '' . $v;
+            if ($v === '') {
+                array_push($result, "/{$k}");
+                continue;
+            }
+            match ($v[0]) {
+                '/', '[', '(', '<' => array_push($result, "/{$k}{$v}"),
+                default => array_push($result, "/{$k} {$v}"),
+            };
+        }
+
+        return '<<' . implode('', $result) . '>>';
+    }
+
+    public function diff($other): false|null|self
     {
         $different = parent::diff($other);
         if (($different === false) || ($different === null)) {
             return $different;
         }
 
-        $result = new PDFValueObject();
+        $result = new self();
         $differences = 0;
 
         foreach ($this->value as $k => $v) {
@@ -68,7 +91,7 @@ class PDFValueObject extends PDFValue
         return $result;
     }
 
-    public static function fromarray($parts): false|PDFValueObject
+    public static function fromarray($parts): false|self
     {
         $k = array_keys($parts);
         $intkeys = false;
@@ -86,10 +109,10 @@ class PDFValueObject extends PDFValue
             $result[$k] = self::_convert($v);
         }
 
-        return new PDFValueObject($result);
+        return new self($result);
     }
 
-    public static function fromstring($str): false|PDFValueObject
+    public static function fromstring($str): false|self
     {
         $result = [];
         $field = null;
@@ -119,7 +142,7 @@ class PDFValueObject extends PDFValue
             return false;
         }
 
-        return new PDFValueObject($result);
+        return new self($result);
     }
 
     public function get_keys(): false|array
@@ -151,28 +174,5 @@ class PDFValueObject extends PDFValue
     public function offsetExists($offset): bool
     {
         return isset($this->value[$offset]);
-    }
-
-    /**
-     * Function to output the object using the PDF format, and trying to make it compact (by reducing spaces, depending on the values)
-     *
-     * @return pdfentry the PDF entry for the object
-     */
-    public function __toString(): string
-    {
-        $result = [];
-        foreach ($this->value as $k => $v) {
-            $v = "" . $v;
-            if ($v === "") {
-                array_push($result, "/$k");
-                continue;
-            }
-            match ($v[0]) {
-                '/', '[', '(', '<' => array_push($result, "/$k$v"),
-                default => array_push($result, "/$k $v"),
-            };
-        }
-
-        return "<<" . implode('', $result) . ">>";
     }
 }

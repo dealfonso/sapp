@@ -43,7 +43,7 @@ class x509
         $tsReqData = asn1::seq(
             asn1::int(1) .
             asn1::seq(
-                asn1::seq($hexOidHashAlgos[$hashAlg] . "0500") . // object OBJ $hexOidHashAlgos[$hashAlg] & OBJ_null
+                asn1::seq($hexOidHashAlgos[$hashAlg] . '0500') . // object OBJ $hexOidHashAlgos[$hashAlg] & OBJ_null
                 asn1::oct($hash)
             ) .
             asn1::int(hash('crc32', random_int(0, mt_getrandmax())) . '001') . // tsa nonce
@@ -51,45 +51,6 @@ class x509
         );
 
         return hex2bin($tsReqData);
-    }
-
-    /**
-     * Calculate 32bit (8 hex) openssl subject hash old and new
-     *
-     * @param string $hex_subjSequence hex subject name sequence
-     *
-     * @return array subject hash old and new
-     */
-    private static function opensslSubjHash($hex_subjSequence): array
-    {
-        $parse = asn1::parse($hex_subjSequence, 3);
-        $hex_subjSequence_new = '';
-        foreach ($parse[0] as $k => $v) {
-            if (is_numeric($k)) {
-                $hex_subjSequence_new .= asn1::set(
-                    asn1::seq(
-                        $v[0][0]['hexdump'] .
-                        asn1::utf8(strtolower(hex2bin((string) $v[0][1]['value_hex'])))
-                    )
-                );
-            }
-        }
-        $tohash = pack("H*", $hex_subjSequence_new);
-        $openssl_subjHash_new = hash('sha1', $tohash);
-        $openssl_subjHash_new = substr($openssl_subjHash_new, 0, 8);
-        $openssl_subjHash_new = str_split($openssl_subjHash_new, 2);
-        $openssl_subjHash_new = array_reverse($openssl_subjHash_new);
-        $openssl_subjHash_new = implode("", $openssl_subjHash_new);
-        $openssl_subjHash_old = hash('md5', hex2bin($hex_subjSequence));
-        $openssl_subjHash_old = substr($openssl_subjHash_old, 0, 8);
-        $openssl_subjHash_old = str_split($openssl_subjHash_old, 2);
-        $openssl_subjHash_old = array_reverse($openssl_subjHash_old);
-        $openssl_subjHash_old = implode("", $openssl_subjHash_old);
-
-        return [
-            "old" => $openssl_subjHash_old,
-            "new" => $openssl_subjHash_new,
-        ];
     }
 
     /**
@@ -101,7 +62,7 @@ class x509
      */
     public static function ocsp_response_parse($binaryOcspResp, &$status = '')
     {
-        $hex = current(unpack("H*", $binaryOcspResp));
+        $hex = current(unpack('H*', $binaryOcspResp));
         $parse = asn1::parse($hex, 10);
         if ($parse[0]['type'] == '30') {
             $ocsp = $parse[0];
@@ -370,8 +331,8 @@ class x509
     {
         $Request = false;
         $hashAlgorithm = asn1::seq(
-            "06052B0E03021A" . // OBJ_sha1
-            "0500"
+            '06052B0E03021A' . // OBJ_sha1
+            '0500'
         );
         $issuerNameHash = asn1::oct($issuerNameHash);
         $issuerKeyHash = asn1::oct($issuerKeyHash);
@@ -379,7 +340,7 @@ class x509
         $CertID = asn1::seq($hashAlgorithm . $issuerNameHash . $issuerKeyHash . $serialNumber);
         $Request = asn1::seq($CertID); // one request
         if ($signer_cert) {
-            $requestorName = asn1::expl("1", asn1::expl("4", $subjectName));
+            $requestorName = asn1::expl('1', asn1::expl('4', $subjectName));
         } else {
             $requestorName = false;
         }
@@ -388,9 +349,9 @@ class x509
         $nonce = md5(base64_encode($rand) . $rand);
         $ReqExts = asn1::seq(
             '06092B0601050507300102' . // OBJ_id_pkix_OCSP_Nonce
-            asn1::oct("0410" . $nonce)
+            asn1::oct('0410' . $nonce)
         );
-        $requestExtensions = asn1::expl("2", asn1::seq($ReqExts));
+        $requestExtensions = asn1::expl('2', asn1::seq($ReqExts));
         $TBSRequest = asn1::seq($requestorName . $requestList . $requestExtensions);
         $optionalSignature = '';
         if ($signer_cert) {
@@ -399,12 +360,12 @@ class x509
             }
             $signatureAlgorithm = asn1::seq(
                 '06092A864886F70D010105' . // OBJ_sha1WithRSAEncryption.
-                "0500"
+                '0500'
             );
-            $signature = asn1::bit("00" . bin2hex((string) $signature_value));
-            $signer_cert = x509::x509_pem2der($signer_cert);
-            $certs = asn1::expl("0", asn1::seq(bin2hex($signer_cert)));
-            $optionalSignature = asn1::expl("0", asn1::seq($signatureAlgorithm . $signature . $certs));
+            $signature = asn1::bit('00' . bin2hex((string) $signature_value));
+            $signer_cert = self::x509_pem2der($signer_cert);
+            $certs = asn1::expl('0', asn1::seq(bin2hex($signer_cert)));
+            $optionalSignature = asn1::expl('0', asn1::seq($signatureAlgorithm . $signature . $certs));
         }
         $OCSPRequest = asn1::seq($TBSRequest . $optionalSignature);
 
@@ -432,8 +393,8 @@ class x509
             return false;
         }
         $crl = substr($crl, 0, $endPos);
-        $crl = str_replace("\n", "", $crl);
-        $crl = str_replace("\r", "", $crl);
+        $crl = str_replace("\n", '', $crl);
+        $crl = str_replace("\r", '', $crl);
         $dercrl = base64_decode($crl, true);
 
         return $dercrl;
@@ -458,203 +419,6 @@ class x509
         $res['parse'] = $crlparse;
 
         return $res;
-    }
-
-    /**
-     * parsing crl from pem or der (binary)
-     *
-     * @param string $crl pem or der crl
-     * @param string $oidprint option show obj as hex/oid
-     *
-     * @return array parsed crl
-     */
-    private static function parsecrl(array $crl, $oidprint = false)
-    {
-        if ($derCrl = self::crl_pem2der($crl)) {
-            $derCrl = bin2hex($derCrl);
-        } else {
-            $derCrl = bin2hex($crl);
-        }
-        $curr = asn1::parse($derCrl, 7);
-        foreach ($curr as $key => $value) {
-            if ($value['type'] == '30') {
-                $curr['crl'] = $curr[$key];
-                unset($curr[$key]);
-            }
-        }
-        $ar = $curr;
-        if (! array_key_exists('crl', $ar)) {
-            return false;
-        }
-        $curr = $ar['crl'];
-        foreach ($curr as $key => $value) {
-            if (is_numeric($key)) {
-                if ($value['type'] == '30' && ! array_key_exists('TBSCertList', $curr)) {
-                    $curr['TBSCertList'] = $curr[$key];
-                    unset($curr[$key]);
-                }
-                if ($value['type'] == '30') {
-                    $curr['signatureAlgorithm'] = self::oidfromhex($value[0]['value_hex']);
-                    unset($curr[$key]);
-                }
-                if ($value['type'] == '03') {
-                    $curr['signature'] = substr((string) $value['value'], 2);
-                    unset($curr[$key]);
-                }
-            } else {
-                unset($curr[$key]);
-            }
-        }
-        $ar['crl'] = $curr;
-        $curr = $ar['crl']['TBSCertList'];
-        foreach ($curr as $key => $value) {
-            if (is_numeric($key)) {
-                if ($value['type'] == '02') {
-                    $curr['version'] = $curr[$key]['value'];
-                    unset($curr[$key]);
-                }
-                if ($value['type'] == '30' && ! array_key_exists('signature', $curr)) {
-                    $curr['signature'] = $value[0]['value_hex'];
-                    unset($curr[$key]);
-                    continue;
-                }
-                if ($value['type'] == '30' && ! array_key_exists('issuer', $curr)) {
-                    $curr['issuer'] = $value;
-                    unset($curr[$key]);
-                    continue;
-                }
-                if ($value['type'] == '17' && ! array_key_exists('thisUpdate', $curr)) {
-                    $curr['thisUpdate'] = hex2bin((string) $value['value_hex']);
-                    unset($curr[$key]);
-                    continue;
-                }
-                if ($value['type'] == '17' && ! array_key_exists('nextUpdate', $curr)) {
-                    $curr['nextUpdate'] = hex2bin((string) $value['value_hex']);
-                    unset($curr[$key]);
-                    continue;
-                }
-                if ($value['type'] == '30' && ! array_key_exists('revokedCertificates', $curr)) {
-                    $curr['revokedCertificates'] = $value;
-                    unset($curr[$key]);
-                    continue;
-                }
-                if ($value['type'] == 'a0') {
-                    $curr['crlExtensions'] = $curr[$key];
-                    unset($curr[$key]);
-                }
-            } else {
-                unset($curr[$key]);
-            }
-        }
-        $ar['crl']['TBSCertList'] = $curr;
-        if (array_key_exists('revokedCertificates', $curr)) {
-            $curr = $ar['crl']['TBSCertList']['revokedCertificates'];
-            foreach ($curr as $key => $value) {
-                if (is_numeric($key)) {
-                    if ($value['type'] == '30') {
-                        $serial = $value[0]['value'];
-                        $revoked['time'] = hex2bin((string) $value[1]['value_hex']);
-                        $lists[$serial] = $revoked;
-                        unset($curr[$key]);
-                    }
-                } else {
-                    unset($curr['depth']);
-                    unset($curr['type']);
-                    unset($curr['typeName']);
-                }
-            }
-            $curr['lists'] = $lists;
-            $ar['crl']['TBSCertList']['revokedCertificates'] = $curr;
-        }
-        if (array_key_exists('crlExtensions', $ar['crl']['TBSCertList'])) {
-            $curr = $ar['crl']['TBSCertList']['crlExtensions'][0];
-            unset($ar['crl']['TBSCertList']['crlExtensions']);
-            foreach ($curr as $key => $value) {
-                if (is_numeric($key)) {
-                    $attributes_name = self::oidfromhex($value[0]['value_hex']);
-                    if ($oidprint == 'oid') {
-                        $attributes_name = self::oidfromhex($value[0]['value_hex']);
-                    }
-                    if ($oidprint == 'hex') {
-                        $attributes_name = $value[0]['value_hex'];
-                    }
-                    $attributes_oid = self::oidfromhex($value[0]['value_hex']);
-                    if ($value['type'] == '30') {
-                        $crlExtensionsValue = $value[1][0];
-                        if ($attributes_oid == '2.5.29.20') { // OBJ_crl_number
-                            $crlExtensionsValue = $crlExtensionsValue['value'];
-                        }
-                        if ($attributes_oid == '2.5.29.35') { // OBJ_authority_key_identifier
-                            foreach ($crlExtensionsValue as $authority_key_identifierValueK => $authority_key_identifierV) {
-                                if (is_numeric($authority_key_identifierValueK)) {
-                                    if ($authority_key_identifierV['type'] == '80') {
-                                        $authority_key_identifier['keyIdentifier'] = $authority_key_identifierV['value_hex'];
-                                    }
-                                    if ($authority_key_identifierV['type'] == 'a1') {
-                                        $authority_key_identifier['authorityCertIssuer'] = $authority_key_identifierV['value_hex'];
-                                    }
-                                    if ($authority_key_identifierV['type'] == '82') {
-                                        $authority_key_identifier['authorityCertSerialNumber'] = $authority_key_identifierV['value_hex'];
-                                    }
-                                }
-                            }
-                            $crlExtensionsValue = $authority_key_identifier;
-                        }
-                        $attribute_list = $crlExtensionsValue;
-                    }
-                    $ar['crl']['TBSCertList']['crlExtensions'][$attributes_name] = $attribute_list;
-                }
-            }
-        }
-        $curr = $ar['crl']['TBSCertList']['issuer'];
-        foreach ($curr as $key => $value) {
-            if (is_numeric($key)) {
-                if ($value['type'] == '31') {
-                    if ($oidprint == 'oid') {
-                        $subjOID = self::oidfromhex($curr[$key][0][0]['value_hex']);
-                    } elseif ($oidprint == 'hex') {
-                        $subjOID = $curr[$key][0][0]['value_hex'];
-                    } else {
-                        $subjOID = self::oidfromhex($curr[$key][0][0]['value_hex']);
-                    }
-                    $curr[$subjOID][] = hex2bin((string) $curr[$key][0][1]['value_hex']);
-                    unset($curr[$key]);
-                }
-            } else {
-                unset($curr['depth']);
-                unset($curr['type']);
-                unset($curr['typeName']);
-                if ($key == 'hexdump') {
-                    $curr['sha1'] = hash('sha1', pack("H*", $value));
-                }
-            }
-        }
-        $ar['crl']['TBSCertList']['issuer'] = $curr;
-        $arrModel['TBSCertList']['version'] = '';
-        $arrModel['TBSCertList']['signature'] = '';
-        $arrModel['TBSCertList']['issuer'] = '';
-        $arrModel['TBSCertList']['thisUpdate'] = '';
-        $arrModel['TBSCertList']['nextUpdate'] = '';
-        $arrModel['signatureAlgorithm'] = '';
-        $arrModel['signature'] = '';
-        $crl = $ar['crl'];
-        $differ = array_diff_key($arrModel, $crl);
-        if (count($differ) == 0) {
-            $differ = array_diff_key($arrModel['TBSCertList'], $crl['TBSCertList']);
-            if (count($differ) > 0) {
-                foreach ($differ as $key => $val) {
-                }
-
-                return false;
-            }
-        } else {
-            foreach ($differ as $key => $val) {
-            }
-
-            return false;
-        }
-
-        return $ar['crl'];
     }
 
     /**
@@ -714,16 +478,15 @@ class x509
             openssl_x509_export($rsccert, $cert);
 
             return self::x509_pem2der($cert);
-        } else {
-            $pem = @self::x509_der2pem($certin);
-            if ($rsccert = @openssl_x509_read($pem)) {
-                openssl_x509_export($rsccert, $cert);
-
-                return self::x509_pem2der($cert);
-            } else {
-                return false;
-            }
         }
+        $pem = @self::x509_der2pem($certin);
+        if ($rsccert = @openssl_x509_read($pem)) {
+            openssl_x509_export($rsccert, $cert);
+
+            return self::x509_pem2der($cert);
+        }
+        return false;
+
     }
 
     /**
@@ -977,6 +740,242 @@ class x509
     }
 
     /**
+     * Calculate 32bit (8 hex) openssl subject hash old and new
+     *
+     * @param string $hex_subjSequence hex subject name sequence
+     *
+     * @return array subject hash old and new
+     */
+    private static function opensslSubjHash($hex_subjSequence): array
+    {
+        $parse = asn1::parse($hex_subjSequence, 3);
+        $hex_subjSequence_new = '';
+        foreach ($parse[0] as $k => $v) {
+            if (is_numeric($k)) {
+                $hex_subjSequence_new .= asn1::set(
+                    asn1::seq(
+                        $v[0][0]['hexdump'] .
+                        asn1::utf8(strtolower(hex2bin((string) $v[0][1]['value_hex'])))
+                    )
+                );
+            }
+        }
+        $tohash = pack('H*', $hex_subjSequence_new);
+        $openssl_subjHash_new = hash('sha1', $tohash);
+        $openssl_subjHash_new = substr($openssl_subjHash_new, 0, 8);
+        $openssl_subjHash_new = str_split($openssl_subjHash_new, 2);
+        $openssl_subjHash_new = array_reverse($openssl_subjHash_new);
+        $openssl_subjHash_new = implode('', $openssl_subjHash_new);
+        $openssl_subjHash_old = hash('md5', hex2bin($hex_subjSequence));
+        $openssl_subjHash_old = substr($openssl_subjHash_old, 0, 8);
+        $openssl_subjHash_old = str_split($openssl_subjHash_old, 2);
+        $openssl_subjHash_old = array_reverse($openssl_subjHash_old);
+        $openssl_subjHash_old = implode('', $openssl_subjHash_old);
+
+        return [
+            'old' => $openssl_subjHash_old,
+            'new' => $openssl_subjHash_new,
+        ];
+    }
+
+    /**
+     * parsing crl from pem or der (binary)
+     *
+     * @param string $crl pem or der crl
+     * @param string $oidprint option show obj as hex/oid
+     *
+     * @return array parsed crl
+     */
+    private static function parsecrl(array $crl, $oidprint = false)
+    {
+        if ($derCrl = self::crl_pem2der($crl)) {
+            $derCrl = bin2hex($derCrl);
+        } else {
+            $derCrl = bin2hex($crl);
+        }
+        $curr = asn1::parse($derCrl, 7);
+        foreach ($curr as $key => $value) {
+            if ($value['type'] == '30') {
+                $curr['crl'] = $curr[$key];
+                unset($curr[$key]);
+            }
+        }
+        $ar = $curr;
+        if (! array_key_exists('crl', $ar)) {
+            return false;
+        }
+        $curr = $ar['crl'];
+        foreach ($curr as $key => $value) {
+            if (is_numeric($key)) {
+                if ($value['type'] == '30' && ! array_key_exists('TBSCertList', $curr)) {
+                    $curr['TBSCertList'] = $curr[$key];
+                    unset($curr[$key]);
+                }
+                if ($value['type'] == '30') {
+                    $curr['signatureAlgorithm'] = self::oidfromhex($value[0]['value_hex']);
+                    unset($curr[$key]);
+                }
+                if ($value['type'] == '03') {
+                    $curr['signature'] = substr((string) $value['value'], 2);
+                    unset($curr[$key]);
+                }
+            } else {
+                unset($curr[$key]);
+            }
+        }
+        $ar['crl'] = $curr;
+        $curr = $ar['crl']['TBSCertList'];
+        foreach ($curr as $key => $value) {
+            if (is_numeric($key)) {
+                if ($value['type'] == '02') {
+                    $curr['version'] = $curr[$key]['value'];
+                    unset($curr[$key]);
+                }
+                if ($value['type'] == '30' && ! array_key_exists('signature', $curr)) {
+                    $curr['signature'] = $value[0]['value_hex'];
+                    unset($curr[$key]);
+                    continue;
+                }
+                if ($value['type'] == '30' && ! array_key_exists('issuer', $curr)) {
+                    $curr['issuer'] = $value;
+                    unset($curr[$key]);
+                    continue;
+                }
+                if ($value['type'] == '17' && ! array_key_exists('thisUpdate', $curr)) {
+                    $curr['thisUpdate'] = hex2bin((string) $value['value_hex']);
+                    unset($curr[$key]);
+                    continue;
+                }
+                if ($value['type'] == '17' && ! array_key_exists('nextUpdate', $curr)) {
+                    $curr['nextUpdate'] = hex2bin((string) $value['value_hex']);
+                    unset($curr[$key]);
+                    continue;
+                }
+                if ($value['type'] == '30' && ! array_key_exists('revokedCertificates', $curr)) {
+                    $curr['revokedCertificates'] = $value;
+                    unset($curr[$key]);
+                    continue;
+                }
+                if ($value['type'] == 'a0') {
+                    $curr['crlExtensions'] = $curr[$key];
+                    unset($curr[$key]);
+                }
+            } else {
+                unset($curr[$key]);
+            }
+        }
+        $ar['crl']['TBSCertList'] = $curr;
+        if (array_key_exists('revokedCertificates', $curr)) {
+            $curr = $ar['crl']['TBSCertList']['revokedCertificates'];
+            foreach ($curr as $key => $value) {
+                if (is_numeric($key)) {
+                    if ($value['type'] == '30') {
+                        $serial = $value[0]['value'];
+                        $revoked['time'] = hex2bin((string) $value[1]['value_hex']);
+                        $lists[$serial] = $revoked;
+                        unset($curr[$key]);
+                    }
+                } else {
+                    unset($curr['depth']);
+                    unset($curr['type']);
+                    unset($curr['typeName']);
+                }
+            }
+            $curr['lists'] = $lists;
+            $ar['crl']['TBSCertList']['revokedCertificates'] = $curr;
+        }
+        if (array_key_exists('crlExtensions', $ar['crl']['TBSCertList'])) {
+            $curr = $ar['crl']['TBSCertList']['crlExtensions'][0];
+            unset($ar['crl']['TBSCertList']['crlExtensions']);
+            foreach ($curr as $key => $value) {
+                if (is_numeric($key)) {
+                    $attributes_name = self::oidfromhex($value[0]['value_hex']);
+                    if ($oidprint == 'oid') {
+                        $attributes_name = self::oidfromhex($value[0]['value_hex']);
+                    }
+                    if ($oidprint == 'hex') {
+                        $attributes_name = $value[0]['value_hex'];
+                    }
+                    $attributes_oid = self::oidfromhex($value[0]['value_hex']);
+                    if ($value['type'] == '30') {
+                        $crlExtensionsValue = $value[1][0];
+                        if ($attributes_oid == '2.5.29.20') { // OBJ_crl_number
+                            $crlExtensionsValue = $crlExtensionsValue['value'];
+                        }
+                        if ($attributes_oid == '2.5.29.35') { // OBJ_authority_key_identifier
+                            foreach ($crlExtensionsValue as $authority_key_identifierValueK => $authority_key_identifierV) {
+                                if (is_numeric($authority_key_identifierValueK)) {
+                                    if ($authority_key_identifierV['type'] == '80') {
+                                        $authority_key_identifier['keyIdentifier'] = $authority_key_identifierV['value_hex'];
+                                    }
+                                    if ($authority_key_identifierV['type'] == 'a1') {
+                                        $authority_key_identifier['authorityCertIssuer'] = $authority_key_identifierV['value_hex'];
+                                    }
+                                    if ($authority_key_identifierV['type'] == '82') {
+                                        $authority_key_identifier['authorityCertSerialNumber'] = $authority_key_identifierV['value_hex'];
+                                    }
+                                }
+                            }
+                            $crlExtensionsValue = $authority_key_identifier;
+                        }
+                        $attribute_list = $crlExtensionsValue;
+                    }
+                    $ar['crl']['TBSCertList']['crlExtensions'][$attributes_name] = $attribute_list;
+                }
+            }
+        }
+        $curr = $ar['crl']['TBSCertList']['issuer'];
+        foreach ($curr as $key => $value) {
+            if (is_numeric($key)) {
+                if ($value['type'] == '31') {
+                    if ($oidprint == 'oid') {
+                        $subjOID = self::oidfromhex($curr[$key][0][0]['value_hex']);
+                    } elseif ($oidprint == 'hex') {
+                        $subjOID = $curr[$key][0][0]['value_hex'];
+                    } else {
+                        $subjOID = self::oidfromhex($curr[$key][0][0]['value_hex']);
+                    }
+                    $curr[$subjOID][] = hex2bin((string) $curr[$key][0][1]['value_hex']);
+                    unset($curr[$key]);
+                }
+            } else {
+                unset($curr['depth']);
+                unset($curr['type']);
+                unset($curr['typeName']);
+                if ($key == 'hexdump') {
+                    $curr['sha1'] = hash('sha1', pack('H*', $value));
+                }
+            }
+        }
+        $ar['crl']['TBSCertList']['issuer'] = $curr;
+        $arrModel['TBSCertList']['version'] = '';
+        $arrModel['TBSCertList']['signature'] = '';
+        $arrModel['TBSCertList']['issuer'] = '';
+        $arrModel['TBSCertList']['thisUpdate'] = '';
+        $arrModel['TBSCertList']['nextUpdate'] = '';
+        $arrModel['signatureAlgorithm'] = '';
+        $arrModel['signature'] = '';
+        $crl = $ar['crl'];
+        $differ = array_diff_key($arrModel, $crl);
+        if (count($differ) == 0) {
+            $differ = array_diff_key($arrModel['TBSCertList'], $crl['TBSCertList']);
+            if (count($differ) > 0) {
+                foreach ($differ as $key => $val) {
+                }
+
+                return false;
+            }
+        } else {
+            foreach ($differ as $key => $val) {
+            }
+
+            return false;
+        }
+
+        return $ar['crl'];
+    }
+
+    /**
      * read oid number of given hex (convert hex to oid)
      *
      * @param string $hex hex form oid number
@@ -1003,19 +1002,19 @@ class x509
                     if ($dec > 129) {
                         $nex = (128 * ($dec - 128)) - 80;
                     }
-                    $result = "2.";
+                    $result = '2.';
                 }
                 if ($dec >= 80 && $dec < 128) {
                     $first = $dec - 80;
-                    $result = "2.$first.";
+                    $result = "2.{$first}.";
                 }
                 if ($dec >= 40 && $dec < 80) {
                     $first = $dec - 40;
-                    $result = "1.$first.";
+                    $result = "1.{$first}.";
                 }
                 if ($dec < 40) {
                     $first = $dec - 0;
-                    $result = "0.$first.";
+                    $result = "0.{$first}.";
                 }
             } else {
                 if ($dec > 127) {
@@ -1025,7 +1024,7 @@ class x509
                         $nex = ($nex * 128) + $mplx[$i];
                     }
                 } else {
-                    $result .= ($dec + $nex) . ".";
+                    $result .= ($dec + $nex) . '.';
                     if ($dec <= 127) {
                         $nex = 0;
                     }
@@ -1034,6 +1033,6 @@ class x509
             $i++;
         }
 
-        return rtrim($result, ".");
+        return rtrim($result, '.');
     }
 }

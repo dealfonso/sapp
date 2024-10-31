@@ -16,21 +16,21 @@
     GNU General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public License
-	along with this program.  If not, see <https://www.gnu.org/licenses/>.
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-	---------
+    ---------
 
-	The code in this file is an adaptation of a part of the code included in
-	fpdf version 1.82 as downloaded from (http://www.fpdf.org/es/dl.php?v=182&f=tgz)
+    The code in this file is an adaptation of a part of the code included in
+    fpdf version 1.82 as downloaded from (http://www.fpdf.org/es/dl.php?v=182&f=tgz)
 
-	The fpdf license:
+    The fpdf license:
 
-	Permission is hereby granted, free of charge, to any person obtaining a copy
-	of this software to use, copy, modify, distribute, sublicense, and/or sell
-	copies of the software, and to permit persons to whom the software is furnished
-	to do so.
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software to use, copy, modify, distribute, sublicense, and/or sell
+    copies of the software, and to permit persons to whom the software is furnished
+    to do so.
 
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
 */
 
 namespace ddn\sapp\helpers;
@@ -78,7 +78,7 @@ function _parsepngstream(&$f)
 {
     // Check signature
     if (($res = _readstream($f, 8)) != chr(137) . 'PNG' . chr(13) . chr(10) . chr(26) . chr(10)) {
-        return p_error("Not a PNG image $res");
+        return p_error("Not a PNG image {$res}");
     }
 
     // Read header chunk
@@ -213,12 +213,12 @@ function _parsepngstream(&$f)
 
 function _readstream(&$f, $n)
 {
-    $res = "";
+    $res = '';
 
     while ($n > 0 && ! $f->eos()) {
         $s = $f->nextchars($n);
         if ($s === false) {
-            return p_error("Error while reading the stream");
+            return p_error('Error while reading the stream');
         }
         $n -= strlen((string) $s);
         $res .= $s;
@@ -242,25 +242,25 @@ function _readint(&$f)
 /*
 function _readstream($f, $n)
 {
-	// Read n bytes from stream
-	$res = '';
-	while($n>0 && !feof($f))
-	{
-		$s = fread($f,$n);
-		if($s===false)
-			return p_error('Error while reading stream');
-		$n -= strlen($s);
-		$res .= $s;
-	}
-	if($n>0)
-		return p_error('Unexpected end of stream');
-	return $res;
+    // Read n bytes from stream
+    $res = '';
+    while($n>0 && !feof($f))
+    {
+        $s = fread($f,$n);
+        if($s===false)
+            return p_error('Error while reading stream');
+        $n -= strlen($s);
+        $res .= $s;
+    }
+    if($n>0)
+        return p_error('Unexpected end of stream');
+    return $res;
 }
 
 function _readint($f)
 {
-	// Read a 4-byte integer from stream
-	$a = unpack('Ni',_readstream($f,4));
-	return $a['i'];
+    // Read a 4-byte integer from stream
+    $a = unpack('Ni',_readstream($f,4));
+    return $a['i'];
 }
 */

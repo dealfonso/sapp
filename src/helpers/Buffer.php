@@ -34,18 +34,39 @@ if (! defined('__CONVENIENT_MAX_BUFFER_DUMP')) {
  */
 class Buffer implements Stringable
 {
-    protected $_buffer = "";
+    protected $_buffer = '';
 
     protected int $_bufferlen;
 
     public function __construct($string = null)
     {
         if ($string === null) {
-            $string = "";
+            $string = '';
         }
 
         $this->_buffer = $string;
         $this->_bufferlen = strlen((string) $string);
+    }
+
+    /**
+     * Provides a easy to read string representation of the buffer, using the "var_dump" output
+     *   of the variable, but providing a reduced otput of the buffer
+     *
+     * @return str a string with the representation of the buffer
+     */
+    public function __toString(): string
+    {
+        if (strlen((string) $this->_buffer) < (__CONVENIENT_MAX_BUFFER_DUMP * 2)) {
+            return (string) debug_var($this);
+        }
+
+        $buffer = $this->_buffer;
+        $this->_buffer = substr((string) $buffer, 0, __CONVENIENT_MAX_BUFFER_DUMP);
+        $this->_buffer .= "\n...\n" . substr((string) $buffer, -__CONVENIENT_MAX_BUFFER_DUMP);
+        $result = debug_var($this);
+        $this->_buffer = $buffer;
+
+        return (string) $result;
     }
 
     /**
@@ -107,7 +128,7 @@ class Buffer implements Stringable
      *
      * @return buffer the resulting buffer (different from this one)
      */
-    public function add(...$bs): Buffer
+    public function add(...$bs): self
     {
         foreach ($bs as $b) {
             if ($b::class !== static::class) {
@@ -115,7 +136,7 @@ class Buffer implements Stringable
             }
         }
 
-        $r = new Buffer($this->_buffer);
+        $r = new self($this->_buffer);
         foreach ($bs as $b) {
             $r->append($b);
         }
@@ -128,32 +149,11 @@ class Buffer implements Stringable
      *
      * @return buffer the cloned buffer
      */
-    public function clone(): Buffer
+    public function clone(): self
     {
-        $buffer = new Buffer($this->_buffer);
+        $buffer = new self($this->_buffer);
 
         return $buffer;
-    }
-
-    /**
-     * Provides a easy to read string representation of the buffer, using the "var_dump" output
-     *   of the variable, but providing a reduced otput of the buffer
-     *
-     * @return str a string with the representation of the buffer
-     */
-    public function __toString(): string
-    {
-        if (strlen((string) $this->_buffer) < (__CONVENIENT_MAX_BUFFER_DUMP * 2)) {
-            return (string) debug_var($this);
-        }
-
-        $buffer = $this->_buffer;
-        $this->_buffer = substr((string) $buffer, 0, __CONVENIENT_MAX_BUFFER_DUMP);
-        $this->_buffer .= "\n...\n" . substr((string) $buffer, -__CONVENIENT_MAX_BUFFER_DUMP);
-        $result = debug_var($this);
-        $this->_buffer = $buffer;
-
-        return (string) $result;
     }
 
     public function show_bytes($columns, $offset = 0, $length = null): string
@@ -162,11 +162,11 @@ class Buffer implements Stringable
             $length = $this->_bufferlen;
         }
 
-        $result = "";
+        $result = '';
         $length = min($length, $this->_bufferlen);
         for ($i = $offset; $i < $length;) {
             for ($j = 0; ($j < $columns) && ($i < $length); $i++, $j++) {
-                $result .= sprintf("%02x ", ord($this->_buffer[$i]));
+                $result .= sprintf('%02x ', ord($this->_buffer[$i]));
             }
             $result .= "\n";
         }

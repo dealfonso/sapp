@@ -23,7 +23,7 @@ namespace ddn\sapp\helpers;
 
 use DateTime;
 
-if (! defined("_DEBUG_LEVEL")) {
+if (! defined('_DEBUG_LEVEL')) {
     define('_DEBUG_LEVEL', 3);
 }
 
@@ -83,7 +83,7 @@ function p_debug_var(...$vars): void
 
     foreach ($vars as $var) {
         $e = var_dump_to_string($var);
-        p_stderr($e, "Debug");
+        p_stderr($e, 'Debug');
     }
 }
 
@@ -103,9 +103,9 @@ function varval($e)
         $a = [];
         foreach ($e as $k => $v) {
             $v = varval($v);
-            array_push($a, "$k => $v");
+            array_push($a, "{$k} => {$v}");
         }
-        $retval = "[ " . implode(", ", $a) . " ]";
+        $retval = '[ ' . implode(', ', $a) . ' ]';
     }
 
     return $retval;
@@ -119,12 +119,12 @@ function varval($e)
  * @param level the depth level to output (0 will refer to the function that called p_stderr
  *              call itself, 1 to the function that called to the function that called p_stderr)
  */
-function p_stderr(&$e, $tag = "Error", $level = 1): void
+function p_stderr(&$e, $tag = 'Error', $level = 1): void
 {
     $dinfo = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT);
     $dinfo = $dinfo[$level];
-    $e = sprintf("$tag info at %s:%d: %s", $dinfo['file'], $dinfo['line'], varval($e));
-    fwrite(STDERR, "$e\n");
+    $e = sprintf("{$tag} info at %s:%d: %s", $dinfo['file'], $dinfo['line'], varval($e));
+    fwrite(STDERR, "{$e}\n");
 }
 
 /**
@@ -139,7 +139,7 @@ function p_debug($e, $retval = false)
 {
     // If the debug level is less than 3, suppress debug messages
     if (_DEBUG_LEVEL >= 3) {
-        p_stderr($e, "Debug");
+        p_stderr($e, 'Debug');
     }
 
     return $retval;
@@ -157,7 +157,7 @@ function p_warning($e, $retval = false)
 {
     // If the debug level is less than 2, suppress warning messages
     if (_DEBUG_LEVEL >= 2) {
-        p_stderr($e, "Warning");
+        p_stderr($e, 'Warning');
     }
 
     return $retval;
@@ -175,7 +175,7 @@ function p_error($e, $retval = false)
 {
     // If the debug level is less than 1, suppress error messages
     if (_DEBUG_LEVEL >= 1) {
-        p_stderr($e, "Error");
+        p_stderr($e, 'Error');
     }
 
     return $retval;
@@ -196,15 +196,15 @@ function p_error($e, $retval = false)
  */
 function get_random_string($length = 8, $extended = false, $hard = false): string
 {
-    $token = "";
-    $codeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    $codeAlphabet .= "abcdefghijklmnopqrstuvwxyz";
-    $codeAlphabet .= "0123456789";
+    $token = '';
+    $codeAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $codeAlphabet .= 'abcdefghijklmnopqrstuvwxyz';
+    $codeAlphabet .= '0123456789';
     if ($extended === true) {
         $codeAlphabet .= "!\"#$%&'()*+,-./:;<=>?@[\\]_{}";
     }
     if ($hard === true) {
-        $codeAlphabet .= "^`|~";
+        $codeAlphabet .= '^`|~';
     }
     $max = strlen($codeAlphabet);
     for ($i = 0; $i < $length; $i++) {
@@ -222,8 +222,10 @@ function get_memory_limit(): int
         switch ($matches[2]) {
             case 'G':
                 $memory_limit = $memory_limit * 1024;
+                // no break
             case 'M':
                 $memory_limit = $memory_limit * 1024;
+                // no break
             case 'K':
                 $memory_limit = $memory_limit * 1024;
                 break;
@@ -239,13 +241,13 @@ function get_memory_limit(): int
 
 function show_bytes($str, $columns = null): string
 {
-    $result = "";
+    $result = '';
     if ($columns === null) {
         $columns = strlen((string) $str);
     }
     $c = $columns;
     for ($i = 0; $i < strlen((string) $str); $i++) {
-        $result .= sprintf("%02x ", ord($str[$i]));
+        $result .= sprintf('%02x ', ord($str[$i]));
         $c--;
         if ($c === 0) {
             $c = $columns;

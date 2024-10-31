@@ -16,102 +16,67 @@ namespace ddn\sapp\helpers;
  */
 class asn1
 {
-    // =====Begin ASN.1 Parser section=====
-    /**
-     * get asn.1 type tag name
-     *
-     * @param string $id hex asn.1 type tag
-     *
-     * @return string asn.1 tag name
-     */
-    protected static function type($id)
+    public static function __callStatic($func, $params)
     {
-        $asn1_Types = [
-            "00" => "ASN1_EOC",
-            "01" => "ASN1_BOOLEAN",
-            "02" => "ASN1_INTEGER",
-            "03" => "ASN1_BIT_STRING",
-            "04" => "ASN1_OCTET_STRING",
-            "05" => "ASN1_NULL",
-            "06" => "ASN1_OBJECT",
-            "07" => "ASN1_OBJECT_DESCRIPTOR",
-            "08" => "ASN1_EXTERNAL",
-            "09" => "ASN1_REAL",
-            "0a" => "ASN1_ENUMERATED",
-            "0c" => "ASN1_UTF8STRING",
-            "30" => "ASN1_SEQUENCE",
-            "31" => "ASN1_SET",
-            "12" => "ASN1_NUMERICSTRING",
-            "13" => "ASN1_PRINTABLESTRING",
-            "14" => "ASN1_T61STRING",
-            "15" => "ASN1_VIDEOTEXSTRING",
-            "16" => "ASN1_IA5STRING",
-            "17" => "ASN1_UTCTIME",
-            "18" => "ASN1_GENERALIZEDTIME",
-            "19" => "ASN1_GRAPHICSTRING",
-            "1a" => "ASN1_VISIBLESTRING",
-            "1b" => "ASN1_GENERALSTRING",
-            "1c" => "ASN1_UNIVERSALSTRING",
-            "1d" => "ASN1_BMPSTRING",
-        ];
-
-        return array_key_exists($id, $asn1_Types) ? $asn1_Types[$id] : $id;
-    }
-
-    /**
-     * parse asn.1 to array
-     * to be called from parse() function
-     *
-     * @param string $hex asn.1 hex form
-     *
-     * @return array asn.1 structure
-     */
-    protected static function oneParse($hex)
-    {
-        if ($hex == '') {
-            return false;
-        }
-        if (! @ctype_xdigit($hex) || @strlen($hex) % 2 != 0) {
-            echo "input:\"$hex\" not hex string!.\n";
-
-            return false;
-        }
-        $stop = false;
-        while ($stop == false) {
-            $asn1_type = substr($hex, 0, 2);
-            $tlv_tagLength = hexdec(substr($hex, 2, 2));
-            if ($tlv_tagLength > 127) {
-                $tlv_lengthLength = $tlv_tagLength - 128;
-                $tlv_valueLength = substr($hex, 4, ($tlv_lengthLength * 2));
-            } else {
-                $tlv_lengthLength = 0;
-                $tlv_valueLength = substr($hex, 2, 2 + ($tlv_lengthLength * 2));
+        $func = strtolower((string) $func);
+        $asn1Tag = self::asn1Tag($func);
+        if ($asn1Tag !== false) {
+            $num = $asn1Tag; //valu of array
+            $hex = $params[0];
+            $val = $hex;
+            if (in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61'])) { // ($string)
+                $val = bin2hex((string) $hex);
             }
-            if ($tlv_lengthLength > 4) { // limit tlv_lengthLength to FFFF
-                return false;
+            if ($func == 'int') {
+                $val = (strlen((string) $val) % 2 != 0) ? "0{$val}" : "{$val}";
             }
-            $tlv_valueLength = hexdec($tlv_valueLength);
-            $totalTlLength = 2 + 2 + ($tlv_lengthLength * 2);
-            $reduction = 2 + 2 + ($tlv_lengthLength * 2) + ($tlv_valueLength * 2);
-            $tlv_value = substr($hex, $totalTlLength, $tlv_valueLength * 2);
-            $remain = substr($hex, $totalTlLength + ($tlv_valueLength * 2));
-            $newhexdump = substr($hex, 0, $totalTlLength + ($tlv_valueLength * 2));
-            $result[] = [
-                'tlv_tagLength' => strlen(dechex($tlv_tagLength)) % 2 == 0 ? dechex($tlv_tagLength) : '0' . dechex($tlv_tagLength),
-                'tlv_lengthLength' => $tlv_lengthLength,
-                'tlv_valueLength' => $tlv_valueLength,
-                'newhexdump' => $newhexdump,
-                'typ' => $asn1_type,
-                'tlv_value' => $tlv_value,
-            ];
-            if ($remain == '') { // if remains string was empty & contents also empty, function return FALSE
-                $stop = true;
-            } else {
-                $hex = $remain;
+            if ($func == 'expl') { //expl($num, $hex)
+                $num = $num . $params[0];
+                $val = $params[1];
             }
-        }
+            if ($func == 'impl') { //impl($num="0")
+                $val = (! $val) ? '00' : $val;
+                $val = (strlen((string) $val) % 2 != 0) ? "0{$val}" : $val;
 
-        return $result;
+                return $num . $val;
+            }
+            if ($func == 'other') { //OTHER($id, $hex, $chr = false)
+                $id = $params[0];
+                $hex = $params[1];
+                $chr = @$params[2];
+                $str = $hex;
+                if ($chr != false) {
+                    $str = bin2hex((string) $hex);
+                }
+                $ret = "{$id}" . self::asn1_header($str) . $str;
+
+                return $ret;
+            }
+            if ($func == 'utime') {
+                $time = $params[0]; //yymmddhhiiss
+                $oldTz = date_default_timezone_get();
+                date_default_timezone_set('UTC');
+                $time = date('ymdHis', $time);
+                date_default_timezone_set($oldTz);
+                $val = bin2hex($time . 'Z');
+            }
+            if ($func == 'gtime') {
+                if (! $time = strtotime((string) $params[0])) {
+                    // echo "asn1::GTIME function strtotime cant recognize time!! please check at input=\"{$params[0]}\"";
+                    return false;
+                }
+                $oldTz = date_default_timezone_get();
+                // date_default_timezone_set("UTC");
+                $time = date('YmdHis', $time);
+                date_default_timezone_set($oldTz);
+                $val = bin2hex($time . 'Z');
+            }
+            $hdr = self::asn1_header($val);
+
+            return $num . $hdr . $val;
+        }
+        // echo "asn1 \"$func\" not exists!";
+
     }
 
     /**
@@ -163,6 +128,104 @@ class asn1
 
         return $result;
     }
+
+    // =====Begin ASN.1 Parser section=====
+    /**
+     * get asn.1 type tag name
+     *
+     * @param string $id hex asn.1 type tag
+     *
+     * @return string asn.1 tag name
+     */
+    protected static function type($id)
+    {
+        $asn1_Types = [
+            '00' => 'ASN1_EOC',
+            '01' => 'ASN1_BOOLEAN',
+            '02' => 'ASN1_INTEGER',
+            '03' => 'ASN1_BIT_STRING',
+            '04' => 'ASN1_OCTET_STRING',
+            '05' => 'ASN1_NULL',
+            '06' => 'ASN1_OBJECT',
+            '07' => 'ASN1_OBJECT_DESCRIPTOR',
+            '08' => 'ASN1_EXTERNAL',
+            '09' => 'ASN1_REAL',
+            '0a' => 'ASN1_ENUMERATED',
+            '0c' => 'ASN1_UTF8STRING',
+            '30' => 'ASN1_SEQUENCE',
+            '31' => 'ASN1_SET',
+            '12' => 'ASN1_NUMERICSTRING',
+            '13' => 'ASN1_PRINTABLESTRING',
+            '14' => 'ASN1_T61STRING',
+            '15' => 'ASN1_VIDEOTEXSTRING',
+            '16' => 'ASN1_IA5STRING',
+            '17' => 'ASN1_UTCTIME',
+            '18' => 'ASN1_GENERALIZEDTIME',
+            '19' => 'ASN1_GRAPHICSTRING',
+            '1a' => 'ASN1_VISIBLESTRING',
+            '1b' => 'ASN1_GENERALSTRING',
+            '1c' => 'ASN1_UNIVERSALSTRING',
+            '1d' => 'ASN1_BMPSTRING',
+        ];
+
+        return array_key_exists($id, $asn1_Types) ? $asn1_Types[$id] : $id;
+    }
+
+    /**
+     * parse asn.1 to array
+     * to be called from parse() function
+     *
+     * @param string $hex asn.1 hex form
+     *
+     * @return array asn.1 structure
+     */
+    protected static function oneParse($hex)
+    {
+        if ($hex == '') {
+            return false;
+        }
+        if (! @ctype_xdigit($hex) || @strlen($hex) % 2 != 0) {
+            echo "input:\"{$hex}\" not hex string!.\n";
+
+            return false;
+        }
+        $stop = false;
+        while ($stop == false) {
+            $asn1_type = substr($hex, 0, 2);
+            $tlv_tagLength = hexdec(substr($hex, 2, 2));
+            if ($tlv_tagLength > 127) {
+                $tlv_lengthLength = $tlv_tagLength - 128;
+                $tlv_valueLength = substr($hex, 4, ($tlv_lengthLength * 2));
+            } else {
+                $tlv_lengthLength = 0;
+                $tlv_valueLength = substr($hex, 2, 2 + ($tlv_lengthLength * 2));
+            }
+            if ($tlv_lengthLength > 4) { // limit tlv_lengthLength to FFFF
+                return false;
+            }
+            $tlv_valueLength = hexdec($tlv_valueLength);
+            $totalTlLength = 2 + 2 + ($tlv_lengthLength * 2);
+            $reduction = 2 + 2 + ($tlv_lengthLength * 2) + ($tlv_valueLength * 2);
+            $tlv_value = substr($hex, $totalTlLength, $tlv_valueLength * 2);
+            $remain = substr($hex, $totalTlLength + ($tlv_valueLength * 2));
+            $newhexdump = substr($hex, 0, $totalTlLength + ($tlv_valueLength * 2));
+            $result[] = [
+                'tlv_tagLength' => strlen(dechex($tlv_tagLength)) % 2 == 0 ? dechex($tlv_tagLength) : '0' . dechex($tlv_tagLength),
+                'tlv_lengthLength' => $tlv_lengthLength,
+                'tlv_valueLength' => $tlv_valueLength,
+                'newhexdump' => $newhexdump,
+                'typ' => $asn1_type,
+                'tlv_value' => $tlv_value,
+            ];
+            if ($remain == '') { // if remains string was empty & contents also empty, function return FALSE
+                $stop = true;
+            } else {
+                $hex = $remain;
+            }
+        }
+
+        return $result;
+    }
     // =====End ASN.1 Parser section=====
 
     // =====Begin ASN.1 Builder section=====
@@ -179,11 +242,11 @@ class asn1
         $len = strlen($str) / 2;
         $ret = dechex($len);
         if (strlen($ret) % 2 != 0) {
-            $ret = "0$ret";
+            $ret = "0{$ret}";
         }
         $headerLength = strlen($ret) / 2;
         if ($len > 127) {
-            $ret = "8" . $headerLength . $ret;
+            $ret = '8' . $headerLength . $ret;
         }
 
         return $ret;
@@ -214,73 +277,10 @@ class asn1
         ];
         if (array_key_exists($name, $functionList)) {
             return $functionList[$name];
-        } else {
-            // echo "func \"$name\" not available";
-            return false;
         }
-    }
+        // echo "func \"$name\" not available";
+        return false;
 
-    public static function __callStatic($func, $params)
-    {
-        $func = strtolower((string) $func);
-        $asn1Tag = self::asn1Tag($func);
-        if ($asn1Tag !== false) {
-            $num = $asn1Tag; //valu of array
-            $hex = $params[0];
-            $val = $hex;
-            if (in_array($func, ['printable', 'utf8', 'ia5', 'visible', 't61'])) { // ($string)
-                $val = bin2hex((string) $hex);
-            }
-            if ($func == 'int') {
-                $val = (strlen((string) $val) % 2 != 0) ? "0$val" : "$val";
-            }
-            if ($func == 'expl') { //expl($num, $hex)
-                $num = $num . $params[0];
-                $val = $params[1];
-            }
-            if ($func == 'impl') { //impl($num="0")
-                $val = (! $val) ? "00" : $val;
-                $val = (strlen((string) $val) % 2 != 0) ? "0$val" : $val;
-
-                return $num . $val;
-            }
-            if ($func == 'other') { //OTHER($id, $hex, $chr = false)
-                $id = $params[0];
-                $hex = $params[1];
-                $chr = @$params[2];
-                $str = $hex;
-                if ($chr != false) {
-                    $str = bin2hex((string) $hex);
-                }
-                $ret = "$id" . self::asn1_header($str) . $str;
-
-                return $ret;
-            }
-            if ($func == 'utime') {
-                $time = $params[0]; //yymmddhhiiss
-                $oldTz = date_default_timezone_get();
-                date_default_timezone_set("UTC");
-                $time = date("ymdHis", $time);
-                date_default_timezone_set($oldTz);
-                $val = bin2hex($time . "Z");
-            }
-            if ($func == 'gtime') {
-                if (! $time = strtotime((string) $params[0])) {
-                    // echo "asn1::GTIME function strtotime cant recognize time!! please check at input=\"{$params[0]}\"";
-                    return false;
-                }
-                $oldTz = date_default_timezone_get();
-                // date_default_timezone_set("UTC");
-                $time = date("YmdHis", $time);
-                date_default_timezone_set($oldTz);
-                $val = bin2hex($time . "Z");
-            }
-            $hdr = self::asn1_header($val);
-
-            return $num . $hdr . $val;
-        } else {
-            // echo "asn1 \"$func\" not exists!";
-        }
     }
     // =====End ASN.1 Builder section=====
 }

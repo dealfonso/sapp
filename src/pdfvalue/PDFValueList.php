@@ -58,8 +58,8 @@ class PDFValueList extends PDFValue
         if ($list === true) {
             $result = [];
             foreach ($this->value as $v) {
-                if (is_a($v, "ddn\\sapp\\pdfvalue\\PDFValueSimple")) {
-                    $v = explode(" ", (string) $v->val());
+                if (is_a($v, 'ddn\\sapp\\pdfvalue\\PDFValueSimple')) {
+                    $v = explode(' ', (string) $v->val());
                 } else {
                     $v = [$v->val()];
                 }
@@ -67,9 +67,9 @@ class PDFValueList extends PDFValue
             }
 
             return $result;
-        } else {
-            return parent::val();
         }
+        return parent::val();
+
     }
 
     /**
@@ -79,9 +79,9 @@ class PDFValueList extends PDFValue
     {
         $ids = [];
         $plain_text_val = implode(' ', $this->value);
-        if (trim($plain_text_val) !== "") {
+        if (trim($plain_text_val) !== '') {
             if (preg_match_all('/(([0-9]+)\s+[0-9]+\s+R)[^0-9]*/ms', $plain_text_val, $matches) > 0) {
-                $rebuilt = implode(" ", $matches[0]);
+                $rebuilt = implode(' ', $matches[0]);
                 $rebuilt = preg_replace('/\s+/ms', ' ', $rebuilt);
                 $plain_text_val = preg_replace('/\s+/ms', ' ', $plain_text_val);
                 if ($plain_text_val === $rebuilt) {

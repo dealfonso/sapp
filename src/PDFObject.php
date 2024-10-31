@@ -24,16 +24,16 @@ namespace ddn\sapp;
 use ArrayAccess;
 use ddn\sapp\helpers\Buffer;
 use ddn\sapp\helpers\LoadHelpers;
-use function ddn\sapp\helpers\p_error;
-use function ddn\sapp\helpers\p_warning;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ReturnTypeWillChange;
 use Stringable;
+use function ddn\sapp\helpers\p_error;
+use function ddn\sapp\helpers\p_warning;
 
 // Loading the functions
 
-if (! defined("ddn\\sapp\\helpers\\LoadHelpers")) {
+if (! defined('ddn\\sapp\\helpers\\LoadHelpers')) {
     new LoadHelpers();
 }
 
@@ -59,12 +59,12 @@ class PDFObject implements ArrayAccess, Stringable
     protected $_generation;
 
     public function __construct(
-        protected $_oid,
+        protected int $_oid,
         $value = null,
-        $generation = 0,
+        int $generation = 0,
     ) {
         if ($generation !== 0) {
-            p_warning("Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/");
+            p_warning('Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/');
         }
 
         // If the value is null, we suppose that we are creating an empty object
@@ -84,6 +84,19 @@ class PDFObject implements ArrayAccess, Stringable
         $this->_generation = $generation;
     }
 
+    public function __toString(): string
+    {
+        return "{$this->_oid} 0 obj\n" .
+            "{$this->_value}\n" .
+            (
+                $this->_stream === null ? '' :
+                "stream\n" .
+                '...' .
+                "\nendstream\n"
+            ) .
+            "endobj\n";
+    }
+
     public function get_keys()
     {
         return $this->_value->get_keys();
@@ -99,19 +112,6 @@ class PDFObject implements ArrayAccess, Stringable
         return $this->_generation;
     }
 
-    public function __toString(): string
-    {
-        return "$this->_oid 0 obj\n" .
-            "$this->_value\n" .
-            (
-                $this->_stream === null ? "" :
-                "stream\n" .
-                '...' .
-                "\nendstream\n"
-            ) .
-            "endobj\n";
-    }
-
     /**
      * Converts the object to a well-formed PDF entry with a form like
      *  1 0 obj
@@ -125,15 +125,15 @@ class PDFObject implements ArrayAccess, Stringable
      */
     public function to_pdf_entry(): string
     {
-        return "$this->_oid 0 obj" . __EOL .
-            "$this->_value" . __EOL .
+        return "{$this->_oid} 0 obj" . __EOL .
+            "{$this->_value}" . __EOL .
             (
-                $this->_stream === null ? "" :
+                $this->_stream === null ? '' :
                 "stream\r\n" .
                 $this->_stream .
-                __EOL . "endstream" . __EOL
+                __EOL . 'endstream' . __EOL
             ) .
-            "endobj" . __EOL;
+            'endobj' . __EOL;
     }
 
     /**
@@ -141,7 +141,7 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @return oid the object id
      */
-    public function get_oid()
+    public function get_oid(): int
     {
         return $this->_oid;
     }
@@ -154,84 +154,6 @@ class PDFObject implements ArrayAccess, Stringable
     public function get_value()
     {
         return $this->_value;
-    }
-
-    protected static function FlateDecode($_stream, array $params)
-    {
-        switch ($params["Predictor"]->get_int()) {
-            case 1:
-                return $_stream;
-            case 10:
-            case 11:
-            case 12:
-            case 13:
-            case 14:
-            case 15:
-                break;
-            default:
-                return p_error("other predictor than PNG is not supported in this version");
-        }
-
-        switch ($params["Colors"]->get_int()) {
-            case 1:
-                break;
-            default:
-                return p_error("other color count than 1 is not supported in this version");
-        }
-
-        switch ($params["BitsPerComponent"]->get_int()) {
-            case 8:
-                break;
-            default:
-                return p_error("other bit count than 8 is not supported in this version");
-        }
-
-        $decoded = new Buffer();
-        $columns = $params['Columns']->get_int();
-
-        $row_len = $columns + 1;
-        $stream_len = strlen((string) $_stream);
-
-        // The previous row is zero
-        $data_prev = str_pad("", $columns, chr(0));
-        $row_i = 0;
-        $pos_i = 0;
-        $data = str_pad("", $columns, chr(0));
-        while ($pos_i < $stream_len) {
-            $filter_byte = ord($_stream[$pos_i++]);
-
-            // Get the current row
-            $data = substr((string) $_stream, $pos_i, $columns);
-            $pos_i += strlen($data);
-
-            // Zero pad, in case that the content is not paired
-            $data = str_pad($data, $columns, chr(0));
-
-            // Depending on the filter byte of the row, we should unpack on one way or another
-            switch ($filter_byte) {
-                case 0:
-                    break;
-                case 1:
-                    for ($i = 1; $i < $columns; $i++) {
-                        $data[$i] = ($data[$i] + $data[$i - 1]) % 256;
-                    }
-                    break;
-                case 2:
-                    for ($i = 0; $i < $columns; $i++) {
-                        $data[$i] = chr((ord($data[$i]) + ord($data_prev[$i])) % 256);
-                    }
-                    break;
-                default:
-                    return p_error("Unsupported stream");
-            }
-
-            // Store and prepare the previous row
-            $decoded->data($data);
-            $data_prev = $data;
-        }
-
-        // p_debug_var($decoded->show_bytes($columns));
-        return $decoded->get_raw();
     }
 
     /**
@@ -249,10 +171,10 @@ class PDFObject implements ArrayAccess, Stringable
                 case '/FlateDecode':
                     $DecodeParams = $this->_value['DecodeParms'] ?? [];
                     $params = [
-                        "Columns" => $DecodeParams['Columns'] ?? new PDFValueSimple(0),
-                        "Predictor" => $DecodeParams['Predictor'] ?? new PDFValueSimple(1),
-                        "BitsPerComponent" => $DecodeParams['BitsPerComponent'] ?? new PDFValueSimple(8),
-                        "Colors" => $DecodeParams['Colors'] ?? new PDFValueSimple(1),
+                        'Columns' => $DecodeParams['Columns'] ?? new PDFValueSimple(0),
+                        'Predictor' => $DecodeParams['Predictor'] ?? new PDFValueSimple(1),
+                        'BitsPerComponent' => $DecodeParams['BitsPerComponent'] ?? new PDFValueSimple(8),
+                        'Colors' => $DecodeParams['Colors'] ?? new PDFValueSimple(1),
                     ];
 
                     return self::FlateDecode(gzuncompress($this->_stream), $params);
@@ -348,5 +270,83 @@ class PDFObject implements ArrayAccess, Stringable
     public function push($v)
     {
         return $this->_value->push($v);
+    }
+
+    protected static function FlateDecode($_stream, array $params)
+    {
+        switch ($params['Predictor']->get_int()) {
+            case 1:
+                return $_stream;
+            case 10:
+            case 11:
+            case 12:
+            case 13:
+            case 14:
+            case 15:
+                break;
+            default:
+                return p_error('other predictor than PNG is not supported in this version');
+        }
+
+        switch ($params['Colors']->get_int()) {
+            case 1:
+                break;
+            default:
+                return p_error('other color count than 1 is not supported in this version');
+        }
+
+        switch ($params['BitsPerComponent']->get_int()) {
+            case 8:
+                break;
+            default:
+                return p_error('other bit count than 8 is not supported in this version');
+        }
+
+        $decoded = new Buffer();
+        $columns = $params['Columns']->get_int();
+
+        $row_len = $columns + 1;
+        $stream_len = strlen((string) $_stream);
+
+        // The previous row is zero
+        $data_prev = str_pad('', $columns, chr(0));
+        $row_i = 0;
+        $pos_i = 0;
+        $data = str_pad('', $columns, chr(0));
+        while ($pos_i < $stream_len) {
+            $filter_byte = ord($_stream[$pos_i++]);
+
+            // Get the current row
+            $data = substr((string) $_stream, $pos_i, $columns);
+            $pos_i += strlen($data);
+
+            // Zero pad, in case that the content is not paired
+            $data = str_pad($data, $columns, chr(0));
+
+            // Depending on the filter byte of the row, we should unpack on one way or another
+            switch ($filter_byte) {
+                case 0:
+                    break;
+                case 1:
+                    for ($i = 1; $i < $columns; $i++) {
+                        $data[$i] = ($data[$i] + $data[$i - 1]) % 256;
+                    }
+                    break;
+                case 2:
+                    for ($i = 0; $i < $columns; $i++) {
+                        $data[$i] = chr((ord($data[$i]) + ord($data_prev[$i])) % 256);
+                    }
+                    break;
+                default:
+                    return p_error('Unsupported stream');
+            }
+
+            // Store and prepare the previous row
+            $decoded->data($data);
+            $data_prev = $data;
+        }
+
+        // p_debug_var($decoded->show_bytes($columns));
+        return $decoded->get_raw();
     }
 }

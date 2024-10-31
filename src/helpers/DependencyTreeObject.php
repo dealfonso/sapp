@@ -31,25 +31,30 @@ class DependencyTreeObject implements Stringable
 {
     private int $is_child;
 
-    function __construct(
+    public function __construct(
         private int $oid,
         private mixed $info = null,
     ) {
         $this->is_child = 0;
     }
 
+    public function __toString(): string
+    {
+        return (string) $this->_getstr(null, isset($this->children) ? count($this->children) : 0);
+    }
+
     /**
      * Function that links one object to its parent (i.e. adds the object to the list of children of this object)
      *  - the function increases the amount of times that one object has been added to a parent object, to detect problems in building the tree
      */
-    function addchild($oid, $o): void
+    public function addchild($oid, $o): void
     {
         if (! isset($this->children)) {
             $this->children = [];
         }
         $this->children[$oid] = $o;
         if ($o->is_child != 0) {
-            p_warning("object $o->oid is already a child of other object");
+            p_warning("object {$o->oid} is already a child of other object");
         }
 
         $o->is_child = $o->is_child + 1;
@@ -58,7 +63,7 @@ class DependencyTreeObject implements Stringable
     /**
      * This is an iterator for the children of this object
      */
-    function children(): Generator
+    public function children(): Generator
     {
         if (isset($this->children)) {
             foreach ($this->children as $oid => $object) {
@@ -70,17 +75,17 @@ class DependencyTreeObject implements Stringable
     /**
      * Gets a string that represents the object, prepending a number of spaces, proportional to the depth in the tree
      */
-    protected function _getstr(?string $spaces = "", $mychcount = 0): string
+    protected function _getstr(?string $spaces = '', $mychcount = 0): string
     {
         // $info = $this->oid . ($this->info?" ($this->info)":"") . (($this->is_child > 1)?" $this->is_child":"");
-        $info = $this->oid . ($this->info ? " ($this->info)" : "");
+        $info = $this->oid . ($this->info ? " ({$this->info})" : '');
         if ($spaces === null) {
-            $lines = ["{$spaces}  " . json_decode('"\u2501"') . " $info"];
+            $lines = ["{$spaces}  " . json_decode('"\u2501"') . " {$info}"];
         } else {
             if ($mychcount == 0) {
-                $lines = ["{$spaces}  " . json_decode('"\u2514\u2500"') . " $info"];
+                $lines = ["{$spaces}  " . json_decode('"\u2514\u2500"') . " {$info}"];
             } else {
-                $lines = ["{$spaces}  " . json_decode('"\u251c\u2500"') . " $info"];
+                $lines = ["{$spaces}  " . json_decode('"\u251c\u2500"') . " {$info}"];
             }
         }
         if (isset($this->children)) {
@@ -88,9 +93,9 @@ class DependencyTreeObject implements Stringable
             foreach ($this->children as $oid => $child) {
                 $chcount--;
                 if (($spaces === null) || ($mychcount == 0)) {
-                    array_push($lines, $child->_getstr($spaces . "   ", $chcount));
+                    array_push($lines, $child->_getstr($spaces . '   ', $chcount));
                 } else {
-                    array_push($lines, $child->_getstr($spaces . "  " . json_decode('"\u2502"'), $chcount));
+                    array_push($lines, $child->_getstr($spaces . '  ' . json_decode('"\u2502"'), $chcount));
                 }
             }
         }
@@ -100,8 +105,8 @@ class DependencyTreeObject implements Stringable
 
     protected function _old_getstr($depth = 0): string
     {
-        $spaces = str_repeat("   " . json_decode('"\u2502"'), $depth);
-        $lines = ["{$spaces}   " . json_decode('"\u251c\u2500"') . " " . $this->oid . ($this->info ? " ($this->info)" : "") . (($this->is_child > 1) ? " $this->is_child" : "")];
+        $spaces = str_repeat('   ' . json_decode('"\u2502"'), $depth);
+        $lines = ["{$spaces}   " . json_decode('"\u251c\u2500"') . ' ' . $this->oid . ($this->info ? " ({$this->info})" : '') . (($this->is_child > 1) ? " {$this->is_child}" : '')];
         if (isset($this->children)) {
             foreach ($this->children as $oid => $child) {
                 array_push($lines, $child->_getstr($depth + 1));
@@ -109,11 +114,6 @@ class DependencyTreeObject implements Stringable
         }
 
         return implode("\n", $lines);
-    }
-
-    public function __toString(): string
-    {
-        return (string) $this->_getstr(null, isset($this->children) ? count($this->children) : 0);
     }
 }
 
@@ -124,9 +124,9 @@ class DependencyTreeObject implements Stringable
  */
 const BLACKLIST = [
     // Field "Parent" for any type of object
-    "*" => ["Parent"],
+    '*' => ['Parent'],
     // Field "P" for nodes of type "Annot"
-    "Annot" => ["P"],
+    'Annot' => ['P'],
 ];
 
 /**
@@ -134,11 +134,11 @@ const BLACKLIST = [
  */
 function references_in_object(array $object, $oid = false): array
 {
-    $type = $object["Type"];
+    $type = $object['Type'];
     if ($type !== false) {
         $type = $type->val();
     } else {
-        $type = "";
+        $type = '';
     }
 
     $references = [];
@@ -147,7 +147,7 @@ function references_in_object(array $object, $oid = false): array
         $valid = true;
 
         // We'll skip those blacklisted fields
-        if (in_array($key, BLACKLIST["*"])) {
+        if (in_array($key, BLACKLIST['*'])) {
             continue;
         }
 
@@ -158,7 +158,7 @@ function references_in_object(array $object, $oid = false): array
         }
 
         $r_objects = [];
-        if (is_a($object[$key], "ddn\\sapp\\pdfvalue\\PDFValueObject")) {
+        if (is_a($object[$key], 'ddn\\sapp\\pdfvalue\\PDFValueObject')) {
             $r_objects = references_in_object($object[$key]);
         } else {
             // Function get_object_referenced checks whether the value (or values in a list) have the form of object references, and if they have the form

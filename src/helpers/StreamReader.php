@@ -32,7 +32,7 @@ namespace ddn\sapp\helpers;
  */
 class StreamReader
 {
-    protected $_buffer = "";
+    protected $_buffer = '';
 
     protected int $_bufferlen;
 
@@ -41,7 +41,7 @@ class StreamReader
     public function __construct($string = null, $offset = 0)
     {
         if ($string === null) {
-            $string = "";
+            $string = '';
         }
 
         $this->_buffer = $string;
@@ -122,9 +122,9 @@ class StreamReader
     {
         if ($length > 0) {
             return substr((string) $this->_buffer, $this->_pos, $length);
-        } else {
-            return substr((string) $this->_buffer, $this->_pos);
         }
+        return substr((string) $this->_buffer, $this->_pos);
+
     }
 
     /**

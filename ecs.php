@@ -16,6 +16,8 @@ return ECSConfig::configure()
     ])
     ->withPreparedSets(
         arrays: true,
+        controlStructures: true,
+        psr12: true,
         comments: true,
 //        docblocks: true,
         spaces: true,

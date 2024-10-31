@@ -21,9 +21,9 @@
 
 namespace ddn\sapp;
 
-use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ddn\sapp\pdfvalue\PDFValueString;
+use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
 // This is an special object that has a set of fields
 class PDFSignatureObject extends PDFObject
@@ -46,6 +46,25 @@ class PDFSignatureObject extends PDFObject
     protected $_signature_ltv_data = null;
 
     protected $_signature_tsa = null;
+
+    /**
+     * Constructs the object and sets the default values needed to sign
+     *
+     * @param oid the oid for the object
+     */
+    public function __construct(int $oid)
+    {
+        $this->_prev_content_size = 0;
+        $this->_post_content_size = null;
+        parent::__construct($oid, [
+            'Filter' => '/Adobe.PPKLite',
+            'Type' => '/Sig',
+            'SubFilter' => '/adbe.pkcs7.detached',
+            'ByteRange' => new PDFValueSimple(str_repeat(' ', self::$__BYTERANGE_SIZE)),
+            'Contents' => '<' . str_repeat('0', self::$__SIGNATURE_MAX_LENGTH) . '>',
+            'M' => new PDFValueString(timestamp_to_pdfdatestring()),
+        ]);
+    }
 
     /**
      * Sets the certificate to use to sign
@@ -89,25 +108,6 @@ class PDFSignatureObject extends PDFObject
     }
 
     /**
-     * Constructs the object and sets the default values needed to sign
-     *
-     * @param oid the oid for the object
-     */
-    public function __construct($oid)
-    {
-        $this->_prev_content_size = 0;
-        $this->_post_content_size = null;
-        parent::__construct($oid, [
-            'Filter' => "/Adobe.PPKLite",
-            'Type' => "/Sig",
-            'SubFilter' => "/adbe.pkcs7.detached",
-            'ByteRange' => new PDFValueSimple(str_repeat(" ", self::$__BYTERANGE_SIZE)),
-            'Contents' => "<" . str_repeat("0", self::$__SIGNATURE_MAX_LENGTH) . ">",
-            'M' => new PDFValueString(timestamp_to_pdfdatestring()),
-        ]);
-    }
-
-    /**
      * Function used to add some metadata fields to the signature: name, reason of signature, etc.
      *
      * @param name the name of the signer
@@ -118,16 +118,16 @@ class PDFSignatureObject extends PDFObject
     public function set_metadata($name = null, $reason = null, $location = null, $contact = null): void
     {
         if ($name !== null) {
-            $this->_value["Name"] = new PDFValueString($name);
+            $this->_value['Name'] = new PDFValueString($name);
         }
         if ($reason !== null) {
-            $this->_value["Reason"] = new PDFValueString($reason);
+            $this->_value['Reason'] = new PDFValueString($reason);
         }
         if ($location !== null) {
-            $this->_value["Location"] = new PDFValueString($location);
+            $this->_value['Location'] = new PDFValueString($location);
         }
         if ($contact !== null) {
-            $this->_value["ContactInfo"] = new PDFValueString($contact);
+            $this->_value['ContactInfo'] = new PDFValueString($contact);
         }
     }
 
@@ -151,7 +151,7 @@ class PDFSignatureObject extends PDFObject
     public function get_signature_marker_offset(): int
     {
         $tmp_output = parent::to_pdf_entry();
-        $marker = "/Contents";
+        $marker = '/Contents';
         $position = strpos($tmp_output, $marker);
 
         return $position + strlen($marker);
@@ -169,16 +169,16 @@ class PDFSignatureObject extends PDFObject
         $offset = $this->get_signature_marker_offset();
         $starting_second_part = $this->_prev_content_size + $offset + self::$__SIGNATURE_MAX_LENGTH + 2;
 
-        $contents_size = strlen("" . $this->_value['Contents']);
+        $contents_size = strlen('' . $this->_value['Contents']);
 
-        $byterange_str = "[ 0 " .
-            ($this->_prev_content_size + $offset) . " " .
-            ($starting_second_part) . " " .
-            ($this->_post_content_size !== null ? $this->_post_content_size + ($signature_size - $contents_size - $offset) : 0) . " ]";
+        $byterange_str = '[ 0 ' .
+            ($this->_prev_content_size + $offset) . ' ' .
+            ($starting_second_part) . ' ' .
+            ($this->_post_content_size !== null ? $this->_post_content_size + ($signature_size - $contents_size - $offset) : 0) . ' ]';
 
         $this->_value['ByteRange'] =
             new PDFValueSimple(
-                $byterange_str . str_repeat(" ", self::$__BYTERANGE_SIZE - strlen($byterange_str) + 1)
+                $byterange_str . str_repeat(' ', self::$__BYTERANGE_SIZE - strlen($byterange_str) + 1)
             );
 
         return parent::to_pdf_entry();

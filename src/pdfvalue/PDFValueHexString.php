@@ -25,6 +25,6 @@ class PDFValueHexString extends PDFValueString
 {
     public function __toString(): string
     {
-        return "<" . trim((string) $this->value) . ">";
+        return '<' . trim((string) $this->value) . '>';
     }
 }

@@ -29,24 +29,24 @@ use finfo;
 
 function tx($x, $y): string
 {
-    return sprintf(" 1 0 0 1 %.2F %.2F cm", $x, $y);
+    return sprintf(' 1 0 0 1 %.2F %.2F cm', $x, $y);
 }
 
 function sx($w, $h): string
 {
-    return sprintf(" %.2F 0 0 %.2F 0 0 cm", $w, $h);
+    return sprintf(' %.2F 0 0 %.2F 0 0 cm', $w, $h);
 }
 
 function deg2rad($angle): float
 {
-    return $angle * pi() / 180;
+    return $angle * M_PI / 180;
 }
 
 function rx($angle): string
 {
     $angle = deg2rad($angle);
 
-    return sprintf(" %.2F %.2F %.2F %.2F 0 0 cm", cos($angle), sin($angle), -sin($angle), cos($angle));
+    return sprintf(' %.2F %.2F %.2F %.2F 0 0 cm', cos($angle), sin($angle), -sin($angle), cos($angle));
 }
 
 /**
@@ -89,7 +89,8 @@ function _create_image_objects($info, $object_factory): array
             array_push($objects, $streamobject);
             break;
         case 'DeviceCMYK':
-            $image["Decode"] = new PDFValueList([1, 0, 1, 0, 1, 0, 1, 0]);
+            $image['Decode'] = new PDFValueList([1, 0, 1, 0, 1, 0, 1, 0]);
+            // no break
         default:
             $image['ColorSpace'] = new PDFValueType($info['cs']);
             break;
@@ -141,7 +142,7 @@ function is_base64($string): bool
 
     // Decode the string in strict mode and check the results
     $decoded = base64_decode((string) $string, true);
-    if (false === $decoded) {
+    if ($decoded === false) {
         return false;
     }
 
@@ -188,7 +189,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
             $filecontent = @file_get_contents($filename);
 
             if ($filecontent === false) {
-                return p_error("failed to get the image");
+                return p_error('failed to get the image');
             }
         }
     }
@@ -210,11 +211,11 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
             $info = _parsepng($filecontent);
             break;
         default:
-            return p_error("unsupported mime type");
+            return p_error('unsupported mime type');
     }
 
     // Generate a new identifier for the image
-    $info['i'] = "Im" . get_random_string(4);
+    $info['i'] = 'Im' . get_random_string(4);
 
     if ($w === null) {
         $w = -96;
@@ -239,7 +240,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
     $images_objects = _create_image_objects($info, $object_factory);
 
     // Generate the command to translate and scale the image
-    $data = "q ";
+    $data = 'q ';
 
     if ($keep_proportions) {
         $angleRads = deg2rad($angle);
@@ -274,7 +275,7 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
     $data .= sx($w, $h);
     */
 
-    $data = "q";
+    $data = 'q';
     $data .= tx($x, $y);
     $data .= sx($w, $h);
     if ($angle != 0) {
@@ -282,17 +283,17 @@ function _add_image($object_factory, $filename, $x = 0, $y = 0, $w = 0, $h = 0, 
         $data .= rx($angle);
         $data .= tx(-0.5, -0.5);
     }
-    $data .= sprintf(" /%s Do Q", $info['i']);
+    $data .= sprintf(' /%s Do Q', $info['i']);
 
     $resources = new PDFValueObject([
         'ProcSet' => ['/PDF', '/Text', '/ImageB', '/ImageC', '/ImageI'],
-        'XObject' => new PDFValueObject ([
+        'XObject' => new PDFValueObject([
             $info['i'] => new PDFValueReference($images_objects[0]->get_oid()),
         ]),
     ]);
 
     return [
-        "image" => $images_objects[0],
+        'image' => $images_objects[0],
         'command' => $data,
         'resources' => $resources,
         'alpha' => $add_alpha,
