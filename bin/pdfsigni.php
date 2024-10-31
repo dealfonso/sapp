@@ -24,45 +24,37 @@ use ddn\sapp\AlmostOriginalLogger;
 use ddn\sapp\PDFDoc;
 use ddn\sapp\PDFException;
 
-require_once 'vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc !== 4) {
     fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));
     exit(1);
 }
+
 if (!file_exists($argv[1])) {
     fwrite(STDERR, "failed to open file " . $argv[1]);
     exit(1);
 }
 
 // Silently prompt for the password
-//fwrite(STDERR, "Password: ");
-//system('stty -echo');
-//$password = trim(fgets(STDIN));
-//system('stty echo');
-//fwrite(STDERR, "\n");
-
-$password='';
+fwrite(STDERR, "Password: ");
+system('stty -echo');
+$password = trim(fgets(STDIN));
+system('stty echo');
+fwrite(STDERR, "\n");
 
 $file_content = file_get_contents($argv[1]);
 $obj = PDFDoc::from_string($file_content);
 $obj->setLogger(new AlmostOriginalLogger());
 
-if ($obj === false) {
-    fwrite(STDERR, "failed to parse file " . $argv[1]);
-
-    exit(1);
-}
-
 $position = [];
 $image = $argv[2];
-$imagesize = @getimagesize($image);
+$imagesize = getimagesize($image);
 if ($imagesize === false) {
-    fwrite(STDERR, "failed to open the image $image");
+    fwrite(STDERR, 'failed to open the image ' . $image);
 
     exit(1);
 }
-
 
 $pagesize = $obj->get_page_size(0);
 if ($pagesize === false) {
@@ -77,8 +69,7 @@ $p_x = (int)("" . $pagesize[0]);
 $p_y = (int)("" . $pagesize[1]);
 $p_w = (int)("" . $pagesize[2]) - $p_x;
 $p_h = (int)("" . $pagesize[3]) - $p_y;
-$i_w = $imagesize[0];
-$i_h = $imagesize[1];
+[$i_w, $i_h] = $imagesize;
 
 $ratio_x = $p_w / $i_w;
 $ratio_y = $p_h / $i_h;
@@ -94,7 +85,7 @@ if (!$obj->set_signature_certificate($argv[3], $password)) {
     fwrite(STDERR, "the certificate is not valid");
 } else {
     $docsigned = $obj->to_pdf_file_s();
-    if ($docsigned === false) {
+    if ($docsigned == false) {
         fwrite(STDERR, "could not sign the document");
     } else {
         echo $docsigned;

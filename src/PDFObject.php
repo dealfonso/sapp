@@ -158,9 +158,9 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @return stream a string that contains the stream of the object
      */
-    public function get_stream($raw = true)
+    public function get_stream(bool $raw = true): Buffer|false
     {
-        if ($raw === true) {
+        if ($raw) {
             return $this->_stream;
         }
 
@@ -189,9 +189,9 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @param stream the stream for the object
      */
-    public function set_stream($stream, $raw = true): void
+    public function set_stream($stream, bool $raw = true): void
     {
-        if ($raw === true) {
+        if ($raw) {
             $this->_stream = $stream;
 
             return;
@@ -219,7 +219,7 @@ class PDFObject implements ArrayAccess, Stringable
      * @param field the field to set the value
      * @param value the value to set
      */
-    public function offsetSet($offset, $value): void
+    public function offsetSet(mixed $offset, mixed $value): void
     {
         $this->_value[$offset] = $value;
     }
@@ -232,7 +232,7 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @return exists true if the field exists; false otherwise
      */
-    public function offsetExists($offset): bool
+    public function offsetExists(mixed $offset): bool
     {
         return $this->_value->offsetExists($offset);
     }
@@ -245,7 +245,7 @@ class PDFObject implements ArrayAccess, Stringable
      * @return value the value of the field
      */
     #[ReturnTypeWillChange]
-    public function offsetGet($offset)
+    public function offsetGet(mixed $offset)
     {
         return $this->_value[$offset];
     }
@@ -255,17 +255,17 @@ class PDFObject implements ArrayAccess, Stringable
      *
      * @param field the field to unset the value
      */
-    public function offsetUnset($offset): void
+    public function offsetUnset(mixed $offset): void
     {
         $this->_value->offsetUnset($offset);
     }
 
-    public function push($v)
+    public function push(mixed $v): bool
     {
         return $this->_value->push($v);
     }
 
-    protected static function FlateDecode($_stream, array $params)
+    protected static function FlateDecode($_stream, array $params): Buffer|string|null
     {
         switch ($params['Predictor']->get_int()) {
             case 1:

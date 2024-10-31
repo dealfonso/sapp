@@ -35,7 +35,7 @@ if (! defined('__CONVENIENT_MAX_BUFFER_DUMP')) {
  */
 class Buffer implements Stringable
 {
-    protected $_buffer = '';
+    protected ?string $_buffer;
 
     protected int $_bufferlen;
 
@@ -46,7 +46,7 @@ class Buffer implements Stringable
         }
 
         $this->_buffer = $string;
-        $this->_bufferlen = strlen((string) $string);
+        $this->_bufferlen = strlen($string);
     }
 
     /**
@@ -98,7 +98,7 @@ class Buffer implements Stringable
      *
      * @return buffer the raw data
      */
-    public function get_raw()
+    public function get_raw(): ?string
     {
         return $this->_buffer;
     }

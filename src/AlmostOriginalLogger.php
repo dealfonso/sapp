@@ -3,10 +3,11 @@
 namespace ddn\sapp;
 
 use Psr\Log\AbstractLogger;
+use Stringable;
 
 class AlmostOriginalLogger extends AbstractLogger
 {
-    public function log($level, string|\Stringable $message, array $context = []): void
+    public function log($level, string|Stringable $message, array $context = []): void
     {
         $dinfo = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT);
         $dinfo = $dinfo[1];

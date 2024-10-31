@@ -22,34 +22,35 @@
 use ddn\sapp\AlmostOriginalLogger;
 use ddn\sapp\PDFDoc;
 
-require_once 'vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc !== 3) {
     fwrite(STDERR, sprintf("usage: %s <filename> <certfile>", $argv[0]));
+    exit(1);
+}
+
+if (!file_exists($argv[1])) {
+    fwrite(STDERR, "failed to open file " . $argv[1]);
 } else {
-    if (!file_exists($argv[1])) {
-        fwrite(STDERR, "failed to open file " . $argv[1]);
+    // Silently prompt for the password
+    fwrite(STDERR, "Password: ");
+    system('stty -echo');
+    $password = trim(fgets(STDIN));
+    system('stty echo');
+    fwrite(STDERR, "\n");
+
+    $file_content = file_get_contents($argv[1]);
+    $obj = PDFDoc::from_string($file_content);
+    $obj->setLogger(new AlmostOriginalLogger());
+
+    if (!$obj->set_signature_certificate($argv[2], $password)) {
+        fwrite(STDERR, "the certificate is not valid");
     } else {
-        // Silently prompt for the password
-        fwrite(STDERR, "Password: ");
-        system('stty -echo');
-        $password = trim(fgets(STDIN));
-        system('stty echo');
-        fwrite(STDERR, "\n");
-
-        $file_content = file_get_contents($argv[1]);
-        $obj = PDFDoc::from_string($file_content);
-        $obj->setLogger(new AlmostOriginalLogger());
-
-        if (!$obj->set_signature_certificate($argv[2], $password)) {
-            fwrite(STDERR, "the certificate is not valid");
+        $docsigned = $obj->to_pdf_file_s();
+        if ($docsigned === false) {
+            fwrite(STDERR, "could not sign the document");
         } else {
-            $docsigned = $obj->to_pdf_file_s();
-            if ($docsigned === false) {
-                fwrite(STDERR, "could not sign the document");
-            } else {
-                echo $docsigned;
-            }
+            echo $docsigned;
         }
     }
 }

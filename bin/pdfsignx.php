@@ -23,35 +23,37 @@
 use ddn\sapp\AlmostOriginalLogger;
 use ddn\sapp\PDFDoc;
 
-require_once 'vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc !== 4) {
     fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));
+    exit(1);
+}
+
+if (!file_exists($argv[1])) {
+    fwrite(STDERR, "failed to open file " . $argv[1]);
+    exit(1);
+}
+
+// Silently prompt for the password
+fwrite(STDERR, "Password: ");
+system('stty -echo');
+$password = trim(fgets(STDIN));
+system('stty echo');
+fwrite(STDERR, "\n");
+
+$file_content = file_get_contents($argv[1]);
+$obj = PDFDoc::from_string($file_content);
+$obj->setLogger(new AlmostOriginalLogger());
+
+$signedDoc = $obj->sign_document($argv[3], $password, 0, $argv[2]);
+if ($signedDoc === false) {
+    fwrite(STDERR, "failed to sign the document");
 } else {
-    if (!file_exists($argv[1])) {
-        fwrite(STDERR, "failed to open file " . $argv[1]);
+    $docsigned = $signedDoc->to_pdf_file_s();
+    if ($docsigned == false) {
+        fwrite(STDERR, "could not sign the document");
     } else {
-        // Silently prompt for the password
-        fwrite(STDERR, "Password: ");
-        system('stty -echo');
-        $password = trim(fgets(STDIN));
-        system('stty echo');
-        fwrite(STDERR, "\n");
-
-        $file_content = file_get_contents($argv[1]);
-        $obj = PDFDoc::from_string($file_content);
-        $obj->setLogger(new AlmostOriginalLogger());
-
-        $signedDoc = $obj->sign_document($argv[3], $password, 0, $argv[2]);
-        if ($signedDoc === false) {
-            fwrite(STDERR, "failed to sign the document");
-        } else {
-            $docsigned = $signedDoc->to_pdf_file_s();
-            if ($docsigned === false) {
-                fwrite(STDERR, "could not sign the document");
-            } else {
-                echo $docsigned;
-            }
-        }
+        echo $docsigned;
     }
 }

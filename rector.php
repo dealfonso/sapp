@@ -12,6 +12,7 @@ use Rector\DeadCode\Rector\Switch_\RemoveDuplicatedCaseInSwitchRector;
 return RectorConfig::configure()
     ->withPaths([
         __DIR__ . '/src',
+        __DIR__ . '/bin',
     ])
     // uncomment to reach your current PHP version
     ->withPhpSets(php80: true)

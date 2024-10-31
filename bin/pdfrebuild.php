@@ -21,23 +21,23 @@
 
 use ddn\sapp\AlmostOriginalLogger;
 use ddn\sapp\PDFDoc;
-use Psr\Log\AbstractLogger;
 
-require_once 'vendor/autoload.php';
+require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc < 2 || $argc > 3) {
     fwrite(STDERR, sprintf("usage: %s <filename> [<output>]", $argv[0]));
-} else {
-    if (!file_exists($argv[1])) {
-        fwrite(STDERR, "failed to open file " . $argv[1]);
-    } else {
-        $obj = PDFDoc::from_string(file_get_contents($argv[1]));
-        $obj->setLogger(new AlmostOriginalLogger());
+    exit(1);
+}
 
-        if ($argc == 3) {
-            file_put_contents($argv[2], $obj->to_pdf_file_s(true));
-        } else {
-            echo $obj->to_pdf_file_s(true);
-        }
+if (!file_exists($argv[1])) {
+    fwrite(STDERR, "failed to open file " . $argv[1]);
+} else {
+    $obj = PDFDoc::from_string(file_get_contents($argv[1]));
+    $obj->setLogger(new AlmostOriginalLogger());
+
+    if ($argc === 3) {
+        file_put_contents($argv[2], $obj->to_pdf_file_s(true));
+    } else {
+        echo $obj->to_pdf_file_s(true);
     }
 }

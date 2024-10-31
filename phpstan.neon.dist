@@ -2,6 +2,7 @@ parameters:
     level: 1
     paths:
         - src/
+        - bin/
     parallel:
         jobSize: 2
 
