@@ -26,7 +26,6 @@ use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueReference;
 use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\get_random_string;
-use function ddn\sapp\helpers\p_warning;
 
 class PDFDocWithContents extends PDFDoc
 {
@@ -63,7 +62,7 @@ class PDFDocWithContents extends PDFDoc
         // TODO: maybe we can create a function that "adds content to a page", and that
         //       function will search for the content field and merge the resources, if
         //       needed
-        p_warning('This function still needs work');
+        $this->logger?->warning('This function still needs work');
 
         $default = [
             'font' => 'Helvetica',
@@ -175,7 +174,7 @@ class PDFDocWithContents extends PDFDoc
         // TODO: maybe we can create a function that "adds content to a page", and that
         //       function will search for the content field and merge the resources, if
         //       needed
-        p_warning('This function still needs work');
+        $this->logger?->warning('This function still needs work');
 
         // Check that the page is valid
         if (is_int($page_obj)) {

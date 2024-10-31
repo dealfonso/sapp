@@ -29,7 +29,6 @@ class CMS
     /**
      * send tsa/ocsp query with curl
      *
-     *
      * @return string response body
      * @public
      */
@@ -92,7 +91,6 @@ class CMS
 
     /**
      * Perform PKCS7 Signing
-     *
      *
      * @return string hex + padding 0
      * @public
@@ -194,7 +192,7 @@ class CMS
                         )
                     );
                 } else {
-                    p_warning("  LTV Validation FAILED!\n");
+                    $this->logger?->warning("LTV Validation FAILED!\n");
                 }
             }
 
@@ -245,7 +243,7 @@ class CMS
                 );
                 $timeStamp = asn1::expl(1, $TimeStampToken);
             } else {
-                p_warning('  Timestamping FAILED!');
+                $this->logger?->warning('Timestamping FAILED!');
             }
         }
 
@@ -316,9 +314,6 @@ class CMS
      * Perform OCSP/CRL Validation
      *
      * @param array $parsedCert parsed certificate
-     * @param string $ocspURI
-     * @param string $crlURIorFILE
-     * @param string $issuerURIorFILE
      *
      * @return array
      */
@@ -332,18 +327,18 @@ class CMS
         $this->logger?->debug('      reading AIA OCSP attribute...');
         $ocspURI = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.1'][0];
         if (trim((string) $ocspURI) === '' || trim((string) $ocspURI) === '0') {
-            p_warning('        FAILED!');
+            $this->logger?->warning('FAILED!');
         } else {
-            $this->logger?->debug(sprintf('        OK got address:"%s"', $ocspURI));
+            $this->logger?->debug(sprintf('OK got address:"%s"', $ocspURI));
         }
 
         $ocspURI = trim((string) $ocspURI);
         $this->logger?->debug('      reading CRL CDP attribute...');
         $crlURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['2.5.29.31']['value'][0];
         if (trim($crlURIorFILE ?? '') === '' || trim($crlURIorFILE ?? '') === '0') {
-            p_warning('        FAILED!');
+            $this->logger?->warning('FAILED!');
         } else {
-            $this->logger?->debug(sprintf('        OK got address:"%s"', $crlURIorFILE));
+            $this->logger?->debug(sprintf('OK got address:"%s"', $crlURIorFILE));
         }
 
         if (($ocspURI === '' || $ocspURI === '0') && empty($crlURIorFILE)) {
@@ -356,29 +351,29 @@ class CMS
         $issuerURIorFILE = @$certSigner_parse['tbsCertificate']['attributes']['1.3.6.1.5.5.7.1.1']['value']['1.3.6.1.5.5.7.48.2'][0];
         $issuerURIorFILE = trim($issuerURIorFILE ?? '');
         if ($issuerURIorFILE === '' || $issuerURIorFILE === '0') {
-            $this->logger?->debug('        Failed!');
+            $this->logger?->debug('Failed!');
         } else {
-            $this->logger?->debug(sprintf('        OK got address "%s"...', $issuerURIorFILE));
+            $this->logger?->debug(sprintf('OK got address "%s"...', $issuerURIorFILE));
             $this->logger?->debug(sprintf('      load issuer from "%s"...', $issuerURIorFILE));
             if ($issuerCert = @file_get_contents($issuerURIorFILE)) {
-                $this->logger?->debug('        OK. size ' . round(strlen($issuerCert) / 1024, 2) . 'Kb');
+                $this->logger?->debug('OK. size ' . round(strlen($issuerCert) / 1024, 2) . 'Kb');
                 $this->logger?->debug('      reading issuer certificate...');
                 if ($issuer_certDER = x509::get_cert($issuerCert)) {
-                    $this->logger?->debug('        OK');
+                    $this->logger?->debug('OK');
                     $this->logger?->debug('      check if issuer is cert issuer...');
                     $certIssuer_parse = x509::readcert($issuer_certDER, 'oid'); // Parsing Issuer cert
                     $certSigner_signatureField = $certSigner_parse['signatureValue'];
                     if (openssl_public_decrypt(hex2bin((string) $certSigner_signatureField), $decrypted, x509::x509_der2pem($issuer_certDER), OPENSSL_PKCS1_PADDING)) {
-                        $this->logger?->debug('        OK issuer is cert issuer.');
+                        $this->logger?->debug('OK issuer is cert issuer.');
                         $ltvResult['issuer'] = $issuer_certDER;
                     } else {
-                        p_warning('        FAILED! issuer is not cert issuer.');
+                        $this->logger?->warning('FAILED! issuer is not cert issuer.');
                     }
                 } else {
-                    p_warning('        FAILED!');
+                    $this->logger?->warning('FAILED!');
                 }
             } else {
-                p_warning('        FAILED!.');
+                $this->logger?->warning('FAILED!.');
             }
         }
 
@@ -387,14 +382,14 @@ class CMS
             if (array_key_exists('extracerts', $this->signature_data) && $this->signature_data['extracerts'] !== null && count($this->signature_data['extracerts']) > 0) {
                 $i = 0;
                 foreach ($this->signature_data['extracerts'] as $extracert) {
-                    $this->logger?->debug(sprintf('        extracerts[%d] ...', $i));
+                    $this->logger?->debug(sprintf('extracerts[%d] ...', $i));
                     $certSigner_signatureField = $certSigner_parse['signatureValue'];
                     if (openssl_public_decrypt(hex2bin((string) $certSigner_signatureField), $decrypted, $extracert, OPENSSL_PKCS1_PADDING)) {
-                        $this->logger?->debug('          OK got issuer.');
+                        $this->logger?->debug('  OK got issuer.');
                         $certIssuer_parse = x509::readcert($extracert, 'oid'); // Parsing Issuer cert
                         $ltvResult['issuer'] = x509::get_cert($extracert);
                     } else {
-                        $this->logger?->debug('          FAIL!');
+                        $this->logger?->debug('  FAIL!');
                     }
 
                     $i++;
@@ -412,7 +407,7 @@ class CMS
                 $ocspReq_issuerKeyHash = $certIssuer_parse['tbsCertificate']['subjectPublicKeyInfo']['sha1'];
                 $this->logger?->debug('      OCSP create request...');
                 if ($ocspReq = x509::ocsp_request($ocspReq_serialNumber, $ocspReq_issuerNameHash, $ocspReq_issuerKeyHash)) {
-                    $this->logger?->debug('        OK.');
+                    $this->logger?->debug('OK.');
                     $ocspBinReq = pack('H*', $ocspReq);
                     $reqData = [
                         'data' => $ocspBinReq,
@@ -422,27 +417,27 @@ class CMS
                     ];
                     $this->logger?->debug(sprintf('      OCSP send request to "%s"...', $ocspURI));
                     if (($ocspResp = $this->sendReq($reqData)) !== '' && ($ocspResp = $this->sendReq($reqData)) !== '0') {
-                        $this->logger?->debug('        OK.');
+                        $this->logger?->debug('OK.');
                         $this->logger?->debug('      OCSP parsing response...');
                         if ($ocsp_parse = x509::ocsp_response_parse($ocspResp, $return)) {
-                            $this->logger?->debug('        OK.');
+                            $this->logger?->debug('OK.');
                             $this->logger?->debug('      OCSP check cert validity...');
                             $certStatus = $ocsp_parse['responseBytes']['response']['BasicOCSPResponse']['tbsResponseData']['responses'][0]['certStatus'];
                             if ($certStatus === 'valid') {
-                                $this->logger?->debug('        OK. VALID.');
+                                $this->logger?->debug('OK. VALID.');
                                 $ocspRespHex = $ocsp_parse['hexdump'];
                                 $ltvResult['ocsp'] = $ocspRespHex;
                             } else {
-                                p_warning('        FAILED! cert not valid, status:"' . strtoupper((string) $certStatus) . '"');
+                                $this->logger?->warning('FAILED! cert not valid, status:"' . strtoupper((string) $certStatus) . '"');
                             }
                         } else {
-                            p_warning(sprintf('        FAILED! Ocsp server status "%s"', $return));
+                            $this->logger?->warning(sprintf('FAILED! Ocsp server status "%s"', $return));
                         }
                     } else {
-                        p_warning('        FAILED!');
+                        $this->logger?->warning('FAILED!');
                     }
                 } else {
-                    p_warning('      FAILED!');
+                    $this->logger?->warning('      FAILED!');
                 }
             }
 
@@ -451,14 +446,14 @@ class CMS
                 $this->logger?->debug('    processing CRL validation since OCSP not done/failed...');
                 $this->logger?->debug(sprintf('      getting crl from "%s"...', $crlURIorFILE));
                 if ($crl = @file_get_contents($crlURIorFILE)) {
-                    $this->logger?->debug('        OK. size ' . round(strlen($crl) / 1024, 2) . 'Kb');
+                    $this->logger?->debug('OK. size ' . round(strlen($crl) / 1024, 2) . 'Kb');
                     $this->logger?->debug('      reading crl...');
                     if ($crlread = x509::crl_read($crl)) {
-                        $this->logger?->debug('        OK');
+                        $this->logger?->debug('OK');
                         $this->logger?->debug('      verify crl signature...');
                         $crl_signatureField = $crlread['parse']['signature'];
                         if (openssl_public_decrypt(hex2bin((string) $crl_signatureField), $decrypted, x509::x509_der2pem($ltvResult['issuer']), OPENSSL_PKCS1_PADDING)) {
-                            $this->logger?->debug('        OK');
+                            $this->logger?->debug('OK');
                             $this->logger?->debug('      check CRL validity...');
                             $crl_parse = $crlread['parse'];
                             $thisUpdate = str_pad((string) $crl_parse['TBSCertList']['thisUpdate'], 15, '20', STR_PAD_LEFT);
@@ -474,7 +469,7 @@ class CMS
                                 throw new PDFException('FAILED! Expired crl at ' . date('d/m/Y H:i:s', $nextUpdateTime) . ' and now ' . date('d/m/Y H:i:s', $nowz) . '!');
                             }
 
-                            $this->logger?->debug('        OK CRL still valid until ' . date('d/m/Y H:i:s', $nextUpdateTime));
+                            $this->logger?->debug('OK CRL still valid until ' . date('d/m/Y H:i:s', $nextUpdateTime));
                             $crlCertValid = true;
                             $this->logger?->debug('      check if cert not revoked...');
                             if (array_key_exists('revokedCertificates', $crl_parse['TBSCertList'])) {
@@ -485,7 +480,7 @@ class CMS
                             }
 
                             if ($crlCertValid) {
-                                $this->logger?->debug('        OK. VALID');
+                                $this->logger?->debug('OK. VALID');
                                 $crlHex = current(unpack('H*', (string) $crlread['der']));
                                 $ltvResult['crl'] = $crlHex;
                             }

@@ -522,7 +522,6 @@ class x509
     /**
      * parse x.509 DER/PEM Certificate structure
      *
-     * @param string $certin pem/der form cert
      * @param bool|string $oidprint show oid as oid number or hex
      *
      * @return array cert structure

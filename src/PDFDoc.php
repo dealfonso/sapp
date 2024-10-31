@@ -38,7 +38,6 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 use function ddn\sapp\helpers\_add_image;
 use function ddn\sapp\helpers\get_random_string;
-use function ddn\sapp\helpers\p_warning;
 use function ddn\sapp\helpers\references_in_object;
 use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 
@@ -191,10 +190,10 @@ class PDFDoc extends Buffer
         $pdfdoc->_max_oid = array_pop($oids);
 
         if ($trailer === false) {
-            p_warning('invalid trailer object');
-        } else {
-            $pdfdoc->_acquire_pages_info();
+            throw new PDFException('invalid trailer object');
         }
+
+        $pdfdoc->_acquire_pages_info();
 
         return $pdfdoc;
     }
@@ -407,7 +406,6 @@ class PDFDoc extends Buffer
     /**
      * Function that stores the tsa configuration to use, when signing the document
      *
-     * @param $tsaurl  string Link to tsa service
      * @param $tsauser ?string user for tsa service
      * @param $tsapass ?string password for tsa service
      */
@@ -422,11 +420,6 @@ class PDFDoc extends Buffer
 
     /**
      * Function to set the metadata properties for the certificate options
-     *
-     * @param $name
-     * @param $reason
-     * @param $location
-     * @param $contact
      */
     public function set_metadata_props($name = null, $reason = null, $location = null, $contact = null): void
     {
@@ -962,12 +955,12 @@ class PDFDoc extends Buffer
      *          - if array [ width, height ], it will be the width and the height for the image to be included as a signature appearance (if
      *            one of these values is null, it will fallback to the actual width or height of the image)
      */
-    public function sign_document($certfile, $password = null, $page_to_appear = 0, $imagefilename = null, $px = 0, $py = 0, $size = null)
+    public function sign_document($certfile, $password = null, $page_to_appear = 0, $imagefilename = null, $px = 0, $py = 0, $size = null): self
     {
         if ($imagefilename !== null) {
             $imagesize = @getimagesize($imagefilename);
             if ($imagesize === false) {
-                return p_warning('failed to open the image ' . $imagesize);
+                throw new PDFException('failed to open the image ' . $imagesize);
             }
 
             if ($page_to_appear < 0 || $page_to_appear > $this->get_page_count() - 1) {
@@ -1456,7 +1449,7 @@ class PDFDoc extends Buffer
 
             $this->_pages_info = $this->_get_page_info($pages);
         } else {
-            p_warning('root object does not exist, so cannot get information about pages');
+            $this->logger?->warning('root object does not exist, so cannot get information about pages');
         }
 
         return [];

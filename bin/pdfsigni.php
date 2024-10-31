@@ -27,17 +27,17 @@ use ddn\sapp\PDFException;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc !== 4) {
-    fwrite(STDERR, sprintf("usage: %s <filename> <image> <certfile>", $argv[0]));
+    fwrite(STDERR, sprintf('usage: %s <filename> <image> <certfile>', $argv[0]));
     exit(1);
 }
 
-if (!file_exists($argv[1])) {
-    fwrite(STDERR, "failed to open file " . $argv[1]);
+if (! file_exists($argv[1])) {
+    fwrite(STDERR, 'failed to open file ' . $argv[1]);
     exit(1);
 }
 
 // Silently prompt for the password
-fwrite(STDERR, "Password: ");
+fwrite(STDERR, 'Password: ');
 system('stty -echo');
 $password = trim(fgets(STDIN));
 system('stty echo');
@@ -58,17 +58,17 @@ if ($imagesize === false) {
 
 $pagesize = $obj->get_page_size(0);
 if ($pagesize === false) {
-    return throw new PDFException("failed to get page size");
+    return throw new PDFException('failed to get page size');
 }
 
-$pagesize = explode(" ", $pagesize[0]->val());
+$pagesize = explode(' ', $pagesize[0]->val());
 // Calculate the position of the image according to its size and the size of the page;
 //   the idea is to keep the aspect ratio and center the image in the page with a size
 //   of 1/3 of the size of the page.
-$p_x = (int)("" . $pagesize[0]);
-$p_y = (int)("" . $pagesize[1]);
-$p_w = (int)("" . $pagesize[2]) - $p_x;
-$p_h = (int)("" . $pagesize[3]) - $p_y;
+$p_x = (int) ('' . $pagesize[0]);
+$p_y = (int) ('' . $pagesize[1]);
+$p_w = (int) ('' . $pagesize[2]) - $p_x;
+$p_h = (int) ('' . $pagesize[3]) - $p_y;
 [$i_w, $i_h] = $imagesize;
 
 $ratio_x = $p_w / $i_w;
@@ -81,12 +81,12 @@ $p_x = $p_w / 3;
 $p_y = $p_h / 3;
 // Set the image appearance and the certificate file
 $obj->set_signature_appearance(0, [$p_x, $p_y, $p_x + $i_w, $p_y + $i_h], $image);
-if (!$obj->set_signature_certificate($argv[3], $password)) {
-    fwrite(STDERR, "the certificate is not valid");
+if (! $obj->set_signature_certificate($argv[3], $password)) {
+    fwrite(STDERR, 'the certificate is not valid');
 } else {
     $docsigned = $obj->to_pdf_file_s();
     if ($docsigned == false) {
-        fwrite(STDERR, "could not sign the document");
+        fwrite(STDERR, 'could not sign the document');
     } else {
         echo $docsigned;
     }

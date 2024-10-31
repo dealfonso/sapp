@@ -23,11 +23,11 @@ namespace ddn\sapp;
 
 use ArrayAccess;
 use ddn\sapp\helpers\Buffer;
+use ddn\sapp\pdfvalue\PDFValue;
 use ddn\sapp\pdfvalue\PDFValueObject;
 use ddn\sapp\pdfvalue\PDFValueSimple;
 use ReturnTypeWillChange;
 use Stringable;
-use function ddn\sapp\helpers\p_warning;
 
 // Loading the functions
 
@@ -50,17 +50,11 @@ class PDFObject implements ArrayAccess, Stringable
 
     protected $_value;
 
-    protected int $_generation;
-
     public function __construct(
         protected int $_oid,
-        $value = null,
-        int $generation = 0,
+        PDFValue|array|null $value = null,
+        protected int $_generation = 0,
     ) {
-        if ($generation !== 0) {
-            p_warning('Objects of non-zero generation are not fully checked... please double check your document and (if possible) please send examples via issues to https://github.com/dealfonso/sapp/issues/');
-        }
-
         // If the value is null, we suppose that we are creating an empty object
         if ($value === null) {
             $value = new PDFValueObject();
@@ -77,7 +71,6 @@ class PDFObject implements ArrayAccess, Stringable
         }
 
         $this->_value = $value;
-        $this->_generation = $generation;
     }
 
     public function __toString(): string

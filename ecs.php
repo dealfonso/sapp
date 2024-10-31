@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use PhpCsFixer\Fixer\Import\NoUnusedImportsFixer;
+use Symplify\CodingStandard\Fixer\Commenting\ParamReturnAndVarTagMalformsFixer;
+use Symplify\CodingStandard\Fixer\Commenting\RemoveUselessDefaultCommentFixer;
 use Symplify\EasyCodingStandard\Config\ECSConfig;
 
 return ECSConfig::configure()
@@ -20,7 +22,12 @@ return ECSConfig::configure()
         controlStructures: true,
         psr12: true,
         comments: true,
-//        docblocks: true,
+        docblocks: true,
         spaces: true,
+        cleanCode: true,
         namespaces: true,
-    );
+    )
+    ->withSkip([
+        RemoveUselessDefaultCommentFixer::class,
+        ParamReturnAndVarTagMalformsFixer::class,
+    ]);

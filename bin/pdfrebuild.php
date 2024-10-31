@@ -25,12 +25,12 @@ use ddn\sapp\PDFDoc;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc < 2 || $argc > 3) {
-    fwrite(STDERR, sprintf("usage: %s <filename> [<output>]", $argv[0]));
+    fwrite(STDERR, sprintf('usage: %s <filename> [<output>]', $argv[0]));
     exit(1);
 }
 
-if (!file_exists($argv[1])) {
-    fwrite(STDERR, "failed to open file " . $argv[1]);
+if (! file_exists($argv[1])) {
+    fwrite(STDERR, 'failed to open file ' . $argv[1]);
 } else {
     $obj = PDFDoc::from_string(file_get_contents($argv[1]));
     $obj->setLogger(new AlmostOriginalLogger());

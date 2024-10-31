@@ -25,12 +25,12 @@ use ddn\sapp\PDFDoc;
 require_once __DIR__ . '/../vendor/autoload.php';
 
 if ($argc < 2 || $argc > 3) {
-    fwrite(STDERR, sprintf("usage: %s <filename> [oid]", $argv[0]));
+    fwrite(STDERR, sprintf('usage: %s <filename> [oid]', $argv[0]));
     exit(1);
 }
 
-if (!file_exists($argv[1])) {
-    fwrite(STDERR, "failed to open file " . $argv[1]);
+if (! file_exists($argv[1])) {
+    fwrite(STDERR, 'failed to open file ' . $argv[1]);
     exit(1);
 }
 
@@ -39,7 +39,7 @@ $doc->setLogger(new AlmostOriginalLogger());
 
 $toid = null;
 if ($argc === 3) {
-    $toid = (int)$argv[2];
+    $toid = (int) $argv[2];
 }
 
 foreach ($doc->get_object_iterator() as $oid => $object) {
@@ -51,29 +51,29 @@ foreach ($doc->get_object_iterator() as $oid => $object) {
         continue;
     }
 
-    if ($object["Filter"] === "/FlateDecode" && $object["Subtype"] !== "/Image") {
+    if ($object['Filter'] === '/FlateDecode' && $object['Subtype'] !== '/Image') {
         $stream = $object->get_stream(false);
         if ($stream !== false) {
-            unset($object["Filter"]);
+            unset($object['Filter']);
             $object->set_stream($stream, false);
             $doc->add_object($object);
         }
     }
 
     // Not needed because we are rebuilding the document
-    if ($object["Type"] === "/ObjStm") {
-        $object->set_stream("", false);
+    if ($object['Type'] === '/ObjStm') {
+        $object->set_stream('', false);
         $doc->add_object($object);
     }
 
     // Do not want images to be uncompressed
-    if ($object["Subtype"] === "/Image") {
-        $object->set_stream("");
+    if ($object['Subtype'] === '/Image') {
+        $object->set_stream('');
         $doc->add_object($object);
     }
 
     if ($toid !== null) {
-        print($object->get_stream(false));
+        print $object->get_stream(false);
     }
 }
 

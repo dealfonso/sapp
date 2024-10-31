@@ -53,11 +53,8 @@ class DependencyTreeObject implements Stringable
     public function addchild(int $oid, self $o): void
     {
         $this->children[$oid] = $o;
-        if ($o->is_child !== 0) {
-            p_warning(sprintf('object %d is already a child of other object', $o->oid));
-        }
 
-        ++$o->is_child;
+        $o->is_child++;
     }
 
     /**

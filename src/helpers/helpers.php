@@ -70,24 +70,6 @@ function debug_var(...$vars): ?string
 }
 
 /**
- * Function that writes the representation of some vars to
- *
- * @param vars comma separated list of variables to output
- */
-function p_debug_var(...$vars): void
-{
-    // If the debug level is less than 3, suppress debug messages
-    if (_DEBUG_LEVEL < 3) {
-        return;
-    }
-
-    foreach ($vars as $var) {
-        $e = var_dump_to_string($var);
-        p_stderr($e, 'Debug');
-    }
-}
-
-/**
  * Function that converts an array into a string, but also recursively converts its values
  *   just in case that they are also arrays. In case that it is not an array, it returns its
  *   string representation
@@ -107,57 +89,6 @@ function varval($e)
         }
 
         $retval = '[ ' . implode(', ', $a) . ' ]';
-    }
-
-    return $retval;
-}
-
-/**
- * Function that writes a string to stderr, including some information about the call stack
- *
- * @param e the string to write to stderr
- * @param tag the tag to prepend to the string and the debug information
- * @param level the depth level to output (0 will refer to the function that called p_stderr
- *              call itself, 1 to the function that called to the function that called p_stderr)
- */
-function p_stderr(string &$e, string $tag = 'Error', int $level = 1): void
-{
-    $dinfo = debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT);
-    $dinfo = $dinfo[$level];
-
-    $e = sprintf('%s info at %s:%d: %s', $tag, $dinfo['file'], $dinfo['line'], varval($e));
-    fwrite(STDERR, $e . PHP_EOL);
-}
-
-/**
- * Function that writes a string to stderr and returns a value (to ease coding like return p_debug(...))
- *
- * @param e the debug message
- * @param retval the value to return (default: false)
- *
- */
-function p_debug(string $e, mixed $retval = false)
-{
-    // If the debug level is less than 3, suppress debug messages
-    if (_DEBUG_LEVEL >= 3) {
-        p_stderr($e, 'Debug');
-    }
-
-    return $retval;
-}
-
-/**
- * Function that writes a string to stderr and returns a value (to ease coding like return p_warning(...))
- *
- * @param e the debug message
- * @param retval the value to return (default: false)
- *
- */
-function p_warning(string $e, mixed $retval = false)
-{
-    // If the debug level is less than 2, suppress warning messages
-    if (_DEBUG_LEVEL >= 2) {
-        p_stderr($e, 'Warning');
     }
 
     return $retval;
@@ -269,7 +200,7 @@ function timestamp_to_pdfdatestring(?DateTimeInterface $date = null): string
  * @return string escaped date string.
  * @since 5.9.152 (2012-03-23)
  */
-function get_pdf_formatted_date(int $time)
+function get_pdf_formatted_date(int $time): string
 {
     return substr_replace(date('YmdHisO', $time), "'", -2, 0) . "'";
 }
