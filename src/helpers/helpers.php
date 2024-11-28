@@ -22,7 +22,7 @@
 namespace ddn\sapp\helpers;
 
 if (! defined("_DEBUG_LEVEL")) {
-    define('_DEBUG_LEVEL', 3);
+    define('_DEBUG_LEVEL', 0);
 }
 
 if (! defined('STDERR')) {
