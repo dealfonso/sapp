@@ -53,9 +53,6 @@ use ddn\sapp\helpers\LoadHelpers;
 if (!defined("ddn\\sapp\\helpers\\LoadHelpers"))
     new LoadHelpers;
 
-if (!defined('__TMP_FOLDER'))
-    define('__TMP_FOLDER', sys_get_temp_dir());
-
 // TODO: move the signature of documents to a new class (i.e. PDFDocSignable)
 // TODO: create a new class "PDFDocIncremental"
 
