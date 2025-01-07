@@ -70,6 +70,7 @@ class PDFDoc extends Buffer {
     protected $_certificate = null;
     protected $_signature_ltv_data = null;
     protected $_signature_tsa = null;
+    protected $_signature_annotation_object_id = null;
     protected $_appearance = null;
     protected $_xref_table_version;
     protected $_revisions;
@@ -259,6 +260,41 @@ class PDFDoc extends Buffer {
     }
 
     /**
+     * Function that sets the signature annotation object that will be used to sign the document. If this is not set,
+     * there will be a new signature annotation object created.
+     * @param int $oid The object ID of the signature annotation object
+     * @return bool True if the object ID is a signature annotation object, false otherwise
+     */
+    public function set_signature_annotation_object_id(int $oid) {
+        /** @var  $pdfObject */
+        $pdfObject = $this->get_object($oid);
+        if (false === $pdfObject) {
+            return p_error('Signature box with ID: '.$oid.' not found');
+        }
+
+        $value = $pdfObject->get_value()->val();
+
+        if (!is_array($value)) {
+            return p_error('Object ID: '.$oid.' does not have a value');
+        }
+
+        if (!isset($value['Type']) || 'Annot' !== $value['Type']->val()) {
+            return p_error('Object ID: '.$oid.' has invalid type value');
+        }
+
+        if (!isset($value['Subtype']) || 'Widget' !== $value['Subtype']->val()) {
+            return p_error('Object ID: '.$oid.' has invalid subtype value');
+        }
+
+        if (!isset($value['FT']) || 'Sig' !== $value['FT']->val()) {
+            return p_error('Object ID: '.$oid.' has invalid FT value');
+        }
+
+        $this->_signature_annotation_object_id = $oid;
+        return true;
+    }
+
+    /**
      * Function that sets the appearance of the signature (if the document is to be signed). At this time, it is possible to set
      *   the page in which the signature will appear, the rectangle, and an image that will be shown in the signature form.
      * @param page the page (zero based) in which the signature will appear
@@ -443,17 +479,21 @@ class PDFDoc extends Buffer {
         }
 
         // Create the annotation object, annotate the offset and append the object
-        $annotation_object = $this->create_object([
-                "Type" => "/Annot",
-                "Subtype" => "/Widget",
-                "FT" => "/Sig",
-                "V" => new PDFValueString(""),
-                "T" => new PDFValueString('Signature' . get_random_string()),
-                "P" => new PDFValueReference($page_obj->get_oid()),
-                "Rect" => $recttoappear,
-                "F" => 132  // TODO: check this value
-            ]
-        );
+        if (null === $this->_signature_annotation_object_id) {
+            $annotation_object = $this->create_object([
+                    "Type" => "/Annot",
+                    "Subtype" => "/Widget",
+                    "FT" => "/Sig",
+                    "V" => new PDFValueString(""),
+                    "T" => new PDFValueString('Signature' . get_random_string()),
+                    "P" => new PDFValueReference($page_obj->get_oid()),
+                    "Rect" => $recttoappear,
+                    "F" => 132  // TODO: check this value
+                ]
+            );
+        } else {
+            $annotation_object = $this->get_object($this->_signature_annotation_object_id);
+        }
 
         // Prepare the signature object (we need references to it)
         $signature = null;
@@ -560,6 +600,11 @@ class PDFDoc extends Buffer {
             // Set the signature appearance field to the form object
             $annotation_object["AP"] = [ "N" => new PDFValueReference($form_object->get_oid())];
             $annotation_object["Rect"] = [ $recttoappear[0], $pagesize_h - $recttoappear[1], $recttoappear[2], $pagesize_h - $recttoappear[3] ];
+        }
+
+        if (null !== $this->_signature_annotation_object_id) {
+            $this->add_object($annotation_object);
+            return $signature;
         }
 
         if (!$newannots->push(new PDFValueReference($annotation_object->get_oid())))
