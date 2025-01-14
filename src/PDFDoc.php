@@ -264,12 +264,14 @@ class PDFDoc extends Buffer {
      * @param page the page (zero based) in which the signature will appear
      * @param rect the rectangle (in page-based coordinates) where the signature will appear in that page
      * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect
+     * @param string|null $name the name of the signature (if not set, a random name will be used)
      */
-    public function set_signature_appearance($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0], $imagefilename = null) {
+    public function set_signature_appearance($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0], $imagefilename = null, $name = null) {
         $this->_appearance = [
             "page" => $page_to_appear,
             "rect" => $rect_to_appear,
-            "image" => $imagefilename
+            "image" => $imagefilename,
+            "name" => $name,
         ];
     }
 
@@ -448,7 +450,7 @@ class PDFDoc extends Buffer {
                 "Subtype" => "/Widget",
                 "FT" => "/Sig",
                 "V" => new PDFValueString(""),
-                "T" => new PDFValueString('Signature' . get_random_string()),
+                "T" => new PDFValueString('Signature' . $this->_appearance['name'] ?? get_random_string()),
                 "P" => new PDFValueReference($page_obj->get_oid()),
                 "Rect" => $recttoappear,
                 "F" => 132  // TODO: check this value
