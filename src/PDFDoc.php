@@ -266,7 +266,6 @@ class PDFDoc extends Buffer {
      * @return bool True if the object ID is a signature annotation object, false otherwise
      */
     public function set_signature_annotation_object_id(int $oid) {
-        /** @var  $pdfObject */
         $pdfObject = $this->get_object($oid);
         if (false === $pdfObject) {
             return p_error('Signature box with ID: '.$oid.' not found');
