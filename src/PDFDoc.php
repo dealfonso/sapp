@@ -259,6 +259,50 @@ class PDFDoc extends Buffer {
     }
 
     /**
+     * Function that sets the placeholder in which the signature will appear (if the document is to be signed).
+     * @param placeholder the signature placeholder name in which the signature will appear, by default, the first to be found
+     * @param imagefilename an image file name (or an image in a buffer, with symbol '@' prepended) that will be put inside the rect
+     */
+    public function set_signature_on_placeholder($placeholder = null, $imagefilename = null) {
+        $placeholders = array_reverse(array_flip($this->get_signatures_placeholders()));
+
+        if (empty($placeholders))
+            return p_error("no signature placeholder available");
+        if (is_null($placeholder))
+            $placeholder_oid = reset($placeholders);
+        else {
+            if (!isset($placeholders[$placeholder]))
+                return p_error("signature placeholder not found");
+            $placeholder_oid = $placeholders[$placeholder];
+        }
+
+        $placeholder = $this->get_object($placeholder_oid);
+        $o_value = $placeholder->get_value()->val();
+        $page_to_appear = 0;
+        if (isset($o_value['P'])) {
+            $page_oid = explode(' ', $o_value['P']->val())[0];
+            foreach ($this->_pages_info as $i => $page)
+                if ($page['id'] == $page_oid)
+                    $page_to_appear = $i;
+        }
+        $rect_to_appear = [0, 0, 0, 0];
+        if (isset($o_value['Rect'])) {
+            $rect = explode(' ', $o_value['Rect']->val()[0]->val());
+            $pagesize = $this->get_page_size($page_to_appear);
+            $pagesize = explode(" ", $pagesize[0]->val());
+            $pagesize_h = floatval("" . $pagesize[3]) - floatval("" . $pagesize[1]);
+            $rect_to_appear = [$rect[0] + 0, round($pagesize_h - $rect[1], 4), $rect[2] + 0, round($pagesize_h - $rect[3], 4)];
+        }
+
+        $this->_appearance = [
+            "page" => $page_to_appear,
+            "rect" => $rect_to_appear,
+            "image" => $imagefilename,
+            "placeholder" => $placeholder,
+        ];
+    }
+
+    /**
      * Function that sets the appearance of the signature (if the document is to be signed). At this time, it is possible to set
      *   the page in which the signature will appear, the rectangle, and an image that will be shown in the signature form.
      * @param page the page (zero based) in which the signature will appear
@@ -368,7 +412,7 @@ class PDFDoc extends Buffer {
         $this->_metadata_contact_info = self::toUTF16Hex($contact);
     }
 
-    // Convert string to UTF-16 Hexadecimal 
+    // Convert string to UTF-16 Hexadecimal
     private static function toUTF16Hex($string) {
         $string = bin2hex(mb_convert_encoding($string, 'UTF-16BE'));
 
@@ -443,7 +487,7 @@ class PDFDoc extends Buffer {
         }
 
         // Create the annotation object, annotate the offset and append the object
-        $annotation_object = $this->create_object([
+        $annotation_object = isset($this->_appearance['placeholder']) ? $this->_appearance['placeholder'] : $this->create_object([
                 "Type" => "/Annot",
                 "Subtype" => "/Widget",
                 "FT" => "/Sig",
@@ -560,6 +604,11 @@ class PDFDoc extends Buffer {
             // Set the signature appearance field to the form object
             $annotation_object["AP"] = [ "N" => new PDFValueReference($form_object->get_oid())];
             $annotation_object["Rect"] = [ $recttoappear[0], $pagesize_h - $recttoappear[1], $recttoappear[2], $pagesize_h - $recttoappear[3] ];
+        }
+
+        if (isset($this->_appearance['placeholder'])) {
+            $this->add_object($annotation_object);
+            return $signature;
         }
 
         if (!$newannots->push(new PDFValueReference($annotation_object->get_oid())))
@@ -1126,6 +1175,31 @@ class PDFDoc extends Buffer {
         return $objects;
     }
 
+    /**
+     * Retrieve the signature placeholders in the document
+     * @return array of signature placeholders in the original document
+     */
+    public function get_signatures_placeholders() {
+
+        // Prepare the return value
+        $placeholders = [];
+
+        foreach ($this->_xref_table as $oid => $offset) {
+            if ($offset === null) continue;
+
+            $o = $this->get_object($oid);
+            if ($o === false) continue;
+
+            $o_value = $o->get_value()->val();
+            if (! is_array($o_value) || ! isset($o_value['FT'])) continue;
+            if ($o_value['FT']->val() != 'Sig') continue;
+            if ($o_value['V']->val() != '') continue;
+
+            $placeholders[$oid] = $o_value['T']->val();
+        }
+
+        return $placeholders;
+    }
 
     /**
      * Retrieve the signatures in the document
