@@ -606,7 +606,7 @@ class PDFDoc extends Buffer {
      * @param date a DateTime object that contains the date to be set; null to set "now"
      * @return ok true if the date could be set; false otherwise
      */
-    protected function update_mod_date(\DateTime $date = null) {
+    protected function update_mod_date(?\DateTime $date = null) {
         // First of all, we are searching for the root object (which should be in the trailer)
         $root = $this->_pdf_trailer_object["Root"];
 
@@ -983,6 +983,10 @@ class PDFDoc extends Buffer {
             return p_error("could not get information about the page");
 
         $page_ids = [];
+
+        if ($object["Type"] === false) {
+            return p_error("object $oid has no type, so cannot be a page or pages");
+        }
 
         switch ($object["Type"]->val()) {
             case "Pages":
