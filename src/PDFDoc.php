@@ -450,7 +450,7 @@ class PDFDoc extends Buffer {
                 "Subtype" => "/Widget",
                 "FT" => "/Sig",
                 "V" => new PDFValueString(""),
-                "T" => new PDFValueString('Signature' . $this->_appearance['name'] ?? get_random_string()),
+                "T" => new PDFValueString($this->_appearance['name'] ?? ('Signature' . get_random_string())),
                 "P" => new PDFValueReference($page_obj->get_oid()),
                 "Rect" => $recttoappear,
                 "F" => 132  // TODO: check this value
