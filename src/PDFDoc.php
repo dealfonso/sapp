@@ -377,6 +377,138 @@ class PDFDoc extends Buffer {
         // Add BOM
         return 'FEFF' .$string;
     }
+
+    public function add_form_field($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0], $name = null)
+    {
+        $page_obj = $this->get_page($page_to_appear);
+        if ($page_obj === false) {
+            return p_error("invalid page");
+        }
+
+        // Create the appearance stream object
+        $width = $rect_to_appear[2] - $rect_to_appear[0];
+        $height = $rect_to_appear[3] - $rect_to_appear[1];
+        $bbox = [ 0, 0, $width, $height];
+        $appearanceStream = $this->create_object([
+            'Type' => '/XObject',
+            'Subtype' => '/Form',
+            'BBox' => $bbox,
+            'Resources' => [
+                'Font' => [
+                    'Helv' => [
+                        'Type' => '/Font',
+                        'Subtype' => '/Type1',
+                        'BaseFont' => '/Helvetica',
+                    ],
+                ],
+            ],
+        ]);
+
+
+        $appearanceContent = "q
+0.8 0.8 0.8 rg           % Fill color (Light Grey)
+0 0 {$width} {$height} re f  % Rectangle fill
+0 0 0 RG                  % Stroke color (Black)
+1 w                       % Border width
+0 0 {$width} {$height} re S  % Rectangle stroke
+/Helv 9 Tf 0 g           % Text font and color
+Q";
+
+        $appearanceStream->set_stream($appearanceContent);
+
+        // Create the annotation object with /AP
+        $annotation_object = $this->create_object(
+            [
+                'Type' => '/Annot',
+                'Subtype' => '/Widget',
+                'FT' => '/Tx',
+                'V' => new PDFValueString(''),
+                'T' => new PDFValueString($name ?? get_random_string()),
+                'P' => new PDFValueReference($page_obj->get_oid()),
+                'Rect' => $rect_to_appear,
+                'BS' => [
+                    'W' => 1,
+                    'S' => '/S',
+                ],
+                'MK' => [
+                    'BC' => [0, 0, 0],
+                    'BG' => [0.8, 0.8, 0.8],
+                ],
+                'DA' => new PDFValueString('/Helv 9 Tf 0 g'), // Text style
+                'AP' => [
+                    'N' => new PDFValueReference($appearanceStream->get_oid()),
+                ],
+            ],
+        );
+
+        // Add the annotation to the page
+        if (!isset($page_obj["Annots"])) {
+            $page_obj["Annots"] = new PDFValueList();
+        }
+
+        $annots = $page_obj["Annots"];
+        if ((($referenced = $annots->get_object_referenced()) !== false) && (!is_array($referenced))) {
+            // It is an indirect object, so we need to update that object
+            $newannots = $this->create_object(
+                $this->get_object($referenced)->get_value(),
+            );
+        } else {
+            $newannots = $this->create_object(
+                new PDFValueList(),
+            );
+            $newannots->push($annots);
+        }
+
+        if (!$newannots->push(new PDFValueReference($annotation_object->get_oid()))) {
+            return p_error("Could not update the page where the signature has to appear");
+        }
+
+        $page_obj["Annots"] = new PDFValueReference($newannots->get_oid());
+
+        $updated_objects = [];
+        array_push($updated_objects, $page_obj);
+
+        $root = $this->_pdf_trailer_object["Root"];
+
+        if (($root === false) || (($root = $root->get_object_referenced()) === false)) {
+            return p_error("could not find the root object from the trailer");
+        }
+
+        $root_obj = $this->get_object($root);
+        if ($root_obj === false) {
+            return p_error("invalid root object");
+        }
+
+        // AcroForm may be an indirect object
+        if (!isset($root_obj["AcroForm"])) {
+            $root_obj["AcroForm"] = new PDFValueObject();
+        }
+
+        $acroform = &$root_obj["AcroForm"];
+        if ((($referenced = $acroform->get_object_referenced()) !== false) && (!is_array($referenced))) {
+            $acroform = $this->get_object($referenced);
+            array_push($updated_objects, $acroform);
+        } else {
+            array_push($updated_objects, $root_obj);
+        }
+
+        // Add the annotation to the interactive form
+        if (!isset($acroform['Fields'])) {
+            $acroform['Fields'] = new PDFValueList();
+        }
+
+        // Add the annotation object to the interactive form
+        if (!$acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
+            return p_error("could not create the signature field");
+        }
+
+        // Store the objects
+        foreach ($updated_objects as &$object) {
+            $this->add_object($object);
+        }
+        return $this;
+    }
+
     /**
      * Function that creates and updates the PDF objects needed to sign the document. The workflow for a signature is:
      * - create a signature object
