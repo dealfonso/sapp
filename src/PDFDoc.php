@@ -378,7 +378,7 @@ class PDFDoc extends Buffer {
         return 'FEFF' .$string;
     }
 
-    public function add_form_field($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0])
+    public function add_form_field($page_to_appear = 0, $rect_to_appear = [0, 0, 0, 0], $name = null)
     {
         $page_obj = $this->get_page($page_to_appear);
         if ($page_obj === false) {
@@ -423,7 +423,7 @@ Q";
                 'Subtype' => '/Widget',
                 'FT' => '/Tx',
                 'V' => new PDFValueString(''),
-                'T' => new PDFValueString(get_random_string()),
+                'T' => new PDFValueString($name ?? get_random_string()),
                 'P' => new PDFValueReference($page_obj->get_oid()),
                 'Rect' => $rect_to_appear,
                 'BS' => [
