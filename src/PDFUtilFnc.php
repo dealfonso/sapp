@@ -578,7 +578,7 @@ class PDFUtilFnc {
      * Function that parses an object 
      */
     public static function object_from_string(&$buffer, $expected_obj_id, $offset = 0, &$offset_end = 0) {
-        if (preg_match('/([0-9]+)\s+([0-9]+)\s+obj(\s+)/ms', $buffer, $matches, 0, $offset) !== 1) {
+        if (preg_match('/([0-9]+)\s+([0-9]+)\s+obj\b/ms', $buffer, $matches, 0, $offset) !== 1) {
             // p_debug_var(substr($buffer))
             return p_error("object is not valid: $expected_obj_id");
         }
