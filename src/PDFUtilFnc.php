@@ -474,11 +474,11 @@ class PDFUtilFnc {
 
         // If it expects a stream, get it
         if ($_stream_pending !== false) {
-            $length = $object['Length']->get_int();
+            $length = $object['Length'] ? $object['Length']->get_int() : false;
             if ($length === false) {
-                $length_object_id = $object['Length']->get_object_referenced();
+                $length_object_id = $object['Length'] ? $object['Length']->get_object_referenced() : false;
                 if ($length_object_id === false) {
-                    return p_error("could not get stream for object $obj_id");
+                    return p_error("could not get stream for object $oid");
                 }
                 $length_object = PDFUtilFnc::find_object($_buffer, $xref_table, $length_object_id);
                 if ($length_object === false)
@@ -488,7 +488,7 @@ class PDFUtilFnc {
             }
 
             if ($length === false) {
-                return p_error("could not get stream length for object $obj_id");
+                return p_error("could not get stream length for object $oid");
             }
 
             $object->set_stream(substr($_buffer, $_stream_pending, $length), true);

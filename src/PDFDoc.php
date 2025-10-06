@@ -624,13 +624,14 @@ class PDFDoc extends Buffer {
         if (isset($root_obj["Metadata"])) {
             $metadata = $root_obj["Metadata"];
             if ((($referenced = $metadata->get_object_referenced()) !== false) && (!is_array($referenced))) {
-                $metadata = $this->get_object($referenced);
-                $metastream = $metadata->get_stream();
-                $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . $date->format("c") . '</xmp:ModifyDate>', $metastream);
-                $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . $date->format("c") . '</xmp:MetadataDate>', $metastream);
-                $metastream = preg_replace('/<xmpMM:InstanceID>([^<]*)<\/xmpMM:InstanceID>/', '<xmpMM:InstanceID>uuid:' . UUID::v4() . '</xmpMM:InstanceID>', $metastream);
-                $metadata->set_stream($metastream, false);
-                $this->add_object($metadata);
+                if ($metadata = $this->get_object($referenced)) {
+                    $metastream = $metadata->get_stream();
+                    $metastream = preg_replace('/<xmp:ModifyDate>([^<]*)<\/xmp:ModifyDate>/', '<xmp:ModifyDate>' . $date->format("c") . '</xmp:ModifyDate>', $metastream);
+                    $metastream = preg_replace('/<xmp:MetadataDate>([^<]*)<\/xmp:MetadataDate>/', '<xmp:MetadataDate>' . $date->format("c") . '</xmp:MetadataDate>', $metastream);
+                    $metastream = preg_replace('/<xmpMM:InstanceID>([^<]*)<\/xmpMM:InstanceID>/', '<xmpMM:InstanceID>uuid:' . UUID::v4() . '</xmpMM:InstanceID>', $metastream);
+                    $metadata->set_stream($metastream, false);
+                    $this->add_object($metadata);
+                }
             }
         }
 
