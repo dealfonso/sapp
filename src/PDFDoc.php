@@ -776,7 +776,7 @@ class PDFDoc extends Buffer {
             $_signature = $this->_generate_signature_in_document();
             if ($_signature === false) {
                 $this->pop_state();
-                return p_error("could not generate the signed document");
+                return p_error("could not generate the signed document", new Buffer());
             }
         }
 
