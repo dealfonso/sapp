@@ -586,6 +586,14 @@ class PDFDoc extends Buffer {
         $acroform["SigFlags"] = 3;
         if (!isset($acroform['Fields']))
             $acroform['Fields'] = new PDFValueList();
+        else {
+            // Found some cases in which Fields is not a list, so we convert it into a list
+            if (!($acroform['Fields'] instanceof PDFValueList)) {
+                $val = $acroform['Fields'];
+                $acroform['Fields'] = new PDFValueList();
+                $acroform['Fields']->push($val);
+            }
+        }
 
         // Add the annotation object to the interactive form
         if (!$acroform['Fields']->push(new PDFValueReference($annotation_object->get_oid()))) {
