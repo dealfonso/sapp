@@ -248,6 +248,8 @@
 
                 $token_type = self::T_NOTOKEN;
 
+                if ($this->_c === false) continue;
+
                 // TODO: also the special characters are not "strictly" considered, according to section 7.3.4.2: \n \r \t \b \f \( \) \\ are valid; the other not; but also \bbb should be considered; all of them are "sufficiently" treated, but other unknown caracters such as \u are also accepted
                 switch ($this->_c) {
                     case '%':
@@ -346,6 +348,24 @@
                         break;
                     case self::T_DICT_END:
                         $this->nexttoken();
+
+                        // If we have a stream after the dictionary, we need to parse it
+                        if ($this->_tt === self::T_STREAM_BEGIN) {
+                            $stream = $this->_parse_stream();                            
+                            if ($stream === false) throw new Exception("invalid stream");
+                            $object['__stream__'] = $stream;
+
+                            // From _parse_stream we know that after the stream, we should have "endstream" and "endobj"
+                            $this->nexttoken();
+                            if ($this->_tt !== self::T_STREAM_END) {
+                                throw new Exception("invalid stream ending");
+                            }
+                            $this->nexttoken();
+                        }
+
+                        // NOTE: we do not check that the object ends with "endobj" because this method is also used to parse
+                        //   dictionaries that may be inside other objects (e.g. lists, other dictionaries, etc).
+
                         return new PDFValueObject($object);
                         break;
                     default:
@@ -385,6 +405,43 @@
             return new PDFValueList($list);
         }
 
+        protected function _parse_stream() {
+            if ($this->_tt !== self::T_STREAM_BEGIN) {
+                throw new Exception("Invalid stream definition");
+            }
+
+            // The distinction is required, because we need to get the proper start for the stream, and if using CRLF instead of LF
+            //   - according to https://www.adobe.com/content/dam/acom/en/devnet/pdf/PDF32000_2008.pdf, stream is followed by CRLF 
+            //     or LF, but not single CR.
+            if ($this->_c === "\n") {
+                $this->nextchar();
+            } else if (($this->_c === "\r") && ($this->_n === "\n")) {
+                $this->nextchar();
+                $this->nextchar();
+            }
+
+            // Now, we should be at the beginning of the stream content
+            // We will read until we find "endstream" or "endobj"
+            $stream_content = $this->_c;
+            while ($this->nextchar() !== false) {
+                if ($this->_n === 'e') {
+                    // Possible "endstream" or "endobj"
+                    if ($this->_buffer->substratpos(9) === "endstream") {
+                        $stream_content .= $this->_c;
+                        break;
+                    } else if ($this->_buffer->substratpos(6) === "endobj") {
+                        $stream_content .= $this->_c;
+                        break;
+                    } else {
+                        $stream_content .= $this->_c;
+                        continue;
+                    }
+                } 
+                $stream_content .= $this->_c;
+            }
+            return $stream_content;
+        }
+
         protected function _parse_value() {
             while ($this->_t !== false) {
                 switch ($this->_tt) {
@@ -414,6 +471,7 @@
 
                     case self::T_OBJECT_END:
                     case self::T_STREAM_BEGIN:
+                        // TODO: maybe we should read the stream here?
                         return null;
                     case self::T_COMMENT:
                         $this->nexttoken();

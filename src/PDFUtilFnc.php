@@ -24,6 +24,7 @@ namespace ddn\sapp;
 use ddn\sapp\PDFObjectParser;
 use ddn\sapp\helpers\StreamReader;
 use ddn\sapp\helpers\Buffer;
+use ddn\sapp\pdfvalue\PDFValueSimple;
 use function ddn\sapp\helpers\p_debug;
 use function ddn\sapp\helpers\p_debug_var;
 use function ddn\sapp\helpers\p_error;
@@ -40,17 +41,23 @@ class PDFUtilFnc {
 
     public static function get_trailer(&$_buffer, $trailer_pos) {
         // Search for the trailer structure
-        if (preg_match('/trailer\s*(.*)\s*startxref/ms', $_buffer, $matches, 0, $trailer_pos) !== 1)
+        if (preg_match('/trailer\s+(.*)\s+startxref/ms', $_buffer, $matches, 0, $trailer_pos) !== 1)
             return p_error("trailer not found");
-        
+
         $trailer_str = $matches[1];
+        // we'll cut when finding "startxref", because maybe there are other "trailer" words in the document
+        $startxref_pos = strpos($trailer_str, "startxref");
+        if ($startxref_pos !== false) {
+            $trailer_str = substr($trailer_str, 0, $startxref_pos);
+        }
+        $trailer_str .= "\nendobj";  // to make sure that the parser understands where the object ends
 
         // We create the object to parse (this is not innefficient, because it is disposed when returning from the function)
         //   and parse the trailer content.
         $parser = new PDFObjectParser();
         try {
             $trailer_obj = $parser->parsestr($trailer_str);
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             return p_error("trailer is not valid");
         }
 
@@ -102,8 +109,6 @@ class PDFUtilFnc {
         array_push($indexes, "$i_k $count");
         $indexes = implode(" ", $indexes);
 
-        // p_debug(show_bytes($result, 6));
-
         return [
             "W" => [ 1, 4, 1 ],
             "Index" => $indexes,
@@ -123,7 +128,8 @@ class PDFUtilFnc {
             $depth = $depth - 1;
         }
 
-        $xref_o = PDFUtilFnc::find_object_at_pos($_buffer, null, $xref_pos, []);
+        $xref_o = PDFUtilFnc::object_from_string($_buffer, null, $xref_pos);
+
         if ($xref_o === false)
             return p_error("cross reference object not found when parsing xref at position $xref_pos", [false, false, false]);
 
@@ -446,58 +452,6 @@ class PDFUtilFnc {
     }
 
     /**
-     * Function that finds a the object at the specific position in the buffer
-     * @param buffer the buffer from which to read the document
-     * @param oid the target object id to read (if null, will return the first object, if found)
-     * @param offset the offset at which the object is expected to be
-     * @param xref_table the xref table, to be able to find indirect objects
-     * @return obj the PDFObject obtained from the file or false if could not be found
-     */
-    public static function find_object_at_pos(&$_buffer, $oid, $object_offset, $xref_table) {
-
-        $object = PDFUtilFnc::object_from_string($_buffer, $oid, $object_offset, $offset_end);
-
-        if ($object === false) return false;
-
-        $_stream_pending = false;
-
-        // The distinction is required, because we need to get the proper start for the stream, and if using CRLF instead of LF
-        //   - according to https://www.adobe.com/content/dam/acom/en/devnet/pdf/PDF32000_2008.pdf, stream is followed by CRLF 
-        //     or LF, but not single CR.
-        if (substr($_buffer, $offset_end - 7, 7) === "stream\n") {
-            $_stream_pending = $offset_end;
-        }
-
-        if (substr($_buffer, $offset_end - 7, 8) === "stream\r\n") {
-            $_stream_pending = $offset_end + 1;
-        }
-
-        // If it expects a stream, get it
-        if ($_stream_pending !== false) {
-            $length = $object['Length']->get_int();
-            if ($length === false) {
-                $length_object_id = $object['Length']->get_object_referenced();
-                if ($length_object_id === false) {
-                    return p_error("could not get stream for object $obj_id");
-                }
-                $length_object = PDFUtilFnc::find_object($_buffer, $xref_table, $length_object_id);
-                if ($length_object === false)
-                    return p_error("could not get object $oid");
-
-                $length = $length_object->get_value()->get_int();
-            }
-
-            if ($length === false) {
-                return p_error("could not get stream length for object $obj_id");
-            }
-
-            $object->set_stream(substr($_buffer, $_stream_pending, $length), true);
-        }
-
-        return $object;
-    }
-
-    /**
      * Function that finds a specific object in the document, using the xref table as a base
      * @param buffer the buffer from which to read the document
      * @param xref_table the xref table
@@ -513,7 +467,7 @@ class PDFUtilFnc {
         $object_offset = $xref_table[$oid];
 
         if (!is_array($object_offset))
-            return PDFUtilFnc::find_object_at_pos($_buffer, $oid, $object_offset, $xref_table);
+            return PDFUtilFnc::object_from_string($_buffer, $oid, $object_offset, $xref_table);
         else {
             $object = PDFUtilFnc::find_object_in_objstm($_buffer, $xref_table, $object_offset["stmoid"], $object_offset["pos"], $oid);
             return $object;
@@ -577,9 +531,8 @@ class PDFUtilFnc {
     /**
      * Function that parses an object 
      */
-    public static function object_from_string(&$buffer, $expected_obj_id, $offset = 0, &$offset_end = 0) {
+    public static function object_from_string(string &$buffer, $expected_obj_id, $offset = 0, $xref_table = []) {
         if (preg_match('/([0-9]+)\s+([0-9]+)\s+obj\b/ms', $buffer, $matches, 0, $offset) !== 1) {
-            // p_debug_var(substr($buffer))
             return p_error("object is not valid: $expected_obj_id");
         }
 
@@ -610,15 +563,48 @@ class PDFUtilFnc {
             case PDFObjectParser::T_OBJECT_END:
                 // The object has ended correctly
                 break;
-            case PDFObjectParser::T_STREAM_BEGIN:
-                // There is an stream
-                break;
             default:
                 return p_error("malformed object");
         }
 
-        $offset_end = $stream->getpos();
-        return new PDFObject($found_obj_id, $obj_parsed, $found_obj_generation);
+        $object = new PDFObject($found_obj_id, $obj_parsed, $found_obj_generation);
+        if (($obj_parsed["__stream__"]??null) !== null) {
+            // Let's check if the length matches the stream length
+
+            if (($object['Length']??false) === false) {
+                p_warning("object $found_obj_id has a stream but no length; assuming length " . strlen($obj_parsed["__stream__"]));
+                $object['Length'] = new PDFValueSimple(strlen($obj_parsed["__stream__"]->val()));
+            }
+
+            $length = $object['Length']->get_int();
+            if ($length === false) {
+                $length_object_id = $object['Length']->get_object_referenced();
+                if ($length_object_id === false) {
+                    return p_error("could not get stream for object $found_obj_id");
+                }
+                $length_object = PDFUtilFnc::find_object($buffer, $xref_table, $length_object_id);
+                if ($length_object === false)
+                    return p_error("could not get object $found_obj_id");
+
+                $length = $length_object->get_value()->get_int();
+            }
+
+            if ($length === false) {
+                return p_error("could not get stream length for object $found_obj_id");
+            }
+
+            // Check that the length matches
+            $stream_length = strlen($obj_parsed["__stream__"]->val());
+            if ($length <= $stream_length) {
+                $object->set_stream(substr($obj_parsed["__stream__"]->val(), 0, $length), true);
+            } else if ($length > $stream_length) {
+                p_warning("object $found_obj_id has a stream of length " . $stream_length . " but length property is $length; assuming length " . $stream_length);
+                $object['Length'] = new PDFValueSimple($stream_length);
+                $object->set_stream($obj_parsed["__stream__"]->val(), true);
+            }
+            unset($obj_parsed["__stream__"]);
+        }
+        return $object;
     }
 
     /**

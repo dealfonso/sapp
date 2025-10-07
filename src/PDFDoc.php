@@ -758,9 +758,10 @@ class PDFDoc extends Buffer {
     /**
      * This functions outputs the document to a buffer object, ready to be dumped to a file.
      * @param rebuild whether we are rebuilding the whole xref table or not (in case of incremental versions, we should use "false")
-     * @return buffer a buffer that contains a pdf dumpable document
+     * @return ?Buffer a buffer that contains a pdf dumpable document or null if a signature was to be created but could not be
+     *         created (e.g. missing certificate)
      */
-    public function to_pdf_file_b($rebuild = false) : Buffer {
+    public function to_pdf_file_b($rebuild = false) : ?Buffer {
         // We made no updates, so return the original doc
         if (($rebuild === false) && (count($this->_pdf_objects) === 0) && ($this->_certificate === null) && ($this->_appearance === null))
             return new Buffer($this->_buffer);
@@ -776,7 +777,7 @@ class PDFDoc extends Buffer {
             $_signature = $this->_generate_signature_in_document();
             if ($_signature === false) {
                 $this->pop_state();
-                return p_error("could not generate the signed document");
+                return p_error("could not generate the signed document", null);
             }
         }
 
@@ -903,10 +904,13 @@ class PDFDoc extends Buffer {
 
     /**
      * This functions outputs the document to a string, ready to be written
-     * @return buffer a buffer that contains a pdf document
+     * @return buffer a buffer that contains a pdf document or false if a signature was to be created but could not be 
      */
-    public function to_pdf_file_s($rebuild = false) {
+    public function to_pdf_file_s($rebuild = false) : string | bool {
         $pdf_content = $this->to_pdf_file_b($rebuild);
+        if ($pdf_content === null) {
+            return false;
+        }
         return $pdf_content->get_raw();
     }
 
@@ -917,6 +921,9 @@ class PDFDoc extends Buffer {
      */
     public function to_pdf_file($filename, $rebuild = false) {
         $pdf_content = $this->to_pdf_file_b($rebuild);
+        if ($pdf_content === null) {
+            return false;
+        }
 
         $file = fopen($filename, "wb");
         if ($file === false) {
