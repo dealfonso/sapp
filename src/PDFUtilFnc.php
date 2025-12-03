@@ -501,7 +501,7 @@ class PDFUtilFnc {
 
         $stream = $objstm->get_stream(false);
         $index = substr($stream, 0, $First);
-        $index = explode(" ", trim($index));
+        $index = preg_split('/\s+/', trim($index));
         $stream = substr($stream, $First);
 
         if (count($index) % 2 !== 0)
