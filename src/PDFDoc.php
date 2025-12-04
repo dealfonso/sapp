@@ -473,7 +473,7 @@ class PDFDoc extends Buffer {
             $len = strlen($res);
             p_debug("     Signature Length is \"$len\" Bytes");
             p_debug("     ########## FINISHED SIGNATURE LENGTH CHECK #########\n\n");
-            PDFSignatureObject::$__SIGNATURE_MAX_LENGTH = $len;
+            PDFSignatureObject::$__SIGNATURE_MAX_LENGTH = $len + 64;
 
             $signature = $this->create_object([], PDFSignatureObject::class, false);
             //$signature = new PDFSignatureObject([]);
@@ -896,7 +896,7 @@ class PDFDoc extends Buffer {
             $cms->signature_data['ltv'] = $_signature->get_ltv();
             $cms->signature_data['tsa'] = $_signature->get_tsa();
             $signature_contents = $cms->pkcs7_sign($_signable_document->get_raw());
-            //$signature_contents = str_pad($signature_contents, strlen($signature_contents), '0');
+            $signature_contents = str_pad($signature_contents, PDFSignatureObject::$__SIGNATURE_MAX_LENGTH, '0');
 
             // Then restore the contents field
             $_signature["Contents"] = new PDFValueHexString($signature_contents);
