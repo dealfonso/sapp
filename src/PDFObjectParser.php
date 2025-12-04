@@ -428,9 +428,11 @@
                     // Possible "endstream" or "endobj"
                     if ($this->_buffer->substratpos(9) === "endstream") {
                         $stream_content .= $this->_c;
+                        $this->nextchar();
                         break;
                     } else if ($this->_buffer->substratpos(6) === "endobj") {
                         $stream_content .= $this->_c;
+                        $this->nextchar();
                         break;
                     } else {
                         $stream_content .= $this->_c;
