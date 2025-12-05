@@ -426,11 +426,11 @@
             while ($this->nextchar() !== false) {
                 if ($this->_n === 'e') {
                     // Possible "endstream" or "endobj"
-                    if ($this->_buffer->substratpos(9) === "endstream") {
+                    if (preg_match('/endstream\s$/', $this->_buffer->substratpos(10))) {
                         $stream_content .= $this->_c;
                         $this->nextchar();
                         break;
-                    } else if ($this->_buffer->substratpos(6) === "endobj") {
+                    } else if (preg_match('/endobj\s$/', $this->_buffer->substratpos(7))) {
                         $stream_content .= $this->_c;
                         $this->nextchar();
                         break;
