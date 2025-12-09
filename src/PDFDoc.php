@@ -912,9 +912,9 @@ class PDFDoc extends Buffer {
 
     /**
      * This functions outputs the document to a string, ready to be written
-     * @return buffer a buffer that contains a pdf document or false if a signature was to be created but could not be 
+     * @return string|false a buffer that contains a pdf document or false if a signature was to be created but could not be 
      */
-    public function to_pdf_file_s($rebuild = false) : string | bool {
+    public function to_pdf_file_s($rebuild = false) {
         $pdf_content = $this->to_pdf_file_b($rebuild);
         if ($pdf_content === null) {
             return false;
