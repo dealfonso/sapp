@@ -127,6 +127,21 @@
         }
 
         /**
+         * Advances the buffer to the next n chars and obtains the next char
+         * and prepares the variable $this->_c and $this->_n to contain the current char and the next char
+         *  - if EOF, _c will be false
+         *  - if the last char before EOF, _n will be false
+         * @param n the number of chars to read
+         * @return char the next char
+         */
+        protected function nextchars($n) {
+            $this->_buffer->nextchars($n);
+            $this->_c = $this->_buffer->currentchar();
+            $this->_n = $this->_buffer->nextchar();
+            return $this->_c;
+        }
+
+        /**
          * Prepares the parser to analythe the text (i.e. prepares the parsing variables)
          */
         protected function start(&$buffer) {
@@ -308,8 +323,13 @@
                 }   
                 if ($token === false) {
                     $token = "";
-
-                    while (!$this->_c_is_separator()) {
+                    if ($this->_n === 'e' && $this->_tt === self::T_STREAM_BEGIN && preg_match('/endstream\s$/', $this->_buffer->substratpos(10))) {
+                        $token = 'endstream';
+                        $this->nextchars(9);
+                    } else if ($this->_n === 'e' && $this->_tt === self::T_OBJECT_BEGIN && preg_match('/endobj\s$/', $this->_buffer->substratpos(7))) {
+                        $token = 'endobj';
+                        $this->nextchars(6);
+                    } else while (!$this->_c_is_separator()) {
                         $token .= $this->_c;
                         if ($this->nextchar() === false) break;
                     }
@@ -426,10 +446,10 @@
             while ($this->nextchar() !== false) {
                 if ($this->_n === 'e') {
                     // Possible "endstream" or "endobj"
-                    if ($this->_buffer->substratpos(9) === "endstream") {
+                    if (preg_match('/endstream\s$/', $this->_buffer->substratpos(10))) {
                         $stream_content .= $this->_c;
                         break;
-                    } else if ($this->_buffer->substratpos(6) === "endobj") {
+                    } else if (preg_match('/endobj\s$/', $this->_buffer->substratpos(7))) {
                         $stream_content .= $this->_c;
                         break;
                     } else {
