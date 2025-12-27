@@ -310,9 +310,8 @@ class PDFDoc extends Buffer {
                 return p_error("private key doesn't corresponds to certificate");
 
             if (is_string($certificate['extracerts'] ?? null)) {
-                $certificate['extracerts'] = array_filter(explode("-----END CERTIFICATE-----\n", $certificate['extracerts']));
-                foreach ($certificate['extracerts'] as &$extracerts)
-                    $extracerts = $extracerts . "-----END CERTIFICATE-----\n";
+                preg_match_all("/-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----/s", $certificate['extracerts'], $matches);
+                $certificate['extracerts'] = $matches[0];
             }
         } else {
             $certfilecontent = file_get_contents($certfile);
