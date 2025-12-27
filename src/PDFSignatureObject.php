@@ -36,7 +36,7 @@ use function ddn\sapp\helpers\timestamp_to_pdfdatestring;
 class PDFSignatureObject extends PDFObject {
     // The maximum signature length, needed to create a placeholder to calculate the range of bytes
     // that will cover the signature.
-    public static $__SIGNATURE_MAX_LENGTH = 27742;
+    public static $__SIGNATURE_MAX_LENGTH = 38000;
 
     // The maximum expected length of the byte range, used to create a placeholder while the size
     // is not known. 68 digits enable 20 digits for the size of the document
