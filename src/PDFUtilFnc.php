@@ -347,6 +347,16 @@ class PDFUtilFnc {
 
         // Get the trailer object
         $trailer_obj = PDFUtilFnc::get_trailer($_buffer, $trailer_pos);
+        if (isset($trailer_obj['XRefStm'])) {
+            $xrefstm_pos = $trailer_obj['XRefStm']->get_int();
+            [ $xrefstm_table ] = PDFUtilFnc::get_xref_1_5($_buffer, $xrefstm_pos, $depth);
+
+            foreach ($xrefstm_table as $oid => $val) {
+                if (!isset($xref_table[$oid])) {
+                    $xref_table[$oid] = $val;
+                }
+            }
+        }
 
         // If there exists a previous xref (for incremental PDFs), get it and merge the objects that do not exist in the current xref table
         if (isset($trailer_obj['Prev'])) {
