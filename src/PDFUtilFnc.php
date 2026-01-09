@@ -532,13 +532,14 @@ class PDFUtilFnc {
      * Function that parses an object 
      */
     public static function object_from_string(string &$buffer, $expected_obj_id, $offset = 0, $xref_table = []) {
-        if (preg_match('/([0-9]+)\s+([0-9]+)\s+obj\b/ms', $buffer, $matches, 0, $offset) !== 1) {
+        if (preg_match('/([0-9]+)\s+([0-9]+)\s+obj\b/ms', $buffer, $matches, PREG_OFFSET_CAPTURE, $offset) !== 1) {
             return p_error("object is not valid: $expected_obj_id");
         }
 
-        $found_obj_header = $matches[0];
-        $found_obj_id = intval($matches[1]);
-        $found_obj_generation = intval($matches[2]);
+        $found_obj_header = $matches[0][0];
+        $match_position = $matches[0][1];
+        $found_obj_id = intval($matches[1][0]);
+        $found_obj_generation = intval($matches[2][0]);
 
         if ($expected_obj_id === null)
             $expected_obj_id = $found_obj_id;
@@ -548,7 +549,7 @@ class PDFUtilFnc {
         }
 
         // The object starts after the header
-        $offset = $offset + strlen($found_obj_header);
+        $offset = $match_position + strlen($found_obj_header);
 
         // Parse the object
         $parser = new PDFObjectParser();
