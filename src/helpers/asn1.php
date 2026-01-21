@@ -233,7 +233,7 @@ class asn1 {
           $time = $params[0]; //yymmddhhiiss
           $oldTz = date_default_timezone_get();
           date_default_timezone_set("UTC");
-          $time = date("ymdHis", $time);
+          $time = \DateTime::createFromFormat('ymdHis', $time)->getTimestamp();
           date_default_timezone_set($oldTz);
           $val = bin2hex($time."Z");
         }
