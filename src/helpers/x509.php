@@ -491,12 +491,12 @@ class x509 {
           unset($curr[$key]);
           continue;
         }
-        if($value['type'] == '17' && !array_key_exists('thisUpdate', $curr)) {
+        if(($value['type'] == '17' || $value['type'] == '18') && !array_key_exists('thisUpdate', $curr)) {
           $curr['thisUpdate']=hex2bin($value['value_hex']);
           unset($curr[$key]);
           continue;
         }
-        if($value['type'] == '17' && !array_key_exists('nextUpdate', $curr)) {
+        if(($value['type'] == '17' || $value['type'] == '18') && !array_key_exists('nextUpdate', $curr)) {
           $curr['nextUpdate']=hex2bin($value['value_hex']);
           unset($curr[$key]);
           continue;
@@ -612,11 +612,13 @@ class x509 {
       $differ=array_diff_key($arrModel['TBSCertList'],$crl['TBSCertList']);
       if(count($differ) > 0) {
         foreach($differ as $key=>$val) {
+          // TODO?
         }
         return false;
       }
     } else {
       foreach($differ as $key=>$val) {
+        // TODO?
       }
       return false;
     }
