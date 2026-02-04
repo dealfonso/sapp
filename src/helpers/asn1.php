@@ -230,11 +230,8 @@ class asn1 {
           return $ret;
         }
         if($func == 'utime') {
-          $time = $params[0]; //yymmddhhiiss
-          $oldTz = date_default_timezone_get();
-          date_default_timezone_set("UTC");
-          $time = \DateTime::createFromFormat('ymdHis', $time)->getTimestamp();
-          date_default_timezone_set($oldTz);
+          $date = $params[0]; //yymmddhhiiss
+          $time = \DateTime::createFromFormat('ymdHis', $date, new \DateTimeZone('UTC'))->getTimestamp();
           $val = bin2hex($time."Z");
         }
         if($func == 'gtime') {
