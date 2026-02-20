@@ -141,8 +141,9 @@ class PDFSignatureObject extends PDFObject {
     public function to_pdf_entry() {
         $signature_size = strlen(parent::to_pdf_entry());
         $offset = $this->get_signature_marker_offset();
+        $starting_second_part = $this->_prev_content_size + $offset + self::$__SIGNATURE_MAX_LENGTH + 2;
+
         $contents_size = strlen("" . $this->_value['Contents']);
-        $starting_second_part = $this->_prev_content_size + $offset + $contents_size;
 
         $byterange_str =  "[ 0 " .
             ($this->_prev_content_size + $offset) . " " .
