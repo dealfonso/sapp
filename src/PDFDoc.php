@@ -884,34 +884,21 @@ class PDFDoc extends Buffer {
             // In case that the document is signed, calculate the signature
 
             $_signature->set_sizes($_doc_to_xref->size(), $_doc_from_xref->size());
-
-            // Build document keeping the placeholder Contents so that the ByteRange is computed
-            // with the correct (fixed) size from the start. Do NOT zero-out Contents here.
-            $raw_doc = $_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw();
-
-            // Extract ByteRange values; use the last match to handle multi-signature documents
-            preg_match_all('/\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/', $raw_doc, $byterange_matches);
-            $last      = count($byterange_matches[0]) - 1;
-            $br_start1 = (int) $byterange_matches[1][$last];
-            $br_len1   = (int) $byterange_matches[2][$last];
-            $br_start2 = (int) $byterange_matches[3][$last];
-            $br_len2   = (int) $byterange_matches[4][$last];
-
-            // The data to sign is only the ByteRange-covered bytes (everything except the signature placeholder)
-            $data_to_sign = substr($raw_doc, $br_start1, $br_len1) . substr($raw_doc, $br_start2, $br_len2);
-
+            $_signature["Contents"] = new PDFValueSimple("");
+            $_signable_document = new Buffer($_doc_to_xref->get_raw() . $_signature->to_pdf_entry() . $_doc_from_xref->get_raw());
             $certificate = $_signature->get_certificate();
             $extracerts = (array_key_exists('extracerts', $certificate)) ? $certificate['extracerts'] : null;
             $cms = new CMS;
             $cms->signature_data['hashAlgorithm'] = 'sha256';
             $cms->signature_data['privkey'] = $certificate['pkey'];
             $cms->signature_data['extracerts'] = $extracerts;
-            $cms->signature_data['signcert'] = $certificate['cert'];
+            $cms->signature_data['signcert'] =  $certificate['cert'];
             $cms->signature_data['ltv'] = $_signature->get_ltv();
             $cms->signature_data['tsa'] = $_signature->get_tsa();
-            $signature_contents = $cms->pkcs7_sign($data_to_sign);
+            $signature_contents = $cms->pkcs7_sign($_signable_document->get_raw());
             $signature_contents = str_pad($signature_contents, PDFSignatureObject::$__SIGNATURE_MAX_LENGTH, '0');
 
+            // Then restore the contents field
             $_signature["Contents"] = new PDFValueHexString($signature_contents);
 
             // Add this object to the content previous to this document xref
