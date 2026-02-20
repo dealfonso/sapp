@@ -469,6 +469,15 @@ class CMS {
       }
     }
     $messageDigest = hash($hashAlgorithm, $binaryData);
+    $certHash      = hash('sha256', hex2bin($hexEmbedCerts[0]));
+    $sha256AlgId   = asn1::seq($hexOidHashAlgos['sha256'] . '0500'); // AlgorithmIdentifier { sha256, NULL }
+    // issuerSerial is OPTIONAL per RFC 5035 and omitted to avoid DER integer sign-extension issues
+    // with ICP-Brasil certificate serial numbers (high-bit set). The validator resolves the cert via certHash.
+    $essCertIDv2       = asn1::seq($sha256AlgId . asn1::oct($certHash));
+    $signingCertV2Attr = asn1::seq(
+        '060B2A864886F70D010910022F' .
+        asn1::set(asn1::seq(asn1::seq($essCertIDv2)))
+    );
     $authenticatedAttributes= asn1::seq(
             '06092A864886F70D010903'. //OBJ_pkcs9_contentType 1.2.840.113549.1.9.3
             asn1::set('06092A864886F70D010701')  //OBJ_pkcs7_data 1.2.840.113549.1.7.1
@@ -476,13 +485,14 @@ class CMS {
         asn1::seq( // signing time
             '06092A864886F70D010905'. //OBJ_pkcs9_signingTime 1.2.840.113549.1.9.5
             asn1::set(
-                asn1::utime(date("ymdHis")) //UTTC Time
+                asn1::utime(time()) //UTC Time
             )
         ).
         asn1::seq( // messageDigest
             '06092A864886F70D010904'. //OBJ_pkcs9_messageDigest 1.2.840.113549.1.9.4
             asn1::set(asn1::oct($messageDigest))
         ).
+        $signingCertV2Attr .
         $appendLTV;
     $tohash = asn1::set($authenticatedAttributes);
     $hash = hash($hashAlgorithm, hex2bin($tohash));
