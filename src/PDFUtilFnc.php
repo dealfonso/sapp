@@ -41,7 +41,7 @@ class PDFUtilFnc {
 
     public static function get_trailer(&$_buffer, $trailer_pos) {
         // Search for the trailer structure
-        if (preg_match('/trailer\s+(.*)\s+startxref/ms', $_buffer, $matches, 0, $trailer_pos) !== 1)
+        if (preg_match('/\btrailer\b\s*(.*)\s*\bstartxref\b/ms', $_buffer, $matches, 0, $trailer_pos) !== 1)
             return p_error("trailer not found");
 
         $trailer_str = $matches[1];
