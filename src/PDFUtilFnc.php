@@ -269,9 +269,8 @@ class PDFUtilFnc {
         // Get the xref content and make sure that the buffer passed contains the xref tag at the offset provided
         $xref_substr = substr($_buffer, $xref_pos, $trailer_pos - $xref_pos);
 
-        $separator = "\r\n";
-        $xref_line = strtok($xref_substr, $separator);
-        if ($xref_line !== 'xref')
+        $lines = preg_split('/\r\n|\r|\n/', $xref_substr);
+        if (trim($lines[0] ?? '') !== 'xref')
             return p_error("xref tag not found at position $xref_pos", [false, false, false]);
         
         // Now parse the lines and build the xref table
@@ -279,8 +278,10 @@ class PDFUtilFnc {
         $obj_count = 0;
         $xref_table = [];
 
-        while (($xref_line = strtok($separator)) !== false) {
-
+        array_shift($lines);
+        foreach ($lines as $xref_line) {
+            $xref_line = trim($xref_line);
+            if ($xref_line === '') continue;
             // The first type of entry contains the id of the next object and the amount of continuous objects defined
             if (preg_match('/([0-9]+) ([0-9]+)$/', $xref_line, $matches) === 1) {
                 if ($obj_count > 0) {
@@ -342,7 +343,6 @@ class PDFUtilFnc {
 
             // If the entry is not recongised, show the error
             p_error("invalid xref entry $xref_line");
-            $xref_line = strtok($separator);
         }
 
         // Get the trailer object
@@ -376,7 +376,6 @@ class PDFUtilFnc {
     }
 
     public static function get_xref(&$_buffer, $xref_pos, $depth = null) {
-        
         // Each xref is immediately followed by a trailer
         $trailer_pos = strpos($_buffer, "trailer", $xref_pos);
         if ($trailer_pos === false) {
@@ -388,9 +387,9 @@ class PDFUtilFnc {
 
     public static function acquire_structure(&$_buffer, $depth = null) {
         // Get the first line and acquire the PDF version of the document
-        $separator = "\r\n";
-        $pdf_version = strtok($_buffer, $separator);
-        if ($pdf_version === false)
+        $pos = strcspn($_buffer, "\r\n");
+        $pdf_version = substr($_buffer, 0, $pos);
+        if ($pdf_version === false || $pdf_version === '')
             return false;
 
         if (preg_match('/^%PDF-[0-9]+\.[0-9]+$/', $pdf_version, $matches) !== 1)
