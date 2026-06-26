@@ -269,7 +269,7 @@ class PDFUtilFnc {
         // Get the xref content and make sure that the buffer passed contains the xref tag at the offset provided
         $xref_substr = substr($_buffer, $xref_pos, $trailer_pos - $xref_pos);
 
-        $lines = preg_split('/\r\n|\r|\n/', $xref_substr);
+        $lines = explode("\n", str_replace(["\r\n", "\r"], "\n", $xref_substr));
         if (trim($lines[0] ?? '') !== 'xref')
             return p_error("xref tag not found at position $xref_pos", [false, false, false]);
         
