@@ -280,7 +280,8 @@ class PDFUtilFnc {
         $xref_table = [];
 
         while (($xref_line = strtok($separator)) !== false) {
-
+            $xref_line = trim($xref_line);
+            if ($xref_line === '') continue;
             // The first type of entry contains the id of the next object and the amount of continuous objects defined
             if (preg_match('/([0-9]+) ([0-9]+)$/', $xref_line, $matches) === 1) {
                 if ($obj_count > 0) {
